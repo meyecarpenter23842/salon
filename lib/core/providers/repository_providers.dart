@@ -23,6 +23,7 @@ import '../repositories/sqlite_reports_repository.dart';
 import '../repositories/sqlite_retail_products_repository.dart';
 import '../repositories/sqlite_service_formula_repository.dart';
 import '../repositories/sqlite_services_repository.dart';
+import '../repositories/sqlite_settings_repository.dart';
 import '../services/backup_service.dart';
 import '../services/offline_update_service.dart';
 import '../settings/local_settings_store.dart';
@@ -144,12 +145,23 @@ final reportsRepositoryProvider = Provider<ReportsRepository>((ref) {
   }
 });
 
-final settingsRepositoryProvider = Provider<SettingsRepository>(
-  (ref) => FakeSettingsRepository(
-    ref.watch(fakeSalonDataSourceProvider),
-    LocalSettingsStore.instance,
-  ),
-);
+final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
+  final backend = ref.watch(appDataBackendProvider);
+  final fakeDataSource = ref.watch(fakeSalonDataSourceProvider);
+
+  switch (backend) {
+    case AppDataBackend.sqlite:
+      return SqliteSettingsRepository(
+        SalonDatabase.instance,
+        LocalSettingsStore.instance,
+      );
+    case AppDataBackend.fake:
+      return FakeSettingsRepository(
+        fakeDataSource,
+        LocalSettingsStore.instance,
+      );
+  }
+});
 
 final backupServiceProvider = Provider<BackupService>(
   (ref) => const BackupService(),

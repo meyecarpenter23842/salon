@@ -67,7 +67,6 @@ Future<void> _openCustomerEditor(
       .saveCustomer(input, existingId: customer?.id);
   if (!context.mounted) return;
 
-  ref.read(customerSearchQueryProvider.notifier).state = saved.fullName;
   ref.read(selectedCustomerIndexProvider.notifier).state = 0;
   ref.read(customersRefreshProvider.notifier).state++;
   ref.invalidate(filteredCustomersProvider);
