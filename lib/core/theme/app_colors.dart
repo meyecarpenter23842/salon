@@ -164,6 +164,21 @@ class AppColors {
       : _isNoir
       ? const Color(0xFF160F09)
       : const Color(0xFFEAF1FF);
+
+  // Application-shell semantic tokens. Keep shell styling centralized instead
+  // of hardcoding colors in DesktopShellPage.
+  static Color get workspaceBackground => background;
+  static Color get navigationSidebarSurface => espresso;
+  static Color get navigationSidebarBorder => border.withValues(alpha: 0.72);
+  static Color get navigationSidebarHover =>
+      textPrimary.withValues(alpha: 0.055);
+  static Color get navigationSidebarActive => selectedSurface;
+  static Color get navigationSidebarIndicator => copper;
+  static Color get navigationSidebarText => textSecondary;
+  static Color get navigationSidebarTextActive => textPrimary;
+  static Color get workspaceTopBarSurface => panel.withValues(alpha: 0.98);
+  static Color get workspaceDivider => border.withValues(alpha: 0.72);
+
   // Token aliases for componentized color usage.
   static Color get appBackground => background;
   static Color get appSurface => panel;

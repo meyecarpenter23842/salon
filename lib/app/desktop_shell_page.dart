@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/models/offline_update_summary.dart';
 import '../core/providers/repository_providers.dart';
@@ -23,6 +24,8 @@ import '../features/services/presentation/pages/services_page.dart';
 import '../features/settings/presentation/pages/settings_page.dart';
 import 'navigation/desktop_navigation.dart';
 
+const _sidebarCollapsedPreferenceKey = 'salon_sidebar_collapsed';
+
 final _appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
   return 'v${info.version}';
@@ -32,446 +35,82 @@ String _todayLabel() {
   final now = DateTime.now();
   const viDays = [
     '',
-    'Th\u1ee9 Hai',
-    'Th\u1ee9 Ba',
-    'Th\u1ee9 T\u01b0',
-    'Th\u1ee9 N\u0103m',
-    'Th\u1ee9 S\u00e1u',
-    'Th\u1ee9 B\u1ea3y',
-    'Ch\u1ee7 Nh\u1eadt',
+    'Thứ Hai',
+    'Thứ Ba',
+    'Thứ Tư',
+    'Thứ Năm',
+    'Thứ Sáu',
+    'Thứ Bảy',
+    'Chủ Nhật',
   ];
-  final dayName = viDays[now.weekday];
-  return '$dayName, ${DateFormat("dd/MM/yyyy").format(now)}';
+  return '${viDays[now.weekday]}, ${DateFormat("dd/MM/yyyy").format(now)}';
 }
 
-class DesktopShellPage extends ConsumerWidget {
+class DesktopShellPage extends ConsumerStatefulWidget {
   const DesktopShellPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectedSection = ref.watch(desktopSectionProvider);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 1100;
-
-        return Scaffold(
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.background, AppColors.backgroundSoft],
-              ),
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(AppDimens.shellPadding),
-                child: isCompact
-                    ? _CompactDesktopLayout(selectedSection: selectedSection)
-                    : Row(
-                        children: [
-                          _DesktopSidebar(selectedSection: selectedSection),
-                          const SizedBox(width: AppDimens.shellGap),
-                          Expanded(
-                            child: _DesktopMainArea(
-                              selectedSection: selectedSection,
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  ConsumerState<DesktopShellPage> createState() => _DesktopShellPageState();
 }
 
-class _CompactDesktopLayout extends StatelessWidget {
-  const _CompactDesktopLayout({required this.selectedSection});
-
-  final DesktopSection selectedSection;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _CompactNavigationRail(selectedSection: selectedSection),
-        const SizedBox(width: AppDimens.shellGap),
-        Expanded(
-          child: _DesktopMainArea(
-            selectedSection: selectedSection,
-            compact: true,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CompactNavigationRail extends ConsumerWidget {
-  const _CompactNavigationRail({required this.selectedSection});
-
-  final DesktopSection selectedSection;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      width: AppDimens.sidebarCollapsedWidth,
-      padding: const EdgeInsets.symmetric(vertical: AppDimens.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.shellGlass,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.luxuryShadow,
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.espresso,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderStrong),
-            ),
-            child: Icon(Icons.content_cut_rounded, color: AppColors.copper),
-          ),
-          const SizedBox(height: AppDimens.sectionGap),
-          Expanded(
-            child: ListView.builder(
-              primary: false,
-              itemCount: desktopNavigationItems.length,
-              itemBuilder: (context, index) {
-                final item = desktopNavigationItems[index];
-                final isSelected = item.section == selectedSection;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Tooltip(
-                    message: item.section.label,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () {
-                        ref.read(desktopSectionProvider.notifier).state =
-                            item.section;
-                      },
-                      child: Container(
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.selectedSurface
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.borderStrong
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Icon(
-                          item.section.icon,
-                          size: 19,
-                          color: isSelected
-                              ? AppColors.copper
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DesktopSidebar extends ConsumerWidget {
-  const _DesktopSidebar({required this.selectedSection});
-
-  final DesktopSection selectedSection;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      width: AppDimens.sidebarWidth,
-      padding: const EdgeInsets.all(AppDimens.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.shellGlass,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.luxuryShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _BrandBlock(),
-          const SizedBox(height: AppDimens.sectionGap),
-          Expanded(
-            child: ListView(
-              primary: false,
-              children: desktopNavigationItems
-                  .map(
-                    (item) => _SidebarItem(
-                      icon: item.section.icon,
-                      label: item.section.label,
-                      selected: item.section == selectedSection,
-                      onTap: () {
-                        ref.read(desktopSectionProvider.notifier).state =
-                            item.section;
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Consumer(
-            builder: (context, ref, _) {
-              final ver = ref.watch(_appVersionProvider);
-              return Text(
-                ver.when(
-                  data: (v) => v,
-                  loading: () => '',
-                  error: (error, stackTrace) => 'v?',
-                ),
-                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BrandBlock extends StatelessWidget {
-  const _BrandBlock();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          height: 48,
-          width: 48,
-          decoration: BoxDecoration(
-            color: AppColors.espresso,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.borderStrong),
-            boxShadow: AppColors.luxuryShadow,
-          ),
-          child: Icon(Icons.content_cut_rounded, color: AppColors.copper),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Quản Lý Salon Tóc',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Hệ thống quản lý nội bộ',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.selected = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Ink(
-            height: 42,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: selected ? AppColors.sidebarSelectionGradient : null,
-              color: selected ? null : Colors.transparent,
-              border: Border.all(
-                color: selected
-                    ? AppColors.borderStrong.withValues(alpha: 0.75)
-                    : Colors.transparent,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Icon(
-                    icon,
-                    size: 17,
-                    color: selected
-                        ? AppColors.copperSoft
-                        : AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: selected
-                            ? AppColors.espresso
-                            : AppColors.textPrimary,
-                        fontWeight: selected
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DesktopMainArea extends ConsumerStatefulWidget {
-  const _DesktopMainArea({required this.selectedSection, this.compact = false});
-
-  final DesktopSection selectedSection;
-  final bool compact;
-
-  @override
-  ConsumerState<_DesktopMainArea> createState() => _DesktopMainAreaState();
-}
-
-class _DesktopMainAreaState extends ConsumerState<_DesktopMainArea> {
-  Timer? _refreshTimer;
-  DesktopSection _previousSection = DesktopSection.overview;
+class _DesktopShellPageState extends ConsumerState<DesktopShellPage> {
+  bool _sidebarCollapsed = false;
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      ref.invalidate(overviewSummaryProvider);
-      ref.invalidate(appointmentsViewProvider);
-      ref.invalidate(customersViewProvider);
-      ref.invalidate(reportsSummaryProvider);
-      ref.invalidate(invoiceDraftProvider);
-      ref.invalidate(invoiceHistoryProvider);
-    });
+    unawaited(_loadSidebarPreference());
   }
 
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
+  Future<void> _loadSidebarPreference() async {
+    final preferences = await SharedPreferences.getInstance();
+    final collapsed = preferences.getBool(_sidebarCollapsedPreferenceKey);
+    if (!mounted || collapsed == null) return;
+    setState(() => _sidebarCollapsed = collapsed);
+  }
+
+  void _toggleSidebar() {
+    final collapsed = !_sidebarCollapsed;
+    setState(() => _sidebarCollapsed = collapsed);
+    unawaited(_persistSidebarPreference(collapsed));
+  }
+
+  Future<void> _persistSidebarPreference(bool collapsed) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_sidebarCollapsedPreferenceKey, collapsed);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Intercept employees section tap → open as floating window instead
-    ref.listen<DesktopSection>(desktopSectionProvider, (prev, next) {
-      if (next == DesktopSection.employees) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          ref.read(desktopSectionProvider.notifier).state = _previousSection;
-          _openEmployeesWindow();
-        });
-      } else {
-        _previousSection = next;
-      }
-    });
+    final selectedSection = ref.watch(desktopSectionProvider);
 
-    ref.listen<OfflineUpdateSummary?>(offlineUpdateLastResultProvider, (
-      previous,
-      next,
-    ) {
-      if (!mounted ||
-          next == null ||
-          !next.hasUpdate ||
-          next.manifest == null) {
-        return;
-      }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final forceCompactNavigation = constraints.maxWidth < 1080;
+        final collapsed = forceCompactNavigation || _sidebarCollapsed;
 
-      final previousVersion = previous?.manifest?.latestVersion;
-      final nextVersion = next.manifest!.latestVersion;
-      if (previousVersion == nextVersion) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Có bản cập nhật mới $nextVersion. Mở Cài đặt để tải và cài đặt.',
+        return Scaffold(
+          body: SafeArea(
+            child: Row(
+              children: [
+                _DesktopSidebar(
+                  selectedSection: selectedSection,
+                  collapsed: collapsed,
+                  canToggle: !forceCompactNavigation,
+                  onToggle: _toggleSidebar,
+                  onOpenStaffWorkstation: _openStaffWorkstation,
+                ),
+                Expanded(
+                  child: _DesktopWorkspace(
+                    selectedSection: selectedSection,
+                    onOpenStaffWorkstation: _openStaffWorkstation,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    });
-
-    final latestUpdate = ref.watch(offlineUpdateLastResultProvider);
-
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: widget.compact ? 84 : AppDimens.topBarHeight,
-          child: _TopBar(
-            selectedSection: widget.selectedSection,
-            updateSummary: latestUpdate,
-            onOpenStaffWorkstation: _openStaffWorkstation,
-            compact: widget.compact,
-          ),
-        ),
-        const SizedBox(height: AppDimens.shellGap),
-        Expanded(child: _buildSectionPage(widget.selectedSection)),
-      ],
-    );
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        widget.compact ? 0 : AppDimens.shellGap,
-        0,
-        widget.compact ? 0 : AppDimens.shellGap,
-        0,
-      ),
-      child: content,
-    );
-  }
-
-  Future<void> _openEmployeesWindow() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => const _EmployeesWindowDialog(),
+        );
+      },
     );
   }
 
@@ -485,23 +124,542 @@ class _DesktopMainAreaState extends ConsumerState<_DesktopMainArea> {
     }
 
     try {
-      await Process.start(Platform.resolvedExecutable, [
-        '--staff-window',
-      ], mode: ProcessStartMode.detached);
-      if (!mounted) {
-        return;
-      }
+      await Process.start(
+        Platform.resolvedExecutable,
+        const ['--staff-window'],
+        mode: ProcessStartMode.detached,
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã mở cửa sổ Bàn nhân viên riêng.')),
+        const SnackBar(content: Text('Đã mở Bàn nhân viên riêng.')),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không mở được cửa sổ staff riêng: $error')),
+        SnackBar(content: Text('Không mở được Bàn nhân viên: $error')),
       );
     }
+  }
+}
+
+class _DesktopSidebar extends ConsumerWidget {
+  const _DesktopSidebar({
+    required this.selectedSection,
+    required this.collapsed,
+    required this.canToggle,
+    required this.onToggle,
+    required this.onOpenStaffWorkstation,
+  });
+
+  final DesktopSection selectedSection;
+  final bool collapsed;
+  final bool canToggle;
+  final VoidCallback onToggle;
+  final VoidCallback onOpenStaffWorkstation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final width = collapsed
+        ? AppDimens.navigationSidebarCollapsedWidth
+        : AppDimens.navigationSidebarWidth;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      width: width,
+      color: AppColors.navigationSidebarSurface,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: AppColors.navigationSidebarBorder),
+          ),
+        ),
+        child: Column(
+          children: [
+            _SidebarBrand(
+              collapsed: collapsed,
+              canToggle: canToggle,
+              onToggle: onToggle,
+            ),
+            Expanded(
+              child: ListView(
+                primary: false,
+                padding: EdgeInsets.fromLTRB(
+                  collapsed ? 8 : 10,
+                  10,
+                  collapsed ? 8 : 10,
+                  12,
+                ),
+                children: [
+                  for (final group in const [
+                    DesktopNavigationGroup.operations,
+                    DesktopNavigationGroup.management,
+                    DesktopNavigationGroup.insights,
+                  ]) ...[
+                    _SidebarGroupLabel(group: group, collapsed: collapsed),
+                    for (final item in desktopNavigationItems.where(
+                      (item) => item.group == group,
+                    ))
+                      _SidebarItem(
+                        icon: item.section.icon,
+                        label: item.section.label,
+                        selected: item.section == selectedSection,
+                        collapsed: collapsed,
+                        onTap: () {
+                          ref.read(desktopSectionProvider.notifier).state =
+                              item.section;
+                        },
+                      ),
+                    const SizedBox(height: 8),
+                  ],
+                ],
+              ),
+            ),
+            _SidebarFooter(
+              selectedSection: selectedSection,
+              collapsed: collapsed,
+              canToggle: canToggle,
+              onToggle: onToggle,
+              onOpenStaffWorkstation: onOpenStaffWorkstation,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarBrand extends StatelessWidget {
+  const _SidebarBrand({
+    required this.collapsed,
+    required this.canToggle,
+    required this.onToggle,
+  });
+
+  final bool collapsed;
+  final bool canToggle;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 76,
+      padding: EdgeInsets.symmetric(horizontal: collapsed ? 12 : 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.navigationSidebarBorder),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: collapsed
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.start,
+        children: [
+          const _SalonMark(),
+          if (!collapsed) ...[
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hair Spa Manager',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Salon operations',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (canToggle)
+              IconButton(
+                onPressed: onToggle,
+                tooltip: 'Thu gọn menu',
+                icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
+                iconSize: 18,
+                color: AppColors.textMuted,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SalonMark extends StatelessWidget {
+  const _SalonMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.shellAccentSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.navigationSidebarBorder),
+      ),
+      child: Icon(
+        Icons.content_cut_rounded,
+        size: 19,
+        color: AppColors.copper,
+      ),
+    );
+  }
+}
+
+class _SidebarGroupLabel extends StatelessWidget {
+  const _SidebarGroupLabel({required this.group, required this.collapsed});
+
+  final DesktopNavigationGroup group;
+  final bool collapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (collapsed) return const SizedBox(height: 4);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+      child: Text(
+        group.label.toUpperCase(),
+        style: TextStyle(
+          color: AppColors.textMuted.withValues(alpha: 0.72),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.05,
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  const _SidebarItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        hoverColor: AppColors.navigationSidebarHover,
+        child: Ink(
+          height: AppDimens.navigationItemHeight,
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.navigationSidebarActive
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Stack(
+            children: [
+              if (selected)
+                Positioned(
+                  left: 0,
+                  top: 8,
+                  bottom: 8,
+                  child: Container(
+                    width: 3,
+                    decoration: BoxDecoration(
+                      color: AppColors.navigationSidebarIndicator,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 12),
+                child: Row(
+                  mainAxisAlignment: collapsed
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 19,
+                      color: selected
+                          ? AppColors.copper
+                          : AppColors.navigationSidebarText,
+                    ),
+                    if (!collapsed) ...[
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: selected
+                                ? AppColors.navigationSidebarTextActive
+                                : AppColors.navigationSidebarText,
+                            fontSize: 13,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: collapsed ? Tooltip(message: label, child: content) : content,
+    );
+  }
+}
+
+class _SidebarFooter extends ConsumerWidget {
+  const _SidebarFooter({
+    required this.selectedSection,
+    required this.collapsed,
+    required this.canToggle,
+    required this.onToggle,
+    required this.onOpenStaffWorkstation,
+  });
+
+  final DesktopSection selectedSection;
+  final bool collapsed;
+  final bool canToggle;
+  final VoidCallback onToggle;
+  final VoidCallback onOpenStaffWorkstation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final version = ref.watch(_appVersionProvider);
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        collapsed ? 8 : 10,
+        10,
+        collapsed ? 8 : 10,
+        10,
+      ),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: AppColors.navigationSidebarBorder),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SidebarAction(
+            icon: Icons.storefront_outlined,
+            label: 'Bàn nhân viên',
+            collapsed: collapsed,
+            onTap: onOpenStaffWorkstation,
+          ),
+          _SidebarItem(
+            icon: DesktopSection.settings.icon,
+            label: DesktopSection.settings.label,
+            selected: selectedSection == DesktopSection.settings,
+            collapsed: collapsed,
+            onTap: () {
+              ref.read(desktopSectionProvider.notifier).state =
+                  DesktopSection.settings;
+            },
+          ),
+          if (collapsed && canToggle)
+            Tooltip(
+              message: 'Mở rộng menu',
+              child: IconButton(
+                onPressed: onToggle,
+                icon: const Icon(Icons.keyboard_double_arrow_right_rounded),
+                iconSize: 18,
+                color: AppColors.textMuted,
+              ),
+            )
+          else if (!collapsed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 7, 10, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  version.when(
+                    data: (value) => value,
+                    loading: () => '',
+                    error: (error, stackTrace) => 'v?',
+                  ),
+                  style: TextStyle(
+                    color: AppColors.textMuted.withValues(alpha: 0.72),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarAction extends StatelessWidget {
+  const _SidebarAction({
+    required this.icon,
+    required this.label,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        hoverColor: AppColors.navigationSidebarHover,
+        child: SizedBox(
+          height: AppDimens.navigationItemHeight,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 12),
+            child: Row(
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: [
+                Icon(icon, size: 19, color: AppColors.navigationSidebarText),
+                if (!collapsed) ...[
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.navigationSidebarText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.open_in_new_rounded,
+                    size: 14,
+                    color: AppColors.textMuted,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: collapsed ? Tooltip(message: label, child: button) : button,
+    );
+  }
+}
+
+class _DesktopWorkspace extends ConsumerStatefulWidget {
+  const _DesktopWorkspace({
+    required this.selectedSection,
+    required this.onOpenStaffWorkstation,
+  });
+
+  final DesktopSection selectedSection;
+  final VoidCallback onOpenStaffWorkstation;
+
+  @override
+  ConsumerState<_DesktopWorkspace> createState() => _DesktopWorkspaceState();
+}
+
+class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<OfflineUpdateSummary?>(offlineUpdateLastResultProvider, (
+      previous,
+      next,
+    ) {
+      if (!mounted || next == null || !next.hasUpdate || next.manifest == null) {
+        return;
+      }
+
+      final previousVersion = previous?.manifest?.latestVersion;
+      final nextVersion = next.manifest!.latestVersion;
+      if (previousVersion == nextVersion) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Có bản cập nhật mới $nextVersion. Mở Cài đặt để xem chi tiết.',
+          ),
+        ),
+      );
+    });
+
+    final latestUpdate = ref.watch(offlineUpdateLastResultProvider);
+
+    return ColoredBox(
+      color: AppColors.workspaceBackground,
+      child: Column(
+        children: [
+          SizedBox(
+            height: AppDimens.workspaceTopBarHeight,
+            child: _WorkspaceTopBar(
+              selectedSection: widget.selectedSection,
+              updateSummary: latestUpdate,
+              onOpenStaffWorkstation: widget.onOpenStaffWorkstation,
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.workspaceHorizontalPadding,
+                AppDimens.workspaceVerticalPadding,
+                AppDimens.workspaceHorizontalPadding,
+                AppDimens.workspaceVerticalPadding,
+              ),
+              child: _buildSectionBody(widget.selectedSection),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSectionBody(DesktopSection section) {
@@ -517,277 +675,134 @@ class _DesktopMainAreaState extends ConsumerState<_DesktopMainArea> {
       DesktopSection.settings => const SettingsPage(),
     };
   }
-
-  Widget _buildSectionPage(DesktopSection section) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: _buildSectionBody(section),
-    );
-  }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
+class _WorkspaceTopBar extends StatelessWidget {
+  const _WorkspaceTopBar({
     required this.selectedSection,
     required this.onOpenStaffWorkstation,
     this.updateSummary,
-    this.compact = false,
   });
 
   final DesktopSection selectedSection;
   final VoidCallback onOpenStaffWorkstation;
   final OfflineUpdateSummary? updateSummary;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = compact || constraints.maxWidth < 1120;
+        final compact = constraints.maxWidth < 980;
 
-        final searchField = Container(
+        return DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.fieldShell,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border),
-            boxShadow: AppColors.luxuryShadow,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: TextField(
-            decoration: InputDecoration(
-              prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
-              hintText: 'Tìm khách hàng, lịch hẹn, dịch vụ...',
-              suffixIcon: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Center(
-                  widthFactor: 1,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.shortcutFill,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      'Ctrl K',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: AppColors.copperSoft,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
+            color: AppColors.workspaceTopBarSurface,
+            border: Border(
+              bottom: BorderSide(color: AppColors.workspaceDivider),
             ),
           ),
-        );
-
-        if (isCompact) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.topBarAccent,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.border),
-              boxShadow: AppColors.luxuryShadow,
-            ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
             child: Row(
               children: [
                 Expanded(
-                  child: _HeaderPill(
-                    icon: selectedSection.icon,
-                    label: selectedSection.label,
-                    emphasized: true,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedSection.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      if (!compact) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          selectedSection.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
+                const SizedBox(width: 16),
+                if (updateSummary?.hasUpdate == true &&
+                    updateSummary?.manifest != null) ...[
+                  _TopBarStatus(
+                    icon: Icons.system_update_alt_outlined,
+                    label: 'Bản ${updateSummary!.manifest!.latestVersion}',
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (!compact) ...[
+                  _TopBarStatus(
+                    icon: Icons.today_outlined,
+                    label: _todayLabel(),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                OutlinedButton.icon(
                   onPressed: onOpenStaffWorkstation,
-                  icon: const Icon(Icons.storefront_outlined),
-                  tooltip: 'Bàn nhân viên',
+                  icon: const Icon(Icons.storefront_outlined, size: 17),
+                  label: compact
+                      ? const Text('Nhân viên')
+                      : const Text('Bàn nhân viên'),
                 ),
               ],
             ),
-          );
-        }
-
-        final actions = Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          alignment: WrapAlignment.end,
-          children: [
-            if (updateSummary?.hasUpdate == true &&
-                updateSummary?.manifest != null)
-              _HeaderPill(
-                icon: Icons.system_update_alt_outlined,
-                label: 'Có bản ${updateSummary!.manifest!.latestVersion}',
-              ),
-            FilledButton.icon(
-              onPressed: onOpenStaffWorkstation,
-              icon: const Icon(Icons.storefront_outlined),
-              label: const Text('Bàn nhân viên'),
-            ),
-            _HeaderPill(
-              icon: selectedSection.icon,
-              label: selectedSection.label,
-              emphasized: true,
-            ),
-            _HeaderPill(icon: Icons.today_outlined, label: _todayLabel()),
-            const _HeaderPill(icon: Icons.person_outline, label: 'Chủ salon'),
-          ],
-        );
-
-        final content = Row(
-          children: [
-            Expanded(child: searchField),
-            const SizedBox(width: 16),
-            actions,
-          ],
-        );
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.topBarAccent,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border),
-            boxShadow: AppColors.luxuryShadow,
           ),
-          child: content,
         );
       },
     );
   }
 }
 
-class _HeaderPill extends StatelessWidget {
-  const _HeaderPill({
-    required this.icon,
-    required this.label,
-    this.emphasized = false,
-  });
+class _TopBarStatus extends StatelessWidget {
+  const _TopBarStatus({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
-  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 200),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: emphasized ? AppColors.topBarPillActive : AppColors.topBarPill,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: emphasized ? AppColors.borderStrong : AppColors.border,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: emphasized
-                  ? AppColors.topBarPillActiveText
-                  : AppColors.copperSoft,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: emphasized
-                      ? AppColors.topBarPillActiveText
-                      : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.panelRaised,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.workspaceDivider),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Employee Management floating window (full-screen dialog)
-// ---------------------------------------------------------------------------
-class _EmployeesWindowDialog extends StatelessWidget {
-  const _EmployeesWindowDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog.fullscreen(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.background, AppColors.backgroundSoft],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.topBarAccent,
-                  border: Border(
-                    bottom: BorderSide(color: AppColors.border),
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.badge_outlined,
-                      size: 20,
-                      color: AppColors.copperSoft,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Quản lý nhân viên',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(
-                        Icons.close,
-                        color: AppColors.textSecondary,
-                      ),
-                      tooltip: 'Đóng cửa sổ',
-                    ),
-                  ],
-                ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.copperSoft),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
               ),
-              const Expanded(child: EmployeesPage()),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -11,7 +11,7 @@ import 'package:salonmanager/core/theme/salon_theme_template.dart';
 
 void main() {
   testWidgets(
-    'renders desktop workflows and persists theme selection locally',
+    'renders desktop workflows and persists shell/theme preferences locally',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1600, 1000);
       tester.view.devicePixelRatio = 1.0;
@@ -37,6 +37,20 @@ void main() {
 
       final container = containerOf(tester);
       expect(find.byType(SalonManagerApp), findsOneWidget);
+      expect(find.text('VẬN HÀNH'), findsOneWidget);
+      expect(find.text('QUẢN LÝ'), findsOneWidget);
+      expect(find.text('THEO DÕI'), findsOneWidget);
+      expect(find.byTooltip('Thu gọn menu'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Thu gọn menu'));
+      await pumpUi(tester);
+      final preferences = await SharedPreferences.getInstance();
+      expect(preferences.getBool('salon_sidebar_collapsed'), isTrue);
+      expect(find.byTooltip('Mở rộng menu'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Mở rộng menu'));
+      await pumpUi(tester);
+      expect(preferences.getBool('salon_sidebar_collapsed'), isFalse);
 
       for (final section in const [
         DesktopSection.overview,
@@ -53,6 +67,14 @@ void main() {
         expect(container.read(desktopSectionProvider), section);
         expect(tester.takeException(), isNull);
       }
+
+      // Employees is now a normal workspace route. It must not be intercepted
+      // into a floating dialog that rewrites the selected section.
+      container.read(desktopSectionProvider.notifier).state =
+          DesktopSection.employees;
+      await pumpUi(tester);
+      expect(container.read(desktopSectionProvider), DesktopSection.employees);
+      expect(find.text('Nhân viên'), findsWidgets);
 
       await LocalSettingsStore.instance.saveThemeTemplate(
         SalonThemeTemplate.salonSapphire,
