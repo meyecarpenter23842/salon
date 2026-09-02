@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app/navigation/desktop_navigation.dart';
 import '../../../../core/models/appointment_entry.dart';
-import '../../../../core/providers/data_backend_provider.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_dimens.dart';
 import '../../../../shared/widgets/app_primitives.dart';
 
 class OverviewPage extends ConsumerWidget {
@@ -15,23 +14,29 @@ class OverviewPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final overview = ref.watch(overviewSummaryProvider);
     final appointments = ref.watch(appointmentsViewProvider);
-    final backend = ref.watch(appDataBackendProvider);
+
+    void openSection(DesktopSection section) {
+      ref.read(desktopSectionProvider.notifier).state = section;
+    }
 
     return overview.when(
       data: (summary) => appointments.when(
         data: (appointmentRows) => _OverviewLoaded(
           summary: summary,
           appointments: appointmentRows,
-          backend: backend,
+          onOpenAppointments: () => openSection(DesktopSection.appointments),
+          onOpenCustomers: () => openSection(DesktopSection.customers),
+          onOpenReports: () => openSection(DesktopSection.reports),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(
-          child: Text('Không tải được lịch overview: $error'),
+          child: Text('Không tải được lịch hôm nay: $error'),
         ),
       ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) =>
-          Center(child: Text('Không tải được tổng quan: $error')),
+      error: (error, stackTrace) => Center(
+        child: Text('Không tải được tổng quan: $error'),
+      ),
     );
   }
 }
@@ -40,79 +45,109 @@ class _OverviewLoaded extends StatelessWidget {
   const _OverviewLoaded({
     required this.summary,
     required this.appointments,
-    required this.backend,
+    required this.onOpenAppointments,
+    required this.onOpenCustomers,
+    required this.onOpenReports,
   });
 
   final Map<String, Object?> summary;
   final List<AppointmentEntry> appointments;
-  final AppDataBackend backend;
+  final VoidCallback onOpenAppointments;
+  final VoidCallback onOpenCustomers;
+  final VoidCallback onOpenReports;
 
   @override
   Widget build(BuildContext context) {
     final kpis = _mapList(summary['kpis']);
     final featuredCustomers = _mapList(summary['featuredCustomers']);
-    final quickCheckoutLines = _mapList(summary['quickCheckoutLines']);
     final revenueSeries = _mapList(summary['revenueSeries']);
 
     final waitingAppointments = appointments
         .where((item) => item.status == 'Chờ xác nhận')
         .length;
     final activeAppointments = appointments
-        .where(
-          (item) => item.status == 'Đã đặt' || item.status == 'Đang làm',
-        )
+        .where((item) => item.status == 'Đang làm')
         .length;
-
-    final contentGrid = _OverviewContentGrid(
-      appointments: appointments,
-      featuredCustomers: featuredCustomers,
-      quickCheckoutCustomer: summary['quickCheckoutCustomer'].toString(),
-      quickCheckoutDiscount: summary['quickCheckoutDiscount'].toString(),
-      quickCheckoutLines: quickCheckoutLines,
-      quickCheckoutPaymentNote: summary['quickCheckoutPaymentNote'].toString(),
-      quickCheckoutTotal: summary['quickCheckoutTotal'].toString(),
-      revenueSeries: revenueSeries,
-    );
+    final bookedAppointments = appointments
+        .where((item) => item.status == 'Đã đặt')
+        .length;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final shortViewport = constraints.maxHeight < 560;
+        final singleColumn = constraints.maxWidth < 980;
 
-        if (shortViewport) {
-          return ListView(
-            primary: false,
-            children: [
-              _OverviewHero(
-                nextSlot: kpis.length > 3 ? kpis[3]['value'].toString() : '',
-                dailyRevenue: kpis.length > 2
-                    ? kpis[2]['value'].toString()
-                    : '',
+        return ListView(
+          primary: false,
+          padding: const EdgeInsets.only(bottom: 16),
+          children: [
+            _KpiGrid(
+              kpis: kpis,
+              onOpenAppointments: onOpenAppointments,
+              onOpenReports: onOpenReports,
+            ),
+            const SizedBox(height: 16),
+            if (singleColumn) ...[
+              _AppointmentsPanel(
+                rows: appointments,
+                onOpen: onOpenAppointments,
+              ),
+              const SizedBox(height: 16),
+              _AttentionPanel(
                 waitingAppointments: waitingAppointments,
                 activeAppointments: activeAppointments,
-                backend: backend,
+                bookedAppointments: bookedAppointments,
+                onOpenAppointments: onOpenAppointments,
               ),
-              const SizedBox(height: AppDimens.heroGap),
-              _OverviewStatsRow(kpis: kpis),
-              const SizedBox(height: AppDimens.sectionGap),
-              contentGrid,
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _OverviewHero(
-              nextSlot: kpis.length > 3 ? kpis[3]['value'].toString() : '',
-              dailyRevenue: kpis.length > 2 ? kpis[2]['value'].toString() : '',
-              waitingAppointments: waitingAppointments,
-              activeAppointments: activeAppointments,
-              backend: backend,
-            ),
-            const SizedBox(height: AppDimens.heroGap),
-            _OverviewStatsRow(kpis: kpis),
-            const SizedBox(height: AppDimens.sectionGap),
-            Expanded(child: contentGrid),
+            ] else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: _AppointmentsPanel(
+                      rows: appointments,
+                      onOpen: onOpenAppointments,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 360,
+                    child: _AttentionPanel(
+                      waitingAppointments: waitingAppointments,
+                      activeAppointments: activeAppointments,
+                      bookedAppointments: bookedAppointments,
+                      onOpenAppointments: onOpenAppointments,
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 16),
+            if (singleColumn) ...[
+              _FeaturedCustomersPanel(
+                customers: featuredCustomers,
+                onOpen: onOpenCustomers,
+              ),
+              const SizedBox(height: 16),
+              _RevenuePanel(points: revenueSeries, onOpen: onOpenReports),
+            ] else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _FeaturedCustomersPanel(
+                      customers: featuredCustomers,
+                      onOpen: onOpenCustomers,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _RevenuePanel(
+                      points: revenueSeries,
+                      onOpen: onOpenReports,
+                    ),
+                  ),
+                ],
+              ),
           ],
         );
       },
@@ -120,226 +155,16 @@ class _OverviewLoaded extends StatelessWidget {
   }
 }
 
-class _OverviewHero extends StatelessWidget {
-  const _OverviewHero({
-    required this.nextSlot,
-    required this.dailyRevenue,
-    required this.waitingAppointments,
-    required this.activeAppointments,
-    required this.backend,
+class _KpiGrid extends StatelessWidget {
+  const _KpiGrid({
+    required this.kpis,
+    required this.onOpenAppointments,
+    required this.onOpenReports,
   });
-
-  final String nextSlot;
-  final String dailyRevenue;
-  final int waitingAppointments;
-  final int activeAppointments;
-  final AppDataBackend backend;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
-        gradient: AppColors.overviewHeroGradient,
-        boxShadow: AppColors.luxuryShadow,
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 1080;
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeroCopy(backend: backend),
-                const SizedBox(height: 20),
-                _HeroSpotlight(
-                  nextSlot: nextSlot,
-                  dailyRevenue: dailyRevenue,
-                  waitingAppointments: waitingAppointments,
-                  activeAppointments: activeAppointments,
-                ),
-              ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: _HeroCopy(backend: backend)),
-              const SizedBox(width: 18),
-              Expanded(
-                flex: 2,
-                child: _HeroSpotlight(
-                  nextSlot: nextSlot,
-                  dailyRevenue: dailyRevenue,
-                  waitingAppointments: waitingAppointments,
-                  activeAppointments: activeAppointments,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _HeroCopy extends StatelessWidget {
-  const _HeroCopy({required this.backend});
-
-  final AppDataBackend backend;
-
-  @override
-  Widget build(BuildContext context) {
-    final runtimeLabel = backend == AppDataBackend.sqlite
-        ? 'SQLite runtime'
-        : 'Fake runtime';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Tổng quan',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (backend == AppDataBackend.fake)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Icon(Icons.info_outline, size: 14, color: AppColors.copper),
-                Text(
-                  'Overview đang dùng dữ liệu demo',
-                  style: TextStyle(color: AppColors.copper, fontSize: 12),
-                ),
-              ],
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Icon(Icons.circle, size: 8, color: AppColors.success),
-                Text(
-                  'SQLite runtime • Dữ liệu cập nhật trực tiếp',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        AppBadge(
-          label: runtimeLabel,
-          tone: backend == AppDataBackend.sqlite
-              ? AppBadgeTone.success
-              : AppBadgeTone.info,
-        ),
-      ],
-    );
-  }
-}
-
-class _HeroSpotlight extends StatelessWidget {
-  const _HeroSpotlight({
-    required this.nextSlot,
-    required this.dailyRevenue,
-    required this.waitingAppointments,
-    required this.activeAppointments,
-  });
-
-  final String nextSlot;
-  final String dailyRevenue;
-  final int waitingAppointments;
-  final int activeAppointments;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Nhịp vận hành hôm nay',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 14),
-          _FlatMetricRow(label: 'Lịch tiếp theo', value: nextSlot),
-          const Divider(height: 20, thickness: 0.5),
-          _FlatMetricRow(label: 'Doanh thu trong ngày', value: dailyRevenue),
-          const Divider(height: 20, thickness: 0.5),
-          _FlatMetricRow(
-            label: 'Lịch đang chạy',
-            value: '$activeAppointments lịch',
-          ),
-          const Divider(height: 20, thickness: 0.5),
-          _FlatMetricRow(
-            label: 'Cần xác nhận thêm',
-            value: '$waitingAppointments lịch',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FlatMetricRow extends StatelessWidget {
-  const _FlatMetricRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _OverviewStatsRow extends StatelessWidget {
-  const _OverviewStatsRow({required this.kpis});
 
   final List<Map<String, Object?>> kpis;
+  final VoidCallback onOpenAppointments;
+  final VoidCallback onOpenReports;
 
   @override
   Widget build(BuildContext context) {
@@ -352,47 +177,30 @@ class _OverviewStatsRow extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        final cards = List.generate(kpis.length, (index) {
-          final item = kpis[index];
-          return _OverviewStatCard(
-            title: item['title'].toString(),
-            value: item['value'].toString(),
-            note: item['note'].toString(),
-            icon: icons[index.clamp(0, icons.length - 1)],
-          );
-        });
+        final columns = constraints.maxWidth >= 1180
+            ? 4
+            : constraints.maxWidth >= 620
+            ? 2
+            : 1;
+        const gap = 12.0;
+        final cardWidth =
+            (constraints.maxWidth - ((columns - 1) * gap)) / columns;
 
-        if (compact) {
-          return Column(
-            children: [
-              for (var index = 0; index < cards.length; index++) ...[
-                cards[index],
-                if (index < cards.length - 1) const SizedBox(height: 16),
-              ],
-            ],
-          );
-        }
-
-        if (constraints.maxWidth < 1280) {
-          final columns = constraints.maxWidth < 1080 ? 2 : 3;
-          final cardWidth =
-              (constraints.maxWidth - (columns - 1) * 16) / columns;
-          return Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              for (final card in cards) SizedBox(width: cardWidth, child: card),
-            ],
-          );
-        }
-
-        return Row(
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
           children: [
-            for (var index = 0; index < cards.length; index++) ...[
-              Expanded(child: cards[index]),
-              if (index < cards.length - 1) const SizedBox(width: 16),
-            ],
+            for (var index = 0; index < kpis.length; index++)
+              SizedBox(
+                width: cardWidth,
+                child: _MetricCard(
+                  title: kpis[index]['title'].toString(),
+                  value: kpis[index]['value'].toString(),
+                  note: kpis[index]['note'].toString(),
+                  icon: icons[index.clamp(0, icons.length - 1)],
+                  onTap: index == 2 ? onOpenReports : onOpenAppointments,
+                ),
+              ),
           ],
         );
       },
@@ -400,237 +208,97 @@ class _OverviewStatsRow extends StatelessWidget {
   }
 }
 
-class _OverviewStatCard extends StatelessWidget {
-  const _OverviewStatCard({
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
     required this.title,
     required this.value,
     required this.note,
     required this.icon,
+    required this.onTap,
   });
 
   final String title;
   final String value;
   final String note;
   final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              height: 36,
-              width: 36,
-              decoration: BoxDecoration(
-                color: AppColors.shellAccentSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Icon(icon, size: 16, color: AppColors.copper),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    note,
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _OverviewContentGrid extends StatelessWidget {
-  const _OverviewContentGrid({
-    required this.appointments,
-    required this.featuredCustomers,
-    required this.quickCheckoutCustomer,
-    required this.quickCheckoutDiscount,
-    required this.quickCheckoutLines,
-    required this.quickCheckoutPaymentNote,
-    required this.quickCheckoutTotal,
-    required this.revenueSeries,
-  });
-
-  final List<AppointmentEntry> appointments;
-  final List<Map<String, Object?>> featuredCustomers;
-  final String quickCheckoutCustomer;
-  final String quickCheckoutDiscount;
-  final List<Map<String, Object?>> quickCheckoutLines;
-  final String quickCheckoutPaymentNote;
-  final String quickCheckoutTotal;
-  final List<Map<String, Object?>> revenueSeries;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact =
-            constraints.maxWidth < 1200 || constraints.maxHeight < 680;
-
-        if (compact) {
-          return ListView(
-            primary: false,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-              _AppointmentsPanel(rows: appointments, viewportHeight: 270),
-              const SizedBox(height: 16),
-              _FeaturedCustomersPanel(
-                customers: featuredCustomers,
-                viewportHeight: 250,
+              Container(
+                height: 40,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.shellAccentSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Icon(icon, size: 18, color: AppColors.copper),
               ),
-              const SizedBox(height: 16),
-              _QuickCheckoutPanel(
-                customerName: quickCheckoutCustomer,
-                discount: quickCheckoutDiscount,
-                lines: quickCheckoutLines,
-                paymentNote: quickCheckoutPaymentNote,
-                total: quickCheckoutTotal,
-                viewportHeight: 300,
-              ),
-              const SizedBox(height: 16),
-              _RevenuePanel(points: revenueSeries),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _AppointmentsPanel(rows: appointments),
-                  ),
-                  const SizedBox(height: 16),
-                  _RevenuePanel(points: revenueSeries),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _FeaturedCustomersPanel(
-                      customers: featuredCustomers,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    flex: 3,
-                    child: _QuickCheckoutPanel(
-                      customerName: quickCheckoutCustomer,
-                      discount: quickCheckoutDiscount,
-                      lines: quickCheckoutLines,
-                      paymentNote: quickCheckoutPaymentNote,
-                      total: quickCheckoutTotal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _AppointmentsPanel extends StatefulWidget {
-  const _AppointmentsPanel({required this.rows, this.viewportHeight});
-
-  final List<AppointmentEntry> rows;
-  final double? viewportHeight;
-
-  @override
-  State<_AppointmentsPanel> createState() => _AppointmentsPanelState();
-}
-
-class _AppointmentsPanelState extends State<_AppointmentsPanel> {
-  final ScrollController _vertCtrl = ScrollController();
-  final ScrollController _horizCtrl = ScrollController();
-
-  @override
-  void dispose() {
-    _vertCtrl.dispose();
-    _horizCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scrollArea = Scrollbar(
-      controller: _vertCtrl,
-      child: SingleChildScrollView(
-        controller: _vertCtrl,
-        child: SingleChildScrollView(
-          controller: _horizCtrl,
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 640),
-            child: Table(
-              columnWidths: const {0: FixedColumnWidth(80)},
-              children: [
-                const TableRow(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _HeaderCell('Giờ'),
-                    _HeaderCell('Khách hàng'),
-                    _HeaderCell('Dịch vụ'),
-                    _HeaderCell('Thợ'),
-                    _HeaderCell('Trạng thái'),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      note,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
-                ...widget.rows.map(
-                  (row) => TableRow(
-                    children: [
-                      _BodyCell(row.timeLabel),
-                      _BodyCell(row.customerName),
-                      _BodyCell(row.servicesSummary),
-                      _BodyCell(row.staffName),
-                      _StatusCell(row.status),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+            ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _AppointmentsPanel extends StatelessWidget {
+  const _AppointmentsPanel({required this.rows, required this.onOpen});
+
+  final List<AppointmentEntry> rows;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleRows = rows.take(6).toList();
 
     return Card(
       child: Padding(
@@ -639,15 +307,298 @@ class _AppointmentsPanelState extends State<_AppointmentsPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _PanelHeader(
-              title: 'Lịch hẹn hôm nay',
-              action: '${widget.rows.length} lịch hiển thị',
+              title: 'Lịch hôm nay',
+              actionLabel: 'Mở lịch hẹn',
+              actionKey: const Key('overview-open-appointments'),
+              onAction: onOpen,
             ),
-            const SizedBox(height: 14),
-            if (widget.viewportHeight != null)
-              SizedBox(height: widget.viewportHeight, child: scrollArea)
+            const SizedBox(height: 10),
+            if (visibleRows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 26),
+                child: Center(
+                  child: Text(
+                    'Chưa có lịch hẹn hôm nay.',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
+                ),
+              )
             else
-              Expanded(child: scrollArea),
+              for (var index = 0; index < visibleRows.length; index++) ...[
+                _AppointmentRow(row: visibleRows[index], onTap: onOpen),
+                if (index < visibleRows.length - 1)
+                  Divider(height: 1, color: AppColors.border),
+              ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppointmentRow extends StatelessWidget {
+  const _AppointmentRow({required this.row, required this.onTap});
+
+  final AppointmentEntry row;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showService = constraints.maxWidth >= 620;
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 58,
+                    child: Text(
+                      row.timeLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      row.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (showService) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        row.servicesSummary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 12),
+                  AppStatusBadge(label: row.status),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AttentionPanel extends StatelessWidget {
+  const _AttentionPanel({
+    required this.waitingAppointments,
+    required this.activeAppointments,
+    required this.bookedAppointments,
+    required this.onOpenAppointments,
+  });
+
+  final int waitingAppointments;
+  final int activeAppointments;
+  final int bookedAppointments;
+  final VoidCallback onOpenAppointments;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _PanelHeader(
+              title: 'Cần xử lý',
+              actionLabel: 'Xem lịch',
+              onAction: onOpenAppointments,
+            ),
+            const SizedBox(height: 12),
+            _AttentionRow(
+              label: 'Chờ xác nhận',
+              value: '$waitingAppointments',
+              onTap: onOpenAppointments,
+            ),
+            _AttentionRow(
+              label: 'Đang phục vụ',
+              value: '$activeAppointments',
+              onTap: onOpenAppointments,
+            ),
+            _AttentionRow(
+              label: 'Đã đặt còn lại',
+              value: '$bookedAppointments',
+              onTap: onOpenAppointments,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttentionRow extends StatelessWidget {
+  const _AttentionRow({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeaturedCustomersPanel extends StatelessWidget {
+  const _FeaturedCustomersPanel({
+    required this.customers,
+    required this.onOpen,
+  });
+
+  final List<Map<String, Object?>> customers;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleCustomers = customers.take(3).toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _PanelHeader(
+              title: 'Khách hàng cần nhớ',
+              actionLabel: 'Mở khách hàng',
+              actionKey: const Key('overview-open-customers'),
+              onAction: onOpen,
+            ),
+            const SizedBox(height: 10),
+            if (visibleCustomers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'Chưa có khách hàng nổi bật.',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              )
+            else
+              for (var index = 0; index < visibleCustomers.length; index++) ...[
+                _CustomerRow(customer: visibleCustomers[index], onTap: onOpen),
+                if (index < visibleCustomers.length - 1)
+                  Divider(height: 1, color: AppColors.border),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerRow extends StatelessWidget {
+  const _CustomerRow({required this.customer, required this.onTap});
+
+  final Map<String, Object?> customer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.shellAccentSurface,
+                foregroundColor: AppColors.textPrimary,
+                child: Text(
+                  customer['initials'].toString(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer['name'].toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      customer['service'].toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              AppBadge(label: customer['tier'].toString()),
+            ],
+          ),
         ),
       ),
     );
@@ -655,234 +606,38 @@ class _AppointmentsPanelState extends State<_AppointmentsPanel> {
 }
 
 class _RevenuePanel extends StatelessWidget {
-  const _RevenuePanel({required this.points});
+  const _RevenuePanel({required this.points, required this.onOpen});
 
   final List<Map<String, Object?>> points;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final maxValue = points
-        .map((point) => (point['value'] as num?)?.toDouble() ?? 0)
-        .fold<double>(
-          1,
-          (previousValue, element) =>
-              element > previousValue ? element : previousValue,
-        );
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _PanelHeader(
-              title: 'Doanh thu tuần này',
-              action: 'Cập nhật theo ngày',
+            _PanelHeader(
+              title: 'Doanh thu 7 ngày',
+              actionLabel: 'Mở báo cáo',
+              actionKey: const Key('overview-open-reports'),
+              onAction: onOpen,
             ),
-            const SizedBox(height: 14),
-            Container(
-              height: 236,
-              decoration: BoxDecoration(
-                color: AppColors.panelRaised,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.border),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: List.generate(points.length, (index) {
-                        final point = points[index];
-                        final value = (point['value'] as num?)?.toDouble() ?? 0;
-                        final heightFactor = maxValue == 0
-                            ? 0.1
-                            : value / maxValue;
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Text(
-                                  _compactCurrency(value),
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Container(
-                                      height: 160 * heightFactor.clamp(0.12, 1),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        gradient: AppColors.revenueBarGradient,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 0,
-                    children: points
-                        .map(
-                          (point) => Text(
-                            point['label'].toString(),
-                            style: TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 10,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FeaturedCustomersPanel extends StatefulWidget {
-  const _FeaturedCustomersPanel({required this.customers, this.viewportHeight});
-
-  final List<Map<String, Object?>> customers;
-  final double? viewportHeight;
-
-  @override
-  State<_FeaturedCustomersPanel> createState() =>
-      _FeaturedCustomersPanelState();
-}
-
-class _FeaturedCustomersPanelState extends State<_FeaturedCustomersPanel> {
-  final ScrollController _scrollCtrl = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final listView = Scrollbar(
-      controller: _scrollCtrl,
-      child: ListView.separated(
-        controller: _scrollCtrl,
-        primary: false,
-        itemCount: widget.customers.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final customer = widget.customers[index];
-          return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.panelRaised,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Container(
-                  height: 36,
-                  width: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.copper),
+                for (final point in points)
+                  _RevenuePoint(
+                    label: point['label'].toString(),
+                    value: (point['value'] as num?)?.toDouble() ?? 0,
+                    onTap: onOpen,
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    customer['initials'].toString(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              customer['name'].toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          AppBadge(label: customer['tier'].toString()),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        customer['service'].toString(),
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        customer['note'].toString(),
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          height: 1.4,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${customer['appointmentTime']} • ${customer['spendLabel']}',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
-          );
-        },
-      ),
-    );
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _PanelHeader(
-              title: 'Khách hàng nổi bật',
-              action: '3 hồ sơ ưu tiên',
-            ),
-            const SizedBox(height: 14),
-            if (widget.viewportHeight != null)
-              SizedBox(height: widget.viewportHeight, child: listView)
-            else
-              Expanded(child: listView),
           ],
         ),
       ),
@@ -890,181 +645,46 @@ class _FeaturedCustomersPanelState extends State<_FeaturedCustomersPanel> {
   }
 }
 
-class _QuickCheckoutPanel extends StatefulWidget {
-  const _QuickCheckoutPanel({
-    required this.customerName,
-    required this.discount,
-    required this.lines,
-    required this.paymentNote,
-    required this.total,
-    this.viewportHeight,
+class _RevenuePoint extends StatelessWidget {
+  const _RevenuePoint({
+    required this.label,
+    required this.value,
+    required this.onTap,
   });
 
-  final String customerName;
-  final String discount;
-  final List<Map<String, Object?>> lines;
-  final String paymentNote;
-  final String total;
-  final double? viewportHeight;
-
-  @override
-  State<_QuickCheckoutPanel> createState() => _QuickCheckoutPanelState();
-}
-
-class _QuickCheckoutPanelState extends State<_QuickCheckoutPanel> {
-  final ScrollController _scrollCtrl = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
+  final String label;
+  final double value;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final linesScrollArea = Scrollbar(
-      controller: _scrollCtrl,
-      child: SingleChildScrollView(
-        controller: _scrollCtrl,
-        primary: false,
-        child: Column(
-          children: widget.lines
-              .map(
-                (line) => Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.panelRaised,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              line['label'].toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Stylist ${line['stylist']} • SL ${line['qty']}',
-                              style: TextStyle(color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        line['amount'].toString(),
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      ),
-    );
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _PanelHeader(
-              title: 'Tính tiền nhanh',
-              action: 'Draft invoice',
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.panelRaised,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppColors.border),
+    return Material(
+      color: AppColors.panelRaised,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 88),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Khách đang chọn',
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.customerName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.paymentNote,
-                    style: TextStyle(color: AppColors.textMuted, height: 1.45),
-                  ),
-                ],
+              const SizedBox(height: 4),
+              Text(
+                _compactCurrency(value),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-            ),
-            const SizedBox(height: 16),
-            if (widget.viewportHeight != null)
-              SizedBox(height: widget.viewportHeight, child: linesScrollArea)
-            else
-              Expanded(child: linesScrollArea),
-            const Divider(height: 28),
-            const _CheckoutSummaryRow(label: 'Tạm tính', value: '1.950.000₫'),
-            const SizedBox(height: 10),
-            _CheckoutSummaryRow(
-              label: 'Giảm giá thành viên',
-              value: '-${widget.discount}',
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Tổng cộng',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Text(
-                  widget.total,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonal(
-                    onPressed: null,
-                    child: const Text('Tiền mặt'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: null,
-                    child: const Text('Chuyển khoản'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1072,10 +692,17 @@ class _QuickCheckoutPanelState extends State<_QuickCheckoutPanel> {
 }
 
 class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.title, required this.action});
+  const _PanelHeader({
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+    this.actionKey,
+  });
 
   final String title;
-  final String action;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final Key? actionKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1087,81 +714,12 @@ class _PanelHeader extends StatelessWidget {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           ),
         ),
-        Text(
-          action,
-          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+        TextButton(
+          key: actionKey,
+          onPressed: onAction,
+          child: Text(actionLabel),
         ),
       ],
-    );
-  }
-}
-
-class _CheckoutSummaryRow extends StatelessWidget {
-  const _CheckoutSummaryRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(label, style: TextStyle(color: AppColors.textMuted)),
-        ),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-}
-
-class _HeaderCell extends StatelessWidget {
-  const _HeaderCell(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: AppColors.textMuted,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _BodyCell extends StatelessWidget {
-  const _BodyCell(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(text),
-    );
-  }
-}
-
-class _StatusCell extends StatelessWidget {
-  const _StatusCell(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: AppStatusBadge(label: text),
-      ),
     );
   }
 }
@@ -1173,7 +731,6 @@ List<Map<String, Object?>> _mapList(Object? source) {
         .map((item) => Map<String, Object?>.from(item))
         .toList();
   }
-
   return const [];
 }
 
@@ -1181,10 +738,8 @@ String _compactCurrency(double value) {
   if (value >= 1000000) {
     return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
   }
-
   if (value >= 1000) {
     return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
   }
-
   return value.toStringAsFixed(0);
 }
