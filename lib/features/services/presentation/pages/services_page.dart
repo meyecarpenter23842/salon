@@ -495,55 +495,63 @@ class _ServiceTile extends StatelessWidget {
           color: selected ? AppColors.copper : AppColors.border,
         ),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 10,
-        ),
-        onTap: onTap,
-        leading: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: AppColors.avatarFill,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 10,
           ),
-          alignment: Alignment.center,
-          child: Icon(Icons.content_cut_rounded, color: AppColors.copper),
-        ),
-        title: Text(
-          service.name,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          onTap: onTap,
+          leading: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: AppColors.avatarFill,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            alignment: Alignment.center,
+            child: Icon(Icons.content_cut_rounded, color: AppColors.copper),
+          ),
+          title: Text(
+            service.name,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${service.category} • ${service.durationLabel}'),
+                const SizedBox(height: 4),
+                Text(
+                  service.popularityLabel,
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${service.category} • ${service.durationLabel}'),
+              Text(
+                service.priceLabel,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 4),
               Text(
-                service.popularityLabel,
-                style: TextStyle(color: AppColors.textMuted),
+                service.statusLabel,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              service.priceLabel,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              service.statusLabel,
-              style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
-            ),
-          ],
         ),
       ),
     );

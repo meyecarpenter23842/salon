@@ -695,69 +695,80 @@ class _AppointmentTile extends StatelessWidget {
           color: selected ? AppColors.copper : AppColors.border,
         ),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        onTap: onTap,
-        leading: Container(
-          width: 58,
-          decoration: BoxDecoration(
-            color: AppColors.avatarFill,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 8,
           ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                appointment.timeLabel,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+          onTap: onTap,
+          leading: Container(
+            width: 58,
+            decoration: BoxDecoration(
+              color: AppColors.avatarFill,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  appointment.timeLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                appointment.dateLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textMuted,
-                  height: 1.0,
+                const SizedBox(height: 2),
+                Text(
+                  appointment.dateLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textMuted,
+                    height: 1.0,
+                  ),
                 ),
+              ],
+            ),
+          ),
+          title: Text(
+            appointment.customerName,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${appointment.servicesSummary} • ${appointment.staffName}'),
+                const SizedBox(height: 4),
+                Text(
+                  '${appointment.durationLabel} • ${appointment.slotLabel}',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              appointment.status,
+              style: TextStyle(
+                color: statusColor,
+                fontWeight: FontWeight.w600,
               ),
-            ],
-          ),
-        ),
-        title: Text(
-          appointment.customerName,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${appointment.servicesSummary} • ${appointment.staffName}'),
-              const SizedBox(height: 4),
-              Text(
-                '${appointment.durationLabel} • ${appointment.slotLabel}',
-                style: TextStyle(color: AppColors.textMuted),
-              ),
-            ],
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            appointment.status,
-            style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ),

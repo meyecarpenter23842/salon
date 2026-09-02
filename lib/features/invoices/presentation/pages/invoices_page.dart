@@ -841,26 +841,37 @@ class _CustomerBillingTile extends StatelessWidget {
           color: selected ? AppColors.copper : AppColors.border,
         ),
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: AppColors.avatarFill,
-          foregroundColor: AppColors.textPrimary,
-          child: Text(customer.initials),
-        ),
-        title: Text(
-          customer.fullName,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(customer.phone),
-            const SizedBox(height: 2),
-            Text(customer.tier, style: TextStyle(color: AppColors.textMuted)),
-          ],
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 8,
+          ),
+          leading: CircleAvatar(
+            backgroundColor: AppColors.avatarFill,
+            foregroundColor: AppColors.textPrimary,
+            child: Text(customer.initials),
+          ),
+          title: Text(
+            customer.fullName,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Text(customer.phone),
+              const SizedBox(height: 2),
+              Text(
+                customer.tier,
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            ],
+          ),
         ),
       ),
     );
