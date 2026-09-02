@@ -501,7 +501,7 @@ class _SidebarFooter extends ConsumerWidget {
                   version.when(
                     data: (value) => value,
                     loading: () => '',
-                    error: (_, __) => 'v?',
+                    error: (error, stackTrace) => 'v?',
                   ),
                   style: TextStyle(
                     color: AppColors.textMuted.withValues(alpha: 0.72),
