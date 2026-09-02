@@ -378,6 +378,11 @@ class _CustomerWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detail = PremiumAnimatedDetail(
+      transitionKey: ValueKey(selected?.id ?? 'customer-empty'),
+      child: _CustomerDetail(customer: selected),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // After the desktop sidebar is deducted, a 1024–1280 window does not
@@ -391,7 +396,7 @@ class _CustomerWorkspace extends StatelessWidget {
                 child: _CustomerList(items: items, selectedIndex: selectedIndex),
               ),
               const SizedBox(height: 12),
-              SizedBox(height: 470, child: _CustomerDetail(customer: selected)),
+              SizedBox(height: 470, child: detail),
             ],
           );
         }
@@ -404,10 +409,7 @@ class _CustomerWorkspace extends StatelessWidget {
               child: _CustomerList(items: items, selectedIndex: selectedIndex),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              flex: 9,
-              child: _CustomerDetail(customer: selected),
-            ),
+            Expanded(flex: 9, child: detail),
           ],
         );
       },
@@ -443,89 +445,82 @@ class _CustomerList extends ConsumerWidget {
                 final isSelected = index == selectedIndex;
                 final vip = customer.tier.contains('VIP');
 
-                return Material(
-                  color: isSelected ? AppColors.selectedSurface : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () {
-                      ref.read(selectedCustomerIndexProvider.notifier).state = index;
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      child: Row(
-                        children: [
-                          PremiumIconBadge(
-                            icon: vip
-                                ? Icons.workspace_premium_outlined
-                                : Icons.person_outline_rounded,
-                            size: 38,
-                            tone: vip ? AppColors.warning : AppColors.copper,
-                          ),
-                          const SizedBox(width: 11),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  customer.fullName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    _TierBadge(tier: customer.tier),
-                                    Text(
-                                      customer.phone,
-                                      style: TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 11.5,
-                                      ),
-                                    ),
-                                    if (customer.favoriteService.isNotEmpty)
-                                      Text(
-                                        customer.favoriteService,
-                                        style: TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 11.5,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
+                return PremiumInteractiveSurface(
+                  selected: isSelected,
+                  onTap: () {
+                    ref.read(selectedCustomerIndexProvider.notifier).state = index;
+                  },
+                  child: Row(
+                    children: [
+                      PremiumIconBadge(
+                        icon: vip
+                            ? Icons.workspace_premium_outlined
+                            : Icons.person_outline_rounded,
+                        size: 38,
+                        tone: vip ? AppColors.warning : AppColors.copper,
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              customer.fullName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w800),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 96,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
+                                _TierBadge(tier: customer.tier),
                                 Text(
-                                  customer.spentLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  '${customer.visitCount} lượt',
+                                  customer.phone,
                                   style: TextStyle(
                                     color: AppColors.textMuted,
-                                    fontSize: 11,
+                                    fontSize: 11.5,
                                   ),
                                 ),
+                                if (customer.favoriteService.isNotEmpty)
+                                  Text(
+                                    customer.favoriteService,
+                                    style: TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
                               ],
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 96,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              customer.spentLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${customer.visitCount} lượt',
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

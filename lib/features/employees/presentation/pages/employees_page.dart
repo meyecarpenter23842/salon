@@ -331,6 +331,13 @@ class _EmployeeWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detail = PremiumAnimatedDetail(
+      transitionKey: ValueKey(
+        selected?['id']?.toString() ?? 'employee-empty',
+      ),
+      child: _EmployeeDetail(employee: selected),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 1040) {
@@ -345,10 +352,7 @@ class _EmployeeWorkspace extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                height: 430,
-                child: _EmployeeDetail(employee: selected),
-              ),
+              SizedBox(height: 430, child: detail),
             ],
           );
         }
@@ -363,7 +367,7 @@ class _EmployeeWorkspace extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(child: _EmployeeDetail(employee: selected)),
+            Expanded(child: detail),
           ],
         );
       },
@@ -400,126 +404,111 @@ class _EmployeeList extends ConsumerWidget {
                 final status = employee['status']?.toString() ?? '';
                 final tone = _statusTone(status);
 
-                return Material(
-                  color: isSelected
-                      ? AppColors.selectedSurface
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () {
-                      ref.read(selectedEmployeeIndexProvider.notifier).state =
-                          index;
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 10,
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxWidth < 300;
-                          final identity = Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                employee['name']?.toString() ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${employee['role']} • ${employee['shift']}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ],
-                          );
+                return PremiumInteractiveSurface(
+                  selected: isSelected,
+                  onTap: () {
+                    ref.read(selectedEmployeeIndexProvider.notifier).state =
+                        index;
+                  },
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 300;
+                      final identity = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            employee['name']?.toString() ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${employee['role']} • ${employee['shift']}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      );
 
-                          if (compact) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                PremiumIconBadge(
-                                  icon: Icons.person_outline_rounded,
-                                  size: 38,
-                                  tone: tone,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                      if (compact) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            PremiumIconBadge(
+                              icon: Icons.person_outline_rounded,
+                              size: 38,
+                              tone: tone,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  identity,
+                                  const SizedBox(height: 7),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 5,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
-                                      identity,
-                                      const SizedBox(height: 7),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 5,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: [
-                                          PremiumStatusPill(
-                                            label: status,
-                                            tone: tone,
-                                          ),
-                                          Text(
-                                            employee['todaySchedule']
-                                                    ?.toString() ??
-                                                '',
-                                            style: TextStyle(
-                                              color: AppColors.textMuted,
-                                              fontSize: 10.5,
-                                            ),
-                                          ),
-                                        ],
+                                      PremiumStatusPill(
+                                        label: status,
+                                        tone: tone,
+                                      ),
+                                      Text(
+                                        employee['todaySchedule']?.toString() ??
+                                            '',
+                                        style: TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 10.5,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: [
-                              PremiumIconBadge(
-                                icon: Icons.person_outline_rounded,
-                                size: 38,
-                                tone: tone,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(child: identity),
-                              const SizedBox(width: 10),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  PremiumStatusPill(
-                                    label: status,
-                                    tone: tone,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    employee['todaySchedule']?.toString() ?? '',
-                                    style: TextStyle(
-                                      color: AppColors.textMuted,
-                                      fontSize: 10.5,
-                                    ),
-                                  ),
                                 ],
                               ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          PremiumIconBadge(
+                            icon: Icons.person_outline_rounded,
+                            size: 38,
+                            tone: tone,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(child: identity),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              PremiumStatusPill(
+                                label: status,
+                                tone: tone,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                employee['todaySchedule']?.toString() ?? '',
+                                style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 10.5,
+                                ),
+                              ),
                             ],
-                          );
-                        },
-                      ),
-                    ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 );
               },
