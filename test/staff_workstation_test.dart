@@ -36,7 +36,7 @@ void main() {
       listen: false,
     );
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Bàn nhân viên'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Bàn nhân viên'));
     await pumpUi(tester);
 
     expect(find.text('Bàn thao tác nhân viên'), findsOneWidget);
