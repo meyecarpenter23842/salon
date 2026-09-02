@@ -1,28 +1,24 @@
 import 'package:sqflite/sqflite.dart';
 
-import '../data/fake/fake_salon_data_source.dart';
-import '../database/invoice_mapper.dart';
 import '../database/invoice_draft_mapper.dart';
+import '../database/invoice_mapper.dart';
 import '../database/salon_database.dart';
-import '../database/salon_database_seed.dart';
 import '../models/appointment_entry.dart';
 import '../models/invoice_draft.dart';
 import '../models/invoice_draft_line.dart';
 import 'repository_contracts.dart';
 
 class SqliteInvoicesRepository implements InvoicesRepository {
-  SqliteInvoicesRepository(this._database, FakeSalonDataSource dataSource)
-    : _seed = SalonDatabaseSeed(dataSource);
+  SqliteInvoicesRepository(this._database, [Object? _]);
 
   final SalonDatabase _database;
-  final SalonDatabaseSeed _seed;
   static const String _draftInvoiceId = 'invoice-draft-001';
+
+  InvoiceDraft? _transientDraft;
 
   @override
   Future<InvoiceDraft> fetchInvoiceDraft() async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     return _loadDraft(database);
   }
 
@@ -33,8 +29,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
     String? appointmentId,
   }) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final whereClauses = <String>['id != ?', 'paid_at IS NOT NULL'];
     final whereArgs = <Object?>[_draftInvoiceId];
 
@@ -60,7 +54,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
     for (final row in invoiceRows) {
       results.add(await _loadInvoiceById(database, row['id'].toString()));
     }
-
     return results;
   }
 
@@ -69,11 +62,8 @@ class SqliteInvoicesRepository implements InvoicesRepository {
     AppointmentEntry appointment,
   ) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final now = DateTime.now();
     final lines = await _buildLinesFromAppointment(database, appointment, now);
-
     final draft = InvoiceDraft(
       id: _draftInvoiceId,
       appointmentId: appointment.id,
@@ -85,7 +75,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       updatedAt: now,
       lines: lines,
     );
-
     return _saveDraft(database, draft, rewriteItems: true);
   }
 
@@ -137,13 +126,10 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> selectInvoiceCustomer(String customerId) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
     if (draft.appointmentId != null && draft.customerId != customerId) {
       throw StateError('Cannot change customer for appointment-linked invoice');
     }
-
     return _saveDraft(
       database,
       draft.copyWith(customerId: customerId, updatedAt: DateTime.now()),
@@ -153,8 +139,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> updateInvoicePaymentMethod(String paymentMethod) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
     return _saveDraft(
       database,
@@ -168,8 +152,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> updateInvoiceDiscount(int discountAmount) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
     final normalizedDiscount = _normalizeDiscount(
       discountAmount,
@@ -190,8 +172,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
     String? employeeId,
   }) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
     final service = await _findService(database, serviceId);
     if (service == null) {
@@ -209,7 +189,10 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       final quantity = existing.quantity + 1;
       updatedLines[existingIndex] = existing.copyWith(
         quantity: quantity,
-        totalPrice: existing.unitPrice * quantity,
+        totalPrice: _lineTotal(
+          existing.unitPrice * quantity,
+          existing.discountAmount,
+        ),
         employeeId: employeeId ?? existing.employeeId,
       );
     } else {
@@ -245,13 +228,74 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   }
 
   @override
+  Future<InvoiceDraft> addInvoiceProduct(String productId) async {
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    final rows = await database.query(
+      'retail_products',
+      where: 'id = ? AND is_active = 1',
+      whereArgs: [productId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      throw StateError('Product $productId not found or inactive');
+    }
+    final product = rows.first;
+
+    final existingIndex = draft.lines.indexWhere(
+      (line) => line.isProduct && line.productId == productId,
+    );
+    final now = DateTime.now();
+    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
+
+    if (existingIndex >= 0) {
+      final existing = updatedLines[existingIndex];
+      final quantity = existing.quantity + 1;
+      updatedLines[existingIndex] = existing.copyWith(
+        quantity: quantity,
+        totalPrice: _lineTotal(
+          existing.unitPrice * quantity,
+          existing.discountAmount,
+        ),
+      );
+    } else {
+      final unitPrice = _toInt(product['sale_price']);
+      updatedLines.add(
+        InvoiceDraftLine(
+          id: 'line-${now.microsecondsSinceEpoch}',
+          invoiceId: draft.id,
+          itemType: 'product',
+          serviceId: null,
+          productId: productId,
+          title: product['name'].toString(),
+          quantity: 1,
+          unitPrice: unitPrice,
+          totalPrice: unitPrice,
+          discountAmount: 0,
+        ),
+      );
+    }
+
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        lines: updatedLines,
+        discountAmount: _normalizeDiscount(
+          draft.discountAmount,
+          _subtotal(updatedLines),
+        ),
+        updatedAt: now,
+      ),
+      rewriteItems: true,
+    );
+  }
+
+  @override
   Future<InvoiceDraft> updateInvoiceLineQuantity(
     String lineId,
     int quantity,
   ) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
     final index = draft.lines.indexWhere((line) => line.id == lineId);
     if (index < 0) {
@@ -284,10 +328,43 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   }
 
   @override
+  Future<InvoiceDraft> updateInvoiceLineDiscount(
+    String lineId,
+    int discountAmount,
+  ) async {
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    final index = draft.lines.indexWhere((line) => line.id == lineId);
+    if (index < 0) {
+      throw StateError('Invoice line $lineId not found');
+    }
+
+    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
+    final line = updatedLines[index];
+    final subtotal = line.unitPrice * line.quantity;
+    final normalizedDiscount = _normalizeDiscount(discountAmount, subtotal);
+    updatedLines[index] = line.copyWith(
+      discountAmount: normalizedDiscount,
+      totalPrice: _lineTotal(subtotal, normalizedDiscount),
+    );
+
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        lines: updatedLines,
+        discountAmount: _normalizeDiscount(
+          draft.discountAmount,
+          _subtotal(updatedLines),
+        ),
+        updatedAt: DateTime.now(),
+      ),
+      rewriteItems: true,
+    );
+  }
+
+  @override
   Future<InvoiceDraft> removeInvoiceLine(String lineId) async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
     final updatedLines = draft.lines
         .where((line) => line.id != lineId)
@@ -310,14 +387,45 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> checkoutInvoice() async {
     final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
     final draft = await _loadDraft(database);
+    if (draft.customerId.trim().isEmpty) {
+      throw StateError('Chọn khách hàng trước khi thanh toán.');
+    }
+    if (draft.lines.isEmpty) {
+      throw StateError('Hóa đơn chưa có dịch vụ hoặc sản phẩm.');
+    }
     return _archiveAndResetDraft(database, draft);
   }
 
   Future<InvoiceDraft> _loadDraft(Database database) async {
+    final invoiceRows = await database.query(
+      'invoices',
+      columns: const ['id'],
+      where: 'id = ?',
+      whereArgs: const [_draftInvoiceId],
+      limit: 1,
+    );
+    if (invoiceRows.isEmpty) {
+      return _transientDraft ??= _newEmptyDraft();
+    }
+
+    _transientDraft = null;
     return _loadInvoiceById(database, _draftInvoiceId);
+  }
+
+  InvoiceDraft _newEmptyDraft() {
+    final now = DateTime.now();
+    return InvoiceDraft(
+      id: _draftInvoiceId,
+      appointmentId: null,
+      customerId: '',
+      discountAmount: 0,
+      paymentMethod: InvoiceDraft.paymentMethods.first,
+      paidAt: null,
+      createdAt: now,
+      updatedAt: now,
+      lines: const [],
+    );
   }
 
   Future<InvoiceDraft> _loadInvoiceById(
@@ -330,7 +438,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       whereArgs: [invoiceId],
       limit: 1,
     );
-
     if (invoiceRows.isEmpty) {
       throw StateError('Invoice $invoiceId not found');
     }
@@ -341,7 +448,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       whereArgs: [invoiceId],
       orderBy: 'id ASC',
     );
-
     final lines = rows
         .map(InvoiceDraftMapper.fromDatabase)
         .toList(growable: false);
@@ -353,20 +459,41 @@ class SqliteInvoicesRepository implements InvoicesRepository {
     InvoiceDraft draft, {
     bool rewriteItems = false,
   }) async {
-    await database.update(
+    if (draft.customerId.trim().isEmpty) {
+      _transientDraft = draft;
+      return draft;
+    }
+
+    final existingRows = await database.query(
       'invoices',
-      InvoiceMapper.toDatabase(draft),
+      columns: const ['id'],
       where: 'id = ?',
       whereArgs: [draft.id],
+      limit: 1,
     );
+    final isNewDraft = existingRows.isEmpty;
 
-    if (rewriteItems) {
+    if (isNewDraft) {
+      await database.insert(
+        'invoices',
+        InvoiceMapper.toDatabase(draft),
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    } else {
+      await database.update(
+        'invoices',
+        InvoiceMapper.toDatabase(draft),
+        where: 'id = ?',
+        whereArgs: [draft.id],
+      );
+    }
+
+    if (rewriteItems || isNewDraft) {
       await database.delete(
         'invoice_items',
         where: 'invoice_id = ?',
         whereArgs: [draft.id],
       );
-
       for (final line in draft.lines) {
         await database.insert(
           'invoice_items',
@@ -376,7 +503,8 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       }
     }
 
-    return _loadDraft(database);
+    _transientDraft = null;
+    return _loadInvoiceById(database, draft.id);
   }
 
   Future<InvoiceDraft> _archiveAndResetDraft(
@@ -439,7 +567,6 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       where: 'invoice_id = ?',
       whereArgs: const [_draftInvoiceId],
     );
-
     await database.update(
       'invoices',
       InvoiceMapper.toDatabase(resetDraft),
@@ -491,22 +618,26 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       return;
     }
 
-    await database.insert('customers', {
-      'id': draft.customerId,
-      'full_name': appointmentRow['customer_name']?.toString() ?? 'Khách mới',
-      'phone': appointmentRow['customer_phone']?.toString() ?? '',
-      'email': null,
-      'tier': 'Member',
-      'loyalty_points': earnedPoints,
-      'favorite_service': appointmentRow['service_name']?.toString() ?? '',
-      'last_visit_at': paidAt.toIso8601String(),
-      'hair_profile': '',
-      'visit_count': 1,
-      'total_spent': draft.totalAmount,
-      'notes': appointmentRow['note']?.toString() ?? '',
-      'created_at': paidAt.toIso8601String(),
-      'updated_at': paidAt.toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await database.insert(
+      'customers',
+      {
+        'id': draft.customerId,
+        'full_name': appointmentRow['customer_name']?.toString() ?? 'Khách mới',
+        'phone': appointmentRow['customer_phone']?.toString() ?? '',
+        'email': null,
+        'tier': 'Member',
+        'loyalty_points': earnedPoints,
+        'favorite_service': appointmentRow['service_name']?.toString() ?? '',
+        'last_visit_at': paidAt.toIso8601String(),
+        'hair_profile': '',
+        'visit_count': 1,
+        'total_spent': draft.totalAmount,
+        'notes': appointmentRow['note']?.toString() ?? '',
+        'created_at': paidAt.toIso8601String(),
+        'updated_at': paidAt.toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<Map<String, Object?>?> _findService(
@@ -519,12 +650,7 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       whereArgs: [serviceId],
       limit: 1,
     );
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return rows.first;
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<Map<String, Object?>?> _findServiceByName(
@@ -537,12 +663,7 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       whereArgs: [serviceName.toLowerCase()],
       limit: 1,
     );
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return rows.first;
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<Map<String, Object?>?> _findAppointment(
@@ -555,23 +676,12 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       whereArgs: [appointmentId],
       limit: 1,
     );
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return rows.first;
+    return rows.isEmpty ? null : rows.first;
   }
 
   int _normalizeDiscount(int discountAmount, int subtotal) {
-    if (discountAmount < 0) {
-      return 0;
-    }
-
-    if (discountAmount > subtotal) {
-      return subtotal;
-    }
-
+    if (discountAmount < 0) return 0;
+    if (discountAmount > subtotal) return subtotal;
     return discountAmount;
   }
 
@@ -584,117 +694,9 @@ class SqliteInvoicesRepository implements InvoicesRepository {
     return value < 0 ? 0 : value;
   }
 
-  @override
-  Future<InvoiceDraft> addInvoiceProduct(String productId) async {
-    final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
-    final draft = await _loadDraft(database);
-    final rows = await database.query(
-      'retail_products',
-      where: 'id = ? AND is_active = 1',
-      whereArgs: [productId],
-      limit: 1,
-    );
-    if (rows.isEmpty) {
-      throw StateError('Product $productId not found or inactive');
-    }
-    final product = rows.first;
-
-    final existingIndex = draft.lines.indexWhere(
-      (line) => line.isProduct && line.productId == productId,
-    );
-    final now = DateTime.now();
-    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
-
-    if (existingIndex >= 0) {
-      final existing = updatedLines[existingIndex];
-      final quantity = existing.quantity + 1;
-      updatedLines[existingIndex] = existing.copyWith(
-        quantity: quantity,
-        totalPrice: _lineTotal(
-          existing.unitPrice * quantity,
-          existing.discountAmount,
-        ),
-      );
-    } else {
-      final unitPrice = _toInt(product['sale_price']);
-      updatedLines.add(
-        InvoiceDraftLine(
-          id: 'line-${now.microsecondsSinceEpoch}',
-          invoiceId: draft.id,
-          itemType: 'product',
-          serviceId: null,
-          productId: productId,
-          title: product['name'].toString(),
-          quantity: 1,
-          unitPrice: unitPrice,
-          totalPrice: unitPrice,
-          discountAmount: 0,
-        ),
-      );
-    }
-
-    return _saveDraft(
-      database,
-      draft.copyWith(
-        lines: updatedLines,
-        discountAmount: _normalizeDiscount(
-          draft.discountAmount,
-          _subtotal(updatedLines),
-        ),
-        updatedAt: now,
-      ),
-      rewriteItems: true,
-    );
-  }
-
-  @override
-  Future<InvoiceDraft> updateInvoiceLineDiscount(
-    String lineId,
-    int discountAmount,
-  ) async {
-    final database = await _database.database;
-    await _seed.seedInvoiceDraftIfNeeded(database);
-
-    final draft = await _loadDraft(database);
-    final index = draft.lines.indexWhere((line) => line.id == lineId);
-    if (index < 0) {
-      throw StateError('Invoice line $lineId not found');
-    }
-
-    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
-    final line = updatedLines[index];
-    final subtotal = line.unitPrice * line.quantity;
-    final normalizedDiscount = _normalizeDiscount(discountAmount, subtotal);
-    updatedLines[index] = line.copyWith(
-      discountAmount: normalizedDiscount,
-      totalPrice: _lineTotal(subtotal, normalizedDiscount),
-    );
-
-    return _saveDraft(
-      database,
-      draft.copyWith(
-        lines: updatedLines,
-        discountAmount: _normalizeDiscount(
-          draft.discountAmount,
-          _subtotal(updatedLines),
-        ),
-        updatedAt: DateTime.now(),
-      ),
-      rewriteItems: true,
-    );
-  }
-
   int _toInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-
-    if (value is num) {
-      return value.toInt();
-    }
-
+    if (value is int) return value;
+    if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

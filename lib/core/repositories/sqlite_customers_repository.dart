@@ -1,6 +1,5 @@
 import 'package:sqflite/sqflite.dart';
 
-import '../data/fake/fake_salon_data_source.dart';
 import '../database/customer_mapper.dart';
 import '../database/salon_database.dart';
 import '../models/customer_profile.dart';
@@ -8,10 +7,9 @@ import '../models/customer_upsert_input.dart';
 import 'repository_contracts.dart';
 
 class SqliteCustomersRepository implements CustomersRepository {
-  SqliteCustomersRepository(this._database, this._seedDataSource);
+  SqliteCustomersRepository(this._database, [Object? _]);
 
   final SalonDatabase _database;
-  final FakeSalonDataSource _seedDataSource;
 
   @override
   Future<List<CustomerProfile>> fetchCustomersView({
@@ -20,8 +18,6 @@ class SqliteCustomersRepository implements CustomersRepository {
     int? recentDays,
   }) async {
     final database = await _database.database;
-    await _seedIfNeeded(database);
-
     final normalizedQuery = query?.trim().toLowerCase();
     final normalizedTier = tier?.trim();
     final days = (recentDays ?? 30).clamp(1, 3650);
@@ -66,8 +62,6 @@ class SqliteCustomersRepository implements CustomersRepository {
     String? existingId,
   }) async {
     final database = await _database.database;
-    await _seedIfNeeded(database);
-
     final existingCustomer = existingId == null
         ? null
         : await _findById(database, existingId);
@@ -104,32 +98,6 @@ class SqliteCustomersRepository implements CustomersRepository {
     );
 
     return customer;
-  }
-
-  Future<void> _seedIfNeeded(Database database) async {
-    final count =
-        Sqflite.firstIntValue(
-          await database.rawQuery('SELECT COUNT(*) FROM customers'),
-        ) ??
-        0;
-
-    if (count > 0) {
-      return;
-    }
-
-    final seedCustomers = await _seedDataSource.fetchCustomersView();
-    final batch = database.batch();
-
-    for (final item in seedCustomers) {
-      final customer = CustomerMapper.fromLegacyView(item);
-      batch.insert(
-        'customers',
-        CustomerMapper.toDatabase(customer),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-
-    await batch.commit(noResult: true);
   }
 
   Future<CustomerProfile?> _findById(Database database, String id) async {
