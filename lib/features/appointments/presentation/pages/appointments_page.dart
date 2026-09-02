@@ -228,6 +228,10 @@ class _AppointmentsView extends ConsumerWidget {
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 1160;
         final bodyHeight = constraints.maxHeight < 760 ? 610.0 : 650.0;
+        final detail = PremiumAnimatedDetail(
+          transitionKey: ValueKey(selected?.id ?? 'appointment-empty'),
+          child: _AppointmentDetailPanel(appointment: selected),
+        );
 
         return ListView(
           primary: false,
@@ -267,10 +271,7 @@ class _AppointmentsView extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
-                      flex: 5,
-                      child: _AppointmentDetailPanel(appointment: selected),
-                    ),
+                    Expanded(flex: 5, child: detail),
                   ],
                 ),
               )
@@ -283,7 +284,13 @@ class _AppointmentsView extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              _AppointmentDetailPanel(appointment: selected, compact: true),
+              PremiumAnimatedDetail(
+                transitionKey: ValueKey(selected?.id ?? 'appointment-empty'),
+                child: _AppointmentDetailPanel(
+                  appointment: selected,
+                  compact: true,
+                ),
+              ),
             ],
           ],
         );
@@ -487,66 +494,52 @@ class _AppointmentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tone = _statusColor(appointment.status);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.selectedSurface : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? AppColors.borderStrong.withValues(alpha: 0.55) : Colors.transparent,
+    return PremiumInteractiveSurface(
+      selected: selected,
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.iconSurface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(appointment.timeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                Text(appointment.dateLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: AppColors.textMuted)),
+              ],
             ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.iconSurface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(appointment.customerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(appointment.servicesSummary, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary)),
+                const SizedBox(height: 3),
+                Row(
                   children: [
-                    Text(appointment.timeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-                    Text(appointment.dateLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: AppColors.textMuted)),
+                    Icon(Icons.badge_outlined, size: 13, color: AppColors.textMuted),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text('${appointment.staffName} • ${appointment.durationLabel} • ${appointment.slotLabel}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textMuted))),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(appointment.customerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Text(appointment.servicesSummary, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary)),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Icon(Icons.badge_outlined, size: 13, color: AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Expanded(child: Text('${appointment.staffName} • ${appointment.durationLabel} • ${appointment.slotLabel}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textMuted))),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              PremiumStatusPill(label: appointment.status, tone: tone),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 18),
-            ],
+              ],
+            ),
           ),
-        ),
+          const SizedBox(width: 10),
+          PremiumStatusPill(label: appointment.status, tone: tone),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 18),
+        ],
       ),
     );
   }

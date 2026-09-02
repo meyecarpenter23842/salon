@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import 'app_motion.dart';
 
 class PremiumPageHeader extends StatelessWidget {
   const PremiumPageHeader({
@@ -112,6 +114,122 @@ class PremiumIconBadge extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Icon(icon, color: color, size: size * 0.46),
+    );
+  }
+}
+
+class PremiumInteractiveSurface extends StatefulWidget {
+  const PremiumInteractiveSurface({
+    super.key,
+    required this.child,
+    required this.onTap,
+    this.selected = false,
+    this.padding = const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    this.borderRadius = 12,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final bool selected;
+  final EdgeInsetsGeometry padding;
+  final double borderRadius;
+
+  @override
+  State<PremiumInteractiveSurface> createState() =>
+      _PremiumInteractiveSurfaceState();
+}
+
+class _PremiumInteractiveSurfaceState extends State<PremiumInteractiveSurface> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    final radius = BorderRadius.circular(widget.borderRadius);
+    final background = _backgroundColor(enabled);
+    final borderColor = widget.selected
+        ? AppColors.borderStrong.withValues(alpha: 0.55)
+        : _hovered && enabled
+        ? AppColors.controlHoverBorder.withValues(alpha: 0.72)
+        : Colors.transparent;
+
+    return MouseRegion(
+      onEnter: enabled ? (_) => setState(() => _hovered = true) : null,
+      onExit: enabled
+          ? (_) => setState(() {
+              _hovered = false;
+              _pressed = false;
+            })
+          : null,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: enabled
+              ? (value) {
+                  if (_pressed == value) return;
+                  setState(() => _pressed = value);
+                }
+              : null,
+          mouseCursor: enabled
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
+          borderRadius: radius,
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          child: AnimatedContainer(
+            duration: AppMotion.duration(context, AppMotion.quick),
+            curve: AppMotion.standardCurve,
+            padding: widget.padding,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: radius,
+              border: Border.all(color: borderColor),
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _backgroundColor(bool enabled) {
+    if (!enabled) {
+      return widget.selected ? AppColors.selectedSurface : Colors.transparent;
+    }
+    if (_pressed) {
+      return widget.selected
+          ? Color.alphaBlend(
+              AppColors.copper.withValues(alpha: 0.08),
+              AppColors.selectedSurface,
+            )
+          : AppColors.controlPressedSurface;
+    }
+    if (widget.selected) return AppColors.selectedSurface;
+    if (_hovered) return AppColors.controlHoverSurface;
+    return Colors.transparent;
+  }
+}
+
+class PremiumAnimatedDetail extends StatelessWidget {
+  const PremiumAnimatedDetail({
+    super.key,
+    required this.transitionKey,
+    required this.child,
+  });
+
+  final Key transitionKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppMotionSwitcher(
+      beginOffset: const Offset(0.01, 0),
+      child: KeyedSubtree(key: transitionKey, child: child),
     );
   }
 }

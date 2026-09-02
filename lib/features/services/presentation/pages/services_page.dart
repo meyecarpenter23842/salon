@@ -296,6 +296,11 @@ class _Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detail = PremiumAnimatedDetail(
+      transitionKey: ValueKey(selected?.id ?? 'service-empty'),
+      child: _ServiceDetail(service: selected),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // The desktop shell consumes a meaningful part of window width.
@@ -312,10 +317,7 @@ class _Workspace extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                height: 430,
-                child: _ServiceDetail(service: selected),
-              ),
+              SizedBox(height: 430, child: detail),
             ],
           );
         }
@@ -331,10 +333,7 @@ class _Workspace extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              flex: 9,
-              child: _ServiceDetail(service: selected),
-            ),
+            Expanded(flex: 9, child: detail),
           ],
         );
       },
@@ -370,74 +369,62 @@ class _ServiceList extends ConsumerWidget {
                 final isSelected = index == selectedIndex;
                 final tone =
                     item.isActive ? AppColors.success : AppColors.textMuted;
-                return Material(
-                  color: isSelected
-                      ? AppColors.selectedSurface
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => ref
-                        .read(selectedServiceIndexProvider.notifier)
-                        .state = index,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 10,
+                return PremiumInteractiveSurface(
+                  selected: isSelected,
+                  onTap: () => ref
+                      .read(selectedServiceIndexProvider.notifier)
+                      .state = index,
+                  child: Row(
+                    children: [
+                      PremiumIconBadge(
+                        icon: Icons.content_cut_rounded,
+                        size: 36,
+                        tone: isSelected ? AppColors.copper : tone,
                       ),
-                      child: Row(
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${item.category} • ${item.durationLabel} • ${item.popularityLabel}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          PremiumIconBadge(
-                            icon: Icons.content_cut_rounded,
-                            size: 36,
-                            tone: isSelected ? AppColors.copper : tone,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${item.category} • ${item.durationLabel} • ${item.popularityLabel}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11.5,
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            item.priceLabel,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                item.priceLabel,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              PremiumStatusPill(
-                                label: item.statusLabel,
-                                tone: tone,
-                              ),
-                            ],
+                          const SizedBox(height: 4),
+                          PremiumStatusPill(
+                            label: item.statusLabel,
+                            tone: tone,
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
                 );
               },
