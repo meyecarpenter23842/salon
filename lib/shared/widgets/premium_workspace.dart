@@ -224,59 +224,73 @@ class PremiumSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasHeader = title != null || icon != null || trailing != null;
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.cardGradient,
-        borderRadius: BorderRadius.circular(AppColors.cardRadius),
-        border: Border.all(color: AppColors.cardBorder),
-        boxShadow: AppColors.surfaceShadow,
-      ),
-      child: Padding(
-        padding: padding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (hasHeader) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (icon != null) ...[
-                    PremiumIconBadge(icon: icon!, size: 34),
-                    const SizedBox(width: 10),
-                  ],
-                  if (title != null)
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title!, style: Theme.of(context).textTheme.titleLarge),
-                          if (subtitle != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textMuted,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Some established operation screens already pass Expanded/Flexible as
+        // the card body. Never add a second Flex ParentDataWidget around those.
+        final shouldExpandBody =
+            constraints.hasBoundedHeight && child is! Flexible;
+        return Container(
+          decoration: BoxDecoration(
+            gradient: AppColors.cardGradient,
+            borderRadius: BorderRadius.circular(AppColors.cardRadius),
+            border: Border.all(color: AppColors.cardBorder),
+            boxShadow: AppColors.surfaceShadow,
+          ),
+          child: Padding(
+            padding: padding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasHeader) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (icon != null) ...[
+                        PremiumIconBadge(icon: icon!, size: 34),
+                        const SizedBox(width: 10),
+                      ],
+                      if (title != null)
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title!,
+                                style: Theme.of(context).textTheme.titleLarge,
                               ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  if (title == null) const Spacer(),
-                  if (trailing != null) ...[
-                    const SizedBox(width: 10),
-                    trailing!,
-                  ],
+                              if (subtitle != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textMuted,
+                                      ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      if (title == null) const Spacer(),
+                      if (trailing != null) ...[
+                        const SizedBox(width: 10),
+                        trailing!,
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
                 ],
-              ),
-              const SizedBox(height: 14),
-            ],
-            child,
-          ],
-        ),
-      ),
+                if (shouldExpandBody) Expanded(child: child) else child,
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -399,31 +413,44 @@ class PremiumStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: AppColors.isLight ? 0.10 : 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tone.withValues(alpha: 0.30)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact =
+            constraints.hasBoundedWidth && constraints.maxWidth < 180;
+        final labelWidget = Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: tone,
+            fontWeight: FontWeight.w800,
           ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: tone,
-              fontWeight: FontWeight.w800,
-            ),
+        );
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: tone.withValues(alpha: AppColors.isLight ? 0.10 : 0.14),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: tone.withValues(alpha: 0.30)),
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: tone,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (compact) Expanded(child: labelWidget) else labelWidget,
+            ],
+          ),
+        );
+      },
     );
   }
 }
