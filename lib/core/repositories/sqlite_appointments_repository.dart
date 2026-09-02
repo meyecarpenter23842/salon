@@ -17,6 +17,8 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   final SalonDatabase _database;
   final SalonDatabaseSeed _seed;
 
+  static const String _cancelledStatus = 'Đã hủy';
+
   @override
   Future<List<AppointmentEntry>> fetchAppointmentsView({DateTime? day}) async {
     final database = await _database.database;
@@ -24,9 +26,29 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     await _seed.seedEmployeesIfNeeded(database);
     await _syncAppointmentEmployeesIfNeeded(database);
 
-    final rows = await database.query('appointments', orderBy: 'starts_at ASC');
+    final rows = day == null
+        ? await database.query('appointments', orderBy: 'starts_at ASC')
+        : await database.query(
+            'appointments',
+            where: 'starts_at >= ? AND starts_at < ?',
+            whereArgs: [
+              _startOfDay(day).toIso8601String(),
+              _startOfNextDay(day).toIso8601String(),
+            ],
+            orderBy: 'starts_at ASC',
+          );
 
-    final serviceLines = await _loadAppointmentServiceLines(database);
+    if (rows.isEmpty) {
+      return const [];
+    }
+
+    final appointmentIds = rows
+        .map((row) => row['id']!.toString())
+        .toList(growable: false);
+    final serviceLines = await _loadAppointmentServiceLines(
+      database,
+      appointmentIds: appointmentIds,
+    );
 
     return rows
         .map((row) {
@@ -54,99 +76,118 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     await _seed.seedAppointmentsIfNeeded(database);
     await _seed.seedEmployeesIfNeeded(database);
 
-    final existing = existingId == null
-        ? null
-        : await _findById(database, existingId);
-    final customer = await _findCustomerById(database, input.customerId);
-    if (customer == null) {
-      throw StateError('Customer ${input.customerId} not found');
-    }
-    final services = await _findServicesByIds(database, input.serviceIds);
-    if (services.length != input.serviceIds.length) {
-      throw StateError('One or more services not found');
-    }
-    final employee = await _findEmployeeById(database, input.employeeId);
-    if (employee == null) {
-      throw StateError('Employee ${input.employeeId} not found');
-    }
-    final now = DateTime.now();
-    final appointmentId =
-        existing?.id ?? 'appointment-${now.microsecondsSinceEpoch}';
-    final startsAt = AppointmentMapper.buildStartsAt(
-      dateLabel: input.dayLabel,
-      timeLabel: input.timeLabel,
-    );
-    final durationMinutes = _resolveDurationMinutes(
-      services,
-      fallbackDurationMinutes: input.durationMinutes,
-      existingDurationMinutes: existing?.durationMinutes ?? 0,
-    );
-    if (input.status != 'Đã hủy') {
-      await _ensureNoScheduleConflict(
-        database,
-        employeeId: employee['id']!.toString(),
-        startsAt: startsAt,
-        durationMinutes: durationMinutes,
-        ignoredAppointmentId: existing?.id,
+    return database.transaction((transaction) async {
+      final existing = existingId == null
+          ? null
+          : await _findById(transaction, existingId);
+      final customer = await _findCustomerById(transaction, input.customerId);
+      if (customer == null) {
+        throw StateError('Customer ${input.customerId} not found');
+      }
+
+      final services = await _findServicesByIds(transaction, input.serviceIds);
+      if (services.length != input.serviceIds.length) {
+        throw StateError('One or more services not found');
+      }
+      if (services.isEmpty) {
+        throw StateError('At least one service is required');
+      }
+
+      final employee = await _findEmployeeById(transaction, input.employeeId);
+      if (employee == null) {
+        throw StateError('Employee ${input.employeeId} not found');
+      }
+
+      final now = DateTime.now();
+      final appointmentId =
+          existing?.id ?? 'appointment-${now.microsecondsSinceEpoch}';
+      final startsAt = AppointmentMapper.buildStartsAt(
+        dateLabel: input.dayLabel,
+        timeLabel: input.timeLabel,
       );
-    }
-    final primaryService = services.first;
-    final serviceSummary = services
-        .map((service) => service['name']!.toString())
-        .join(' + ');
-    final appointment =
-        AppointmentEntry.fromUpsertInput(
-          id: appointmentId,
-          input: AppointmentUpsertInput(
-            customerId: customer['id']!.toString(),
-            serviceIds: services
-                .map((service) => service['id']!.toString())
-                .toList(growable: false),
-            employeeId: employee['id']!.toString(),
-            customerName: customer['full_name']!.toString(),
-            customerPhone: customer['phone']!.toString(),
-            serviceName: serviceSummary,
-            staffName: employee['full_name']!.toString(),
-            status: input.status,
-            durationMinutes: durationMinutes,
-            slotLabel: input.slotLabel,
-            note: input.note,
-            dayLabel: input.dayLabel,
-            timeLabel: input.timeLabel,
-          ),
+      final durationMinutes = _resolveDurationMinutes(
+        services,
+        fallbackDurationMinutes: input.durationMinutes,
+        existingDurationMinutes: existing?.durationMinutes ?? 0,
+      );
+
+      if (input.status != _cancelledStatus) {
+        await _ensureNoScheduleConflict(
+          transaction,
+          employeeId: employee['id']!.toString(),
           startsAt: startsAt,
-          createdAt: existing?.createdAt ?? now,
-          updatedAt: now,
-        ).copyWith(
-          serviceId: primaryService['id']!.toString(),
-          services: _buildAppointmentServiceLines(
-            appointmentId: appointmentId,
-            services: services,
-          ),
+          durationMinutes: durationMinutes,
+          ignoredAppointmentId: existing?.id,
         );
+      }
 
-    await database.insert(
-      'appointments',
-      AppointmentMapper.toDatabase(appointment),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-
-    await database.delete(
-      'appointment_services',
-      where: 'appointment_id = ?',
-      whereArgs: [appointment.id],
-    );
-    final batch = database.batch();
-    for (final serviceLine in appointment.services) {
-      batch.insert(
-        'appointment_services',
-        AppointmentServiceMapper.toDatabase(serviceLine),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+      final primaryService = services.first;
+      final serviceSummary = services
+          .map((service) => service['name']!.toString())
+          .join(' + ');
+      final appointment = AppointmentEntry.fromUpsertInput(
+        id: appointmentId,
+        input: AppointmentUpsertInput(
+          customerId: customer['id']!.toString(),
+          serviceIds: services
+              .map((service) => service['id']!.toString())
+              .toList(growable: false),
+          employeeId: employee['id']!.toString(),
+          customerName: customer['full_name']!.toString(),
+          customerPhone: customer['phone']!.toString(),
+          serviceName: serviceSummary,
+          staffName: employee['full_name']!.toString(),
+          status: input.status,
+          durationMinutes: durationMinutes,
+          slotLabel: input.slotLabel,
+          note: input.note,
+          dayLabel: input.dayLabel,
+          timeLabel: input.timeLabel,
+        ),
+        startsAt: startsAt,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      ).copyWith(
+        serviceId: primaryService['id']!.toString(),
+        services: _buildAppointmentServiceLines(
+          appointmentId: appointmentId,
+          services: services,
+        ),
       );
-    }
-    await batch.commit(noResult: true);
 
-    return appointment;
+      if (existing == null) {
+        await transaction.insert(
+          'appointments',
+          AppointmentMapper.toDatabase(appointment),
+          conflictAlgorithm: ConflictAlgorithm.abort,
+        );
+      } else {
+        final updatedRows = await transaction.update(
+          'appointments',
+          AppointmentMapper.toDatabase(appointment),
+          where: 'id = ?',
+          whereArgs: [appointment.id],
+        );
+        if (updatedRows != 1) {
+          throw StateError('Appointment ${appointment.id} could not be updated');
+        }
+      }
+
+      await transaction.delete(
+        'appointment_services',
+        where: 'appointment_id = ?',
+        whereArgs: [appointment.id],
+      );
+      for (final serviceLine in appointment.services) {
+        await transaction.insert(
+          'appointment_services',
+          AppointmentServiceMapper.toDatabase(serviceLine),
+          conflictAlgorithm: ConflictAlgorithm.abort,
+        );
+      }
+
+      return appointment;
+    });
   }
 
   @override
@@ -157,28 +198,51 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     final database = await _database.database;
     await _seed.seedAppointmentsIfNeeded(database);
 
-    final existing = await _findById(database, appointmentId);
-    if (existing == null) {
-      throw StateError('Appointment $appointmentId not found');
-    }
+    return database.transaction((transaction) async {
+      final existing = await _findById(transaction, appointmentId);
+      if (existing == null) {
+        throw StateError('Appointment $appointmentId not found');
+      }
 
-    final updated = existing.copyWith(
-      status: status,
-      updatedAt: DateTime.now(),
-    );
+      var resolvedEmployeeId = existing.employeeId;
+      if (status != _cancelledStatus) {
+        resolvedEmployeeId ??= await _findEmployeeIdByName(
+          transaction,
+          existing.staffName,
+        );
+        if (resolvedEmployeeId != null && resolvedEmployeeId.isNotEmpty) {
+          await _ensureNoScheduleConflict(
+            transaction,
+            employeeId: resolvedEmployeeId,
+            startsAt: existing.startsAt,
+            durationMinutes: _appointmentDuration(existing),
+            ignoredAppointmentId: existing.id,
+          );
+        }
+      }
 
-    await database.update(
-      'appointments',
-      AppointmentMapper.toDatabase(updated),
-      where: 'id = ?',
-      whereArgs: [appointmentId],
-    );
+      final updated = existing.copyWith(
+        employeeId: resolvedEmployeeId,
+        status: status,
+        updatedAt: DateTime.now(),
+      );
 
-    return updated;
+      final updatedRows = await transaction.update(
+        'appointments',
+        AppointmentMapper.toDatabase(updated),
+        where: 'id = ?',
+        whereArgs: [appointmentId],
+      );
+      if (updatedRows != 1) {
+        throw StateError('Appointment $appointmentId could not be updated');
+      }
+
+      return updated;
+    });
   }
 
   Future<Map<String, Object?>?> _findCustomerById(
-    Database database,
+    DatabaseExecutor database,
     String customerId,
   ) async {
     final rows = await database.query(
@@ -197,7 +261,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   }
 
   Future<Map<String, Object?>?> _findServiceById(
-    Database database,
+    DatabaseExecutor database,
     String serviceId,
   ) async {
     final rows = await database.query(
@@ -216,7 +280,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   }
 
   Future<List<Map<String, Object?>>> _findServicesByIds(
-    Database database,
+    DatabaseExecutor database,
     List<String> serviceIds,
   ) async {
     final results = <Map<String, Object?>>[];
@@ -230,7 +294,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   }
 
   Future<Map<String, Object?>?> _findEmployeeById(
-    Database database,
+    DatabaseExecutor database,
     String employeeId,
   ) async {
     final rows = await database.query(
@@ -249,7 +313,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   }
 
   Future<void> _ensureNoScheduleConflict(
-    Database database, {
+    DatabaseExecutor database, {
     required String employeeId,
     required DateTime startsAt,
     required int durationMinutes,
@@ -261,7 +325,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
       'status != ?',
       'substr(starts_at, 1, 10) = ?',
     ];
-    final whereArgs = <Object?>[employeeId, 'Đã hủy', dateKey];
+    final whereArgs = <Object?>[employeeId, _cancelledStatus, dateKey];
     if (ignoredAppointmentId != null && ignoredAppointmentId.isNotEmpty) {
       whereClauses.add('id != ?');
       whereArgs.add(ignoredAppointmentId);
@@ -313,7 +377,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   }
 
   Future<Map<String, int>> _loadServiceDurationsByAppointmentIds(
-    Database database,
+    DatabaseExecutor database,
     List<String> appointmentIds,
   ) async {
     if (appointmentIds.isEmpty) {
@@ -364,6 +428,17 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     return 90;
   }
 
+  int _appointmentDuration(AppointmentEntry appointment) {
+    final serviceDuration = appointment.services.fold<int>(
+      0,
+      (sum, service) => sum + service.durationMinutes,
+    );
+    if (serviceDuration > 0) {
+      return serviceDuration;
+    }
+    return _normalizeDurationMinutes(appointment.durationMinutes);
+  }
+
   int _normalizeDurationMinutes(int value) {
     if (value > 0) {
       return value;
@@ -371,7 +446,17 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     return 90;
   }
 
-  Future<void> _syncAppointmentEmployeesIfNeeded(Database database) async {
+  DateTime _startOfDay(DateTime day) {
+    return DateTime(day.year, day.month, day.day);
+  }
+
+  DateTime _startOfNextDay(DateTime day) {
+    return DateTime(day.year, day.month, day.day + 1);
+  }
+
+  Future<void> _syncAppointmentEmployeesIfNeeded(
+    DatabaseExecutor database,
+  ) async {
     final rows = await database.query(
       'appointments',
       columns: const ['id', 'staff_name', 'employee_id'],
@@ -398,7 +483,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
   }
 
   Future<String?> _findEmployeeIdByName(
-    Database database,
+    DatabaseExecutor database,
     String fullName,
   ) async {
     final rows = await database.query(
@@ -416,7 +501,10 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     return rows.first['id']?.toString();
   }
 
-  Future<AppointmentEntry?> _findById(Database database, String id) async {
+  Future<AppointmentEntry?> _findById(
+    DatabaseExecutor database,
+    String id,
+  ) async {
     final rows = await database.query(
       'appointments',
       where: 'id = ?',
@@ -433,7 +521,8 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
       database,
       appointmentIds: [id],
     );
-    final bookedServices = serviceLines[id] ?? const <AppointmentServiceLine>[];
+    final bookedServices =
+        serviceLines[id] ?? const <AppointmentServiceLine>[];
     return appointment.copyWith(
       services: bookedServices,
       serviceId: bookedServices.firstOrNull?.serviceId ?? appointment.serviceId,
@@ -445,10 +534,14 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
 
   Future<Map<String, List<AppointmentServiceLine>>>
   _loadAppointmentServiceLines(
-    Database database, {
+    DatabaseExecutor database, {
     List<String>? appointmentIds,
   }) async {
-    final rows = appointmentIds == null || appointmentIds.isEmpty
+    if (appointmentIds != null && appointmentIds.isEmpty) {
+      return const {};
+    }
+
+    final rows = appointmentIds == null
         ? await database.query(
             'appointment_services',
             orderBy: 'appointment_id ASC, id ASC',

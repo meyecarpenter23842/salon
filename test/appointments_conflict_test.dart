@@ -145,6 +145,156 @@ void main() {
     expect(updated.id, created.id);
     expect(updated.note, 'Cap nhat ghi chu');
   });
+
+  test('fetchAppointmentsView loc dung ngay theo starts_at', () async {
+    final fixture = await _createFixture();
+
+    final today = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        dayLabel: 'Hôm nay',
+        timeLabel: '08:00',
+        durationMinutes: 60,
+      ),
+    );
+    final tomorrow = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        dayLabel: 'Ngày mai',
+        timeLabel: '08:00',
+        durationMinutes: 60,
+      ),
+    );
+
+    final todayRows = await fixture.appointmentsRepository.fetchAppointmentsView(
+      day: today.startsAt,
+    );
+    final tomorrowRows = await fixture.appointmentsRepository.fetchAppointmentsView(
+      day: tomorrow.startsAt,
+    );
+
+    expect(todayRows.map((item) => item.id), [today.id]);
+    expect(tomorrowRows.map((item) => item.id), [tomorrow.id]);
+    expect(todayRows.single.services, hasLength(1));
+    expect(tomorrowRows.single.services, hasLength(1));
+  });
+
+  test('mo lai lich da huy phai kiem tra conflict', () async {
+    final fixture = await _createFixture();
+
+    await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        status: 'Đã đặt',
+        timeLabel: '09:00',
+        durationMinutes: 60,
+      ),
+    );
+    final cancelled = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        status: 'Đã hủy',
+        timeLabel: '09:30',
+        durationMinutes: 60,
+      ),
+    );
+
+    expect(
+      () => fixture.appointmentsRepository.updateAppointmentStatus(
+        cancelled.id,
+        'Chờ xác nhận',
+      ),
+      throwsA(
+        predicate(
+          (error) =>
+              error is StateError &&
+              error.toString().contains(
+                'Nhân viên này đã có lịch trong khung giờ đã chọn.',
+              ),
+        ),
+      ),
+    );
+
+    final database = await SalonDatabase.instance.database;
+    final rows = await database.query(
+      'appointments',
+      columns: const ['status'],
+      where: 'id = ?',
+      whereArgs: [cancelled.id],
+      limit: 1,
+    );
+    expect(rows.single['status'], 'Đã hủy');
+  });
+
+  test('conflict dung tong duration tu appointment_services', () async {
+    final fixture = await _createFixture();
+
+    final created = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        serviceIds: [fixture.serviceAId, fixture.serviceBId],
+        timeLabel: '09:00',
+        durationMinutes: 30,
+      ),
+    );
+
+    final database = await SalonDatabase.instance.database;
+    await database.update(
+      'appointments',
+      {'duration_minutes': 30},
+      where: 'id = ?',
+      whereArgs: [created.id],
+    );
+
+    expect(
+      () => fixture.appointmentsRepository.saveAppointment(
+        fixture.buildInput(
+          employeeId: fixture.employeeAId,
+          timeLabel: '10:00',
+          durationMinutes: 60,
+        ),
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    final adjacent = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        timeLabel: '10:30',
+        durationMinutes: 60,
+      ),
+    );
+    expect(adjacent.id, isNotEmpty);
+  });
+
+  test('rollback appointment neu insert appointment_services that bai', () async {
+    final fixture = await _createFixture();
+    final database = await SalonDatabase.instance.database;
+
+    await database.execute('''
+      CREATE TRIGGER fail_appointment_service_insert
+      BEFORE INSERT ON appointment_services
+      BEGIN
+        SELECT RAISE(ABORT, 'forced appointment service failure');
+      END
+    ''');
+
+    expect(
+      () => fixture.appointmentsRepository.saveAppointment(
+        fixture.buildInput(
+          employeeId: fixture.employeeAId,
+          timeLabel: '14:00',
+          durationMinutes: 60,
+        ),
+      ),
+      throwsA(anything),
+    );
+
+    final appointments = await database.query('appointments');
+    final serviceLines = await database.query('appointment_services');
+    expect(appointments, isEmpty);
+    expect(serviceLines, isEmpty);
+  });
 }
 
 class _Fixture {
@@ -152,6 +302,7 @@ class _Fixture {
     required this.appointmentsRepository,
     required this.customerId,
     required this.serviceAId,
+    required this.serviceBId,
     required this.employeeAId,
     required this.employeeBId,
   });
@@ -159,6 +310,7 @@ class _Fixture {
   final SqliteAppointmentsRepository appointmentsRepository;
   final String customerId;
   final String serviceAId;
+  final String serviceBId;
   final String employeeAId;
   final String employeeBId;
 
@@ -166,22 +318,24 @@ class _Fixture {
     required String employeeId,
     required String timeLabel,
     required int durationMinutes,
+    List<String>? serviceIds,
     String status = 'Đã đặt',
     String note = '',
+    String dayLabel = 'Hôm nay',
   }) {
     return AppointmentUpsertInput(
       customerId: customerId,
-      serviceIds: [serviceAId],
+      serviceIds: serviceIds ?? [serviceAId],
       employeeId: employeeId,
       customerName: 'Khach test',
       customerPhone: '0900000000',
-      serviceName: 'Dich vu test A',
+      serviceName: 'Dich vu test',
       staffName: employeeId == employeeAId ? 'Nhan vien A' : 'Nhan vien B',
       status: status,
       durationMinutes: durationMinutes,
       slotLabel: 'Ghe test',
       note: note,
-      dayLabel: 'Hôm nay',
+      dayLabel: dayLabel,
       timeLabel: timeLabel,
     );
   }
@@ -230,6 +384,18 @@ Future<_Fixture> _createFixture() async {
     ),
   );
 
+  final serviceB = await servicesRepository.saveService(
+    const ServiceUpsertInput(
+      name: 'Dich vu test B',
+      category: 'Chăm sóc',
+      durationMinutes: 30,
+      price: 100000,
+      description: '',
+      isActive: true,
+      popularityLabel: 'Ổn định',
+    ),
+  );
+
   final employeeA = await employeesRepository.saveEmployee(
     const EmployeeUpsertInput(
       fullName: 'Nhan vien A',
@@ -268,6 +434,7 @@ Future<_Fixture> _createFixture() async {
     appointmentsRepository: appointmentsRepository,
     customerId: customer.id,
     serviceAId: serviceA.id,
+    serviceBId: serviceB.id,
     employeeAId: employeeA['id']!.toString(),
     employeeBId: employeeB['id']!.toString(),
   );
