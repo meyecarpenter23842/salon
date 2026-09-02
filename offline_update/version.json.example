@@ -1,0 +1,16 @@
+{
+  "latestVersion": "1.0.2",
+  "minimumSupportedVersion": "1.0.0",
+  "required": false,
+  "title": "Co ban cap nhat moi",
+  "message": "Ban 1.0.2 va loi van hanh va cai thien quy trinh desktop.",
+  "notes": [
+    "Va loi khoi dong trong giai doan bootstrap",
+    "Lam ro du lieu demo o Overview va Reports",
+    "Cap nhat tai lieu huong dan van hanh"
+  ],
+  "downloadPath": "\\\\SERVER-PC\\salon-update\\SalonManagerSetup-1.0.2.exe",
+  "releaseNotesPath": "\\\\SERVER-PC\\salon-update\\release-notes-1.0.2.txt",
+  "publishedAt": "2026-04-26T10:00:00",
+  "sha256": "PUT_REAL_SHA256_HERE"
+}

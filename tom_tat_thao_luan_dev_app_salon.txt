@@ -1,0 +1,123 @@
+TÓM TẮT Ý CHÍNH THẢO LUẬN VỚI DEV
+Dự án: App Quản Lý Salon Tóc
+
+1. ĐỊNH HƯỚNG SẢN PHẨM
+- Desktop app là bản chính.
+- Android để phase sau.
+- MVP đầu tiên ưu tiên Windows desktop chạy ổn, giao diện chuyên nghiệp, dùng được thật.
+- Không làm cloud, Android, Google Play, AI, thanh toán online trong MVP đầu.
+
+2. KIẾN TRÚC KỸ THUẬT
+- Flutter desktop-first.
+- State management: Riverpod.
+- Database local: SQLite cho Windows desktop.
+- Nên dùng sqflite_common_ffi hoặc abstraction phù hợp desktop.
+- UI không gọi database trực tiếp.
+- Cấu trúc chuẩn:
+  UI → Controller/Provider → Repository → Local SQLite.
+
+3. GIAO DIỆN
+- Desktop dùng sidebar trái là chính.
+- Theme chính: dark luxury hoặc light luxury tùy chọn.
+- Nếu dùng light theme: màu cream/champagne/espresso, không quá nhạt.
+- Layout desktop cần rộng, rõ, dễ nhập liệu:
+  + Sidebar trái
+  + Topbar search
+  + Dashboard cards
+  + Table lịch hẹn
+  + Panel chi tiết khách hàng/tính tiền
+
+4. MODULE MVP
+- Tổng quan
+- Lịch hẹn
+- Khách hàng
+- Dịch vụ
+- Nhân viên
+- Tính tiền
+- Báo cáo cơ bản
+- Cài đặt
+
+5. ĐỒNG BỘ DỮ LIỆU SAU NÀY
+- MVP hiện tại local-first, chưa làm cloud sync.
+- Nhưng database phải thiết kế sẵn để sau này đồng bộ Desktop + Android.
+- Không dùng INTEGER AUTOINCREMENT cho dữ liệu nghiệp vụ cần sync.
+- Dùng UUID dạng TEXT PRIMARY KEY.
+- Các bảng nghiệp vụ cần có:
+  + id TEXT PRIMARY KEY
+  + salon_id TEXT
+  + device_id TEXT
+  + created_at TEXT
+  + updated_at TEXT
+  + deleted_at TEXT
+  + sync_status TEXT
+  + last_synced_at TEXT
+  + version INTEGER DEFAULT 1
+- Dùng soft delete qua deleted_at, không xóa cứng dữ liệu.
+- Sau này thêm Cloud Sync:
+  Desktop SQLite ↔ Cloud Database/API ↔ Android SQLite.
+
+6. MÔ HÌNH BÁN HÀNG
+- Không nên chọn một kiểu duy nhất.
+- Nên dùng mô hình lai:
+  + Desktop Offline: bán key 1 lần.
+  + Cloud Sync + Android: thu phí theo tháng/năm.
+
+7. GÓI GIÁ GỢI Ý
+- Desktop Offline 1 máy: 690.000đ - 1.500.000đ.
+- Có thể chọn giá khởi điểm: 990.000đ / 1 máy / dùng vĩnh viễn.
+- Cloud Sync sau này: 99.000đ - 199.000đ/tháng.
+- Gói năm gợi ý: 1.500.000đ/năm.
+- Không nên bán cloud vĩnh viễn vì cloud có chi phí server, backup, storage, bảo trì.
+
+8. CƠ CHẾ LICENSE
+Bản offline:
+- Dùng mã kích hoạt theo máy.
+- 1 key dùng cho 1 máy.
+- Cho phép đổi máy 1-2 lần nếu khách liên hệ.
+- Có thể cho cập nhật miễn phí 12 tháng.
+
+Bản cloud/subscription:
+- Dùng tài khoản salon.
+- Có ngày hết hạn.
+- Có gói đang dùng.
+- Có số thiết bị được phép.
+- Nếu hết hạn: khóa cloud sync, không khóa dữ liệu local ngay.
+- Nếu mất mạng: cho dùng offline thêm 3-7 ngày.
+
+9. PHASE TRIỂN KHAI ĐỀ XUẤT
+Phase 1: Windows desktop local MVP
+- Scaffold Flutter desktop
+- Theme + sidebar
+- SQLite local
+- CRUD dịch vụ, nhân viên, khách hàng
+- Lịch hẹn
+- Tính tiền
+- Báo cáo cơ bản
+- Build Windows release
+
+Phase 2: Tối ưu vận hành
+- Backup dữ liệu
+- In hóa đơn
+- Xuất Excel/PDF
+- Tối ưu báo cáo
+- License offline
+
+Phase 3: Cloud sync
+- Tài khoản salon
+- Cloud database/API
+- SyncService
+- Backup cloud
+- Quản lý hạn dùng
+
+Phase 4: Android app
+- Android dùng chung schema
+- Đồng bộ với cloud
+- Chủ salon xem lịch, khách, báo cáo trên điện thoại
+
+10. NGUYÊN TẮC LÀM VIỆC VỚI CODEX/AI-DEV
+- Không làm tất cả cùng lúc.
+- Làm từng phase nhỏ.
+- Mỗi phase phải báo file đã sửa và cách test.
+- Không thêm tính năng ngoài spec.
+- Không đổi kiến trúc khi chưa hỏi.
+- Không làm Android khi MVP hiện tại là desktop-first.

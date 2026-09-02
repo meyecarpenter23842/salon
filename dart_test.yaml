@@ -1,0 +1,3 @@
+# Run test files sequentially to prevent SQLite file-lock conflicts
+# when multiple test isolates share the same .salon_manager database path.
+concurrency: 1
