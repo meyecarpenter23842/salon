@@ -14,6 +14,7 @@ import '../../../../shared/widgets/premium_workspace.dart';
 final customerSearchQueryProvider = StateProvider<String>((ref) => '');
 final customerTierFilterProvider = StateProvider<String?>((ref) => null);
 final customerRecentDaysFilterProvider = StateProvider<int?>((ref) => null);
+final customerInactiveDaysFilterProvider = StateProvider<int?>((ref) => null);
 final customerServiceFilterProvider = StateProvider<String?>((ref) => null);
 final selectedCustomerIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -33,12 +34,14 @@ final filteredCustomersProvider = FutureProvider<List<CustomerProfile>>((ref) as
   final query = ref.watch(customerSearchQueryProvider);
   final tier = ref.watch(customerTierFilterProvider);
   final recentDays = ref.watch(customerRecentDaysFilterProvider);
+  final inactiveDays = ref.watch(customerInactiveDaysFilterProvider);
   final service = ref.watch(customerServiceFilterProvider);
 
   final customers = await ref.watch(customersRepositoryProvider).fetchCustomersView(
         query: query.isEmpty ? null : query,
         tier: tier,
         recentDays: recentDays,
+        inactiveDays: inactiveDays,
       );
 
   if (service == null || service.isEmpty) return customers;
@@ -253,22 +256,25 @@ class _CustomerToolbar extends ConsumerWidget {
   const _CustomerToolbar();
 
   static const tiers = [
-    (label: 'Tất cả', value: null),
+    (label: 'Tất cả hạng', value: null),
     (label: 'VIP Gold', value: 'VIP Gold'),
     (label: 'VIP Silver', value: 'VIP Silver'),
     (label: 'Member', value: 'Member'),
   ];
-  static const periods = [
-    (label: 'Mọi thời gian', value: null),
-    (label: '7 ngày', value: 7),
-    (label: '30 ngày', value: 30),
-    (label: '90 ngày', value: 90),
+  static const activityFilters = [
+    (label: 'Tất cả khách', recentDays: null, inactiveDays: null),
+    (label: 'Gần đây · 7 ngày', recentDays: 7, inactiveDays: null),
+    (label: 'Gần đây · 30 ngày', recentDays: 30, inactiveDays: null),
+    (label: 'Gần đây · 90 ngày', recentDays: 90, inactiveDays: null),
+    (label: 'Không hoạt động · 30+ ngày', recentDays: null, inactiveDays: 30),
+    (label: 'Không hoạt động · 90+ ngày', recentDays: null, inactiveDays: 90),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentTier = ref.watch(customerTierFilterProvider);
-    final currentDays = ref.watch(customerRecentDaysFilterProvider);
+    final currentRecentDays = ref.watch(customerRecentDaysFilterProvider);
+    final currentInactiveDays = ref.watch(customerInactiveDaysFilterProvider);
     final currentService = ref.watch(customerServiceFilterProvider);
     final services = ref.watch(customerServiceOptionsProvider);
 
@@ -303,13 +309,17 @@ class _CustomerToolbar extends ConsumerWidget {
                     ref.read(selectedCustomerIndexProvider.notifier).state = 0;
                   },
                 ),
-              for (final option in periods)
+              for (final option in activityFilters)
                 FilterChip(
                   label: Text(option.label),
-                  selected: currentDays == option.value,
+                  selected: currentRecentDays == option.recentDays &&
+                      currentInactiveDays == option.inactiveDays,
                   showCheckmark: false,
                   onSelected: (_) {
-                    ref.read(customerRecentDaysFilterProvider.notifier).state = option.value;
+                    ref.read(customerRecentDaysFilterProvider.notifier).state =
+                        option.recentDays;
+                    ref.read(customerInactiveDaysFilterProvider.notifier).state =
+                        option.inactiveDays;
                     ref.read(selectedCustomerIndexProvider.notifier).state = 0;
                   },
                 ),

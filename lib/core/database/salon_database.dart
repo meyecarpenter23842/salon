@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'database_bootstrap.dart';
 import 'database_schema.dart';
+import 'legacy_demo_data_cleanup.dart';
 
 class SalonDatabase {
   SalonDatabase._();
@@ -289,6 +290,7 @@ class SalonDatabase {
           'value': DatabaseSchema.version.toString(),
           'updated_at': DateTime.now().toIso8601String(),
         }, conflictAlgorithm: ConflictAlgorithm.replace);
+        await LegacyDemoDataCleanup.run(database);
       },
     );
 

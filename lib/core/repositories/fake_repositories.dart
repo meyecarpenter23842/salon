@@ -264,12 +264,24 @@ class FakeCustomersRepository implements CustomersRepository {
     String? query,
     String? tier,
     int? recentDays,
+    int? inactiveDays,
   }) async {
+    if (recentDays != null && inactiveDays != null) {
+      throw ArgumentError(
+        'recentDays and inactiveDays are mutually exclusive activity filters.',
+      );
+    }
+
     final items = await _loadItems();
     final normalizedQuery = query?.trim().toLowerCase();
     final normalizedTier = tier?.trim();
-    final days = (recentDays ?? 30).clamp(1, 3650);
-    final threshold = DateTime.now().subtract(Duration(days: days));
+    final now = DateTime.now();
+    final recentThreshold = recentDays == null
+        ? null
+        : now.subtract(Duration(days: recentDays.clamp(1, 3650)));
+    final inactiveThreshold = inactiveDays == null
+        ? null
+        : now.subtract(Duration(days: inactiveDays.clamp(1, 3650)));
 
     return items
         .where((customer) {
@@ -281,9 +293,16 @@ class FakeCustomersRepository implements CustomersRepository {
             }
           }
 
-          final lastActivity = customer.lastVisitAt ?? customer.updatedAt;
-          if (lastActivity.isBefore(threshold)) {
-            return false;
+          if (recentThreshold != null) {
+            final lastVisit = customer.lastVisitAt;
+            if (lastVisit == null || lastVisit.isBefore(recentThreshold)) {
+              return false;
+            }
+          } else if (inactiveThreshold != null) {
+            final lastVisit = customer.lastVisitAt;
+            if (lastVisit != null && !lastVisit.isBefore(inactiveThreshold)) {
+              return false;
+            }
           }
 
           if (normalizedQuery == null || normalizedQuery.isEmpty) {
@@ -867,8 +886,7 @@ class FakeInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> addInvoiceProduct(String productId) async {
     final draft = await _loadDraft();
-    final products = await FakeRetailProductsRepository.shared()
-        .fetchProducts();
+    final products = await FakeRetailProductsRepository.shared().fetchProducts();
     final product = products.where((item) => item.id == productId).firstOrNull;
     if (product == null) {
       throw StateError('Product $productId not found');
@@ -1151,8 +1169,7 @@ class FakeRetailProductsRepository implements RetailProductsRepository {
 
   static final List<RetailProductItem> _sharedCache = [];
 
-  static FakeRetailProductsRepository shared() =>
-      FakeRetailProductsRepository();
+  static FakeRetailProductsRepository shared() => FakeRetailProductsRepository();
 
   void _ensureSeedData() {
     if (_sharedCache.any((item) => item.id == 'product-seed-1')) {
