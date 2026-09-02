@@ -169,7 +169,7 @@ class _ServicesView extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, viewport) {
-        if (viewport.maxHeight < 620) {
+        if (viewport.maxHeight < 760) {
           return ListView(
             key: const Key('services-premium-workspace'),
             primary: false,

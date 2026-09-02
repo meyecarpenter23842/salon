@@ -60,7 +60,7 @@ class _SalesView extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, viewport) {
-        final shortViewport = viewport.maxHeight < 620;
+        final shortViewport = viewport.maxHeight < 760;
         final page = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
