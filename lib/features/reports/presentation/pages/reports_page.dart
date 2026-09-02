@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,8 +11,7 @@ import '../../../../core/models/reports_period.dart';
 import '../../../../core/providers/data_backend_provider.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_dimens.dart';
-import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/premium_workspace.dart';
 
 final selectedReportServiceIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -26,8 +26,11 @@ class ReportsPage extends ConsumerWidget {
     return reports.when(
       data: (summary) => _ReportsView(summary: summary, backend: backend),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) =>
-          Center(child: Text('Không tải được báo cáo: $error')),
+      error: (error, _) => PremiumEmptyState(
+        icon: Icons.query_stats_rounded,
+        title: 'Không tải được báo cáo',
+        message: '$error',
+      ),
     );
   }
 }
@@ -44,8 +47,6 @@ class _ReportsView extends ConsumerWidget {
     final employeePerformance = _mapList(summary['employeePerformance']);
     final revenueTrend = _mapList(summary['revenueTrend']);
     final insights = _stringList(summary['insights']);
-    final periods = ReportsPeriod.values;
-    final selectedPeriod = ref.watch(reportsPeriodProvider);
     final selectedIndex = ref.watch(selectedReportServiceIndexProvider);
     final effectiveIndex = servicePerformance.isEmpty
         ? 0
@@ -54,275 +55,117 @@ class _ReportsView extends ConsumerWidget {
         ? null
         : servicePerformance[effectiveIndex];
 
-    return LayoutBuilder(
-      builder: (context, viewport) {
-        final shortViewport = viewport.maxHeight < 560;
-
-        Widget buildBody() {
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 1220;
-
-              if (compact) {
-                return ListView(
-                  primary: false,
-                  children: [
-                    _RevenueTrendPanel(points: revenueTrend),
-                    const SizedBox(height: 16),
-                    _ServicePerformancePanel(
-                      items: servicePerformance,
-                      selectedIndex: effectiveIndex,
-                    ),
-                    const SizedBox(height: 16),
-                    _ReportServiceDetailPanel(service: selectedService),
-                    const SizedBox(height: 16),
-                    _EmployeePerformancePanel(items: employeePerformance),
-                    const SizedBox(height: 16),
-                    _InsightsPanel(items: insights),
-                  ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: ListView(
-                      primary: false,
-                      children: [
-                        _RevenueTrendPanel(points: revenueTrend),
-                        const SizedBox(height: 16),
-                        _ServicePerformancePanel(
-                          items: servicePerformance,
-                          selectedIndex: effectiveIndex,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 4,
-                    child: ListView(
-                      primary: false,
-                      children: [
-                        _ReportServiceDetailPanel(service: selectedService),
-                        const SizedBox(height: 16),
-                        _EmployeePerformancePanel(items: employeePerformance),
-                        const SizedBox(height: 16),
-                        _InsightsPanel(items: insights),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        }
-
-        if (shortViewport) {
-          return ListView(
-            primary: false,
-            children: [
-              _ReportsHero(
-                goalRevenue: summary['revenue'].toString(),
-                fillRate: summary['fillRate'].toString(),
-                backend: backend,
+    return ListView(
+      key: const Key('reports-premium-workspace'),
+      primary: false,
+      padding: const EdgeInsets.only(bottom: 18),
+      children: [
+        PremiumSectionCard(
+          key: const Key('reports-premium-header'),
+          child: PremiumPageHeader(
+            icon: Icons.query_stats_rounded,
+            eyebrow: 'Hiệu suất salon',
+            title: 'Báo cáo',
+            subtitle:
+                'Theo dõi doanh thu, dịch vụ chủ lực, hiệu suất nhân sự và insight vận hành theo dữ liệu runtime.',
+            trailing: [
+              PremiumStatusPill(
+                label: backend == AppDataBackend.sqlite
+                    ? 'SQLite runtime'
+                    : 'Dữ liệu demo',
+                tone: backend == AppDataBackend.sqlite
+                    ? AppColors.success
+                    : AppColors.warning,
               ),
-              const SizedBox(height: AppDimens.heroGap),
-              _ReportsSummaryRow(summary: summary),
-              const SizedBox(height: AppDimens.sectionGap),
-              _ReportsToolbar(
-                periods: periods,
-                selectedPeriod: selectedPeriod,
-                summary: summary,
+              FilledButton.icon(
+                onPressed: () => _exportReportsCsv(context, summary),
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Xuất CSV'),
               ),
-              const SizedBox(height: AppDimens.sectionGap),
-              SizedBox(height: 980, child: buildBody()),
             ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ReportsHero(
-              goalRevenue: summary['revenue'].toString(),
-              fillRate: summary['fillRate'].toString(),
-              backend: backend,
-            ),
-            const SizedBox(height: AppDimens.heroGap),
-            _ReportsSummaryRow(summary: summary),
-            const SizedBox(height: AppDimens.sectionGap),
-            _ReportsToolbar(
-              periods: periods,
-              selectedPeriod: selectedPeriod,
-              summary: summary,
-            ),
-            const SizedBox(height: AppDimens.sectionGap),
-            Expanded(child: buildBody()),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ReportsHero extends StatelessWidget {
-  const _ReportsHero({
-    required this.goalRevenue,
-    required this.fillRate,
-    required this.backend,
-  });
-
-  final String goalRevenue;
-  final String fillRate;
-  final AppDataBackend backend;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 1080;
-          final spotlight = _HeroSpotlight(
-            goalRevenue: goalRevenue,
-            fillRate: fillRate,
-          );
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+        ),
+        if (backend == AppDataBackend.fake) ...[
+          const SizedBox(height: 12),
+          const _DemoDataNotice(),
+        ],
+        const SizedBox(height: 14),
+        _ReportStats(summary: summary),
+        const SizedBox(height: 14),
+        const _ReportsToolbar(),
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final twoColumns = constraints.maxWidth >= 1180;
+            final left = Column(
               children: [
-                _HeroCopy(backend: backend),
-                const SizedBox(height: 18),
-                spotlight,
+                _RevenueTrendPanel(points: revenueTrend),
+                const SizedBox(height: 14),
+                _ServicePerformancePanel(
+                  items: servicePerformance,
+                  selectedIndex: effectiveIndex,
+                ),
               ],
             );
-          }
+            final right = Column(
+              children: [
+                _ReportServiceDetailPanel(service: selectedService),
+                const SizedBox(height: 14),
+                _EmployeePerformancePanel(items: employeePerformance),
+                const SizedBox(height: 14),
+                _InsightsPanel(items: insights),
+              ],
+            );
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: _HeroCopy(backend: backend)),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: spotlight),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
+            if (!twoColumns) {
+              return Column(
+                children: [
+                  left,
+                  const SizedBox(height: 14),
+                  right,
+                ],
+              );
+            }
 
-class _HeroCopy extends StatelessWidget {
-  const _HeroCopy({required this.backend});
-
-  final AppDataBackend backend;
-
-  @override
-  Widget build(BuildContext context) {
-    final runtimeLabel = backend == AppDataBackend.sqlite
-        ? 'Runtime: SQLite'
-        : 'Runtime: Fake';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.copper.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            'Reports Desktop',
-            style: TextStyle(
-              color: AppColors.copper,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Báo cáo',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Workflow báo cáo desktop-first - đọc nhanh doanh thu, dịch vụ chủ lực, hiệu suất nhân sự và insight vận hành trước khi nối dữ liệu thật.',
-          style: TextStyle(color: AppColors.textMuted, height: 1.6),
-        ),
-        const SizedBox(height: 16),
-        if (backend == AppDataBackend.fake) ...[
-          const _DataSourceNotice(
-            title: 'Báo cáo đang dùng dữ liệu demo',
-            message:
-                'Toàn bộ số liệu doanh thu, dịch vụ, nhân sự và insight trong màn hình này hiện lấy từ fake repository để khóa UX desktop. Không dùng các chỉ số này làm số liệu vận hành thật.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            AppBadge(
-              label: runtimeLabel,
-              tone: backend == AppDataBackend.sqlite
-                  ? AppBadgeTone.success
-                  : AppBadgeTone.info,
-            ),
-            if (backend == AppDataBackend.fake)
-              const AppBadge(label: 'Demo metrics', tone: AppBadgeTone.warning),
-          ],
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 11, child: left),
+                const SizedBox(width: 14),
+                Expanded(flex: 9, child: right),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 }
 
-class _DataSourceNotice extends StatelessWidget {
-  const _DataSourceNotice({required this.title, required this.message});
-
-  final String title;
-  final String message;
+class _DemoDataNotice extends StatelessWidget {
+  const _DemoDataNotice();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.copper.withValues(alpha: 0.35)),
+        color: AppColors.warning.withValues(alpha: AppColors.isLight ? 0.08 : 0.11),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.24)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: AppColors.copper),
-          const SizedBox(width: 12),
+          Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 19),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  message,
-                  style: TextStyle(color: AppColors.textMuted, height: 1.5),
-                ),
-              ],
+            child: Text(
+              'Môi trường hiện tại đang dùng fake repository. Các chỉ số trên màn hình này chỉ dùng để kiểm tra giao diện, không phải số liệu vận hành thật.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
             ),
           ),
         ],
@@ -331,210 +174,112 @@ class _DataSourceNotice extends StatelessWidget {
   }
 }
 
-class _HeroSpotlight extends StatelessWidget {
-  const _HeroSpotlight({required this.goalRevenue, required this.fillRate});
-
-  final String goalRevenue;
-  final String fillRate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Tóm tắt tuần hiện tại',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          _HeroMetric(label: 'Doanh thu', value: goalRevenue),
-          const SizedBox(height: 12),
-          _HeroMetric(label: 'Tỷ lệ kín lịch', value: fillRate),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroMetric extends StatelessWidget {
-  const _HeroMetric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(color: AppColors.textMuted)),
-          const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReportsSummaryRow extends StatelessWidget {
-  const _ReportsSummaryRow({required this.summary});
+class _ReportStats extends StatelessWidget {
+  const _ReportStats({required this.summary});
 
   final Map<String, Object?> summary;
 
   @override
   Widget build(BuildContext context) {
     final cards = [
-      _SummaryCard(label: 'Doanh thu', value: summary['revenue'].toString()),
-      _SummaryCard(
+      PremiumStatCard(
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Doanh thu',
+        value: summary['revenue'].toString(),
+        tone: AppColors.copper,
+      ),
+      PremiumStatCard(
+        icon: Icons.receipt_long_outlined,
         label: 'Số hóa đơn',
         value: summary['invoiceCount'].toString(),
+        tone: AppColors.info,
       ),
-      _SummaryCard(
+      PremiumStatCard(
+        icon: Icons.content_cut_rounded,
         label: 'Top dịch vụ',
         value: summary['topService'].toString(),
+        tone: AppColors.success,
       ),
-      _SummaryCard(
+      PremiumStatCard(
+        icon: Icons.badge_outlined,
         label: 'Top nhân sự',
         value: summary['topEmployee'].toString(),
+        tone: AppColors.warning,
       ),
-      _SummaryCard(
+      PremiumStatCard(
+        icon: Icons.event_available_outlined,
         label: 'Tỷ lệ kín lịch',
         value: summary['fillRate'].toString(),
+        tone: AppColors.copper,
       ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
-          return Column(
-            children: [
-              for (var index = 0; index < cards.length; index++) ...[
-                cards[index],
-                if (index < cards.length - 1) const SizedBox(height: 12),
-              ],
-            ],
-          );
-        }
-
-        if (constraints.maxWidth < 1320) {
-          final columns = constraints.maxWidth < 1080 ? 2 : 3;
-          final cardWidth =
-              (constraints.maxWidth - (columns - 1) * 12) / columns;
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final card in cards) SizedBox(width: cardWidth, child: card),
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            for (var index = 0; index < cards.length; index++) ...[
-              Expanded(child: cards[index]),
-              if (index < cards.length - 1) const SizedBox(width: 12),
-            ],
-          ],
+        final columns = constraints.maxWidth >= 1450
+            ? 5
+            : constraints.maxWidth >= 900
+                ? 3
+                : constraints.maxWidth >= 580
+                    ? 2
+                    : 1;
+        const gap = 12.0;
+        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [for (final card in cards) SizedBox(width: width, child: card)],
         );
       },
     );
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: AppColors.textMuted),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ReportsToolbar extends ConsumerWidget {
-  const _ReportsToolbar({
-    required this.periods,
-    required this.selectedPeriod,
-    required this.summary,
-  });
-
-  final List<ReportsPeriod> periods;
-  final ReportsPeriod selectedPeriod;
-  final Map<String, Object?> summary;
+  const _ReportsToolbar();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: periods
-              .map(
-                (period) => FilterChip(
+    final selected = ref.watch(reportsPeriodProvider);
+    return PremiumSectionCard(
+      padding: const EdgeInsets.all(12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.date_range_outlined, size: 17, color: AppColors.copper),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Khoảng thời gian',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              for (final period in ReportsPeriod.values)
+                FilterChip(
                   label: Text(period.label),
-                  selected: period == selectedPeriod,
+                  selected: period == selected,
+                  showCheckmark: false,
                   onSelected: (_) {
                     ref.read(reportsPeriodProvider.notifier).state = period;
+                    ref.read(selectedReportServiceIndexProvider.notifier).state = 0;
                   },
                 ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            FilledButton.tonalIcon(
-              onPressed: () => _exportReportsCsv(context, summary),
-              icon: const Icon(Icons.download_outlined),
-              label: const Text('Xuất CSV'),
-            ),
-          ],
-        ),
-      ],
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -546,97 +291,178 @@ class _RevenueTrendPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxValue = points
+    final values = points
         .map((point) => (point['value'] as num?)?.toDouble() ?? 0)
-        .fold<double>(
-          1,
-          (previousValue, element) =>
-              element > previousValue ? element : previousValue,
-        );
+        .toList();
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    final average = values.isEmpty ? 0.0 : total / values.length;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Xu hướng doanh thu',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              height: 240,
-              decoration: BoxDecoration(
-                color: AppColors.panelRaised,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.border),
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: List.generate(points.length, (index) {
-                        final point = points[index];
-                        final value = (point['value'] as num?)?.toDouble() ?? 0;
-                        final heightFactor = maxValue == 0
-                            ? 0.1
-                            : value / maxValue;
-
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Text(
-                                  _compactCurrency(value),
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Container(
-                                      height: 160 * heightFactor.clamp(0.12, 1),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        gradient: AppColors.revenueBarGradient,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
+    return PremiumSectionCard(
+      icon: Icons.show_chart_rounded,
+      title: 'Xu hướng doanh thu',
+      subtitle: points.isEmpty
+          ? 'Chưa có dữ liệu theo kỳ đã chọn'
+          : '${points.length} mốc dữ liệu • trung bình ${_compactCurrency(average)}',
+      child: points.isEmpty
+          ? const PremiumEmptyState(
+              icon: Icons.show_chart_rounded,
+              title: 'Chưa có dữ liệu doanh thu',
+              message: 'Đổi khoảng thời gian hoặc ghi nhận hóa đơn để xem xu hướng.',
+            )
+          : Column(
+              children: [
+                Container(
+                  height: 210,
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.featureSurface,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: points
-                        .map(
-                          (point) => Text(
-                            point['label'].toString(),
-                            style: TextStyle(color: AppColors.textMuted),
-                          ),
-                        )
-                        .toList(),
+                  child: CustomPaint(
+                    painter: _RevenueTrendPainter(values),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 10),
+                _ChartEdgeLabels(points: points),
+              ],
             ),
-          ],
-        ),
-      ),
     );
+  }
+}
+
+class _ChartEdgeLabels extends StatelessWidget {
+  const _ChartEdgeLabels({required this.points});
+
+  final List<Map<String, Object?>> points;
+
+  @override
+  Widget build(BuildContext context) {
+    if (points.isEmpty) return const SizedBox.shrink();
+    final middle = points.length > 2 ? points[points.length ~/ 2] : null;
+    final labels = <Map<String, Object?>>[
+      points.first,
+      ?middle,
+      if (points.length > 1) points.last,
+    ];
+    return Row(
+      children: [
+        for (var index = 0; index < labels.length; index++)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: index == 0
+                  ? CrossAxisAlignment.start
+                  : index == labels.length - 1
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.center,
+              children: [
+                Text(
+                  labels[index]['label']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _compactCurrency(
+                    (labels[index]['value'] as num?)?.toDouble() ?? 0,
+                  ),
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RevenueTrendPainter extends CustomPainter {
+  const _RevenueTrendPainter(this.values);
+
+  final List<double> values;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty || size.width <= 0 || size.height <= 0) return;
+
+    final minValue = values.reduce(math.min);
+    final maxValue = values.reduce(math.max);
+    final range = math.max(1.0, maxValue - minValue);
+    const top = 18.0;
+    const bottom = 22.0;
+    const horizontal = 6.0;
+    final chartWidth = math.max(1.0, size.width - horizontal * 2);
+    final chartHeight = math.max(1.0, size.height - top - bottom);
+    final step = values.length <= 1 ? 0.0 : chartWidth / (values.length - 1);
+
+    final gridPaint = Paint()
+      ..color = AppColors.chartGrid
+      ..strokeWidth = 1;
+    for (var row = 0; row < 4; row++) {
+      final y = top + (chartHeight / 3) * row;
+      canvas.drawLine(Offset(horizontal, y), Offset(size.width - horizontal, y), gridPaint);
+    }
+
+    final points = <Offset>[];
+    for (var index = 0; index < values.length; index++) {
+      final normalized = (values[index] - minValue) / range;
+      points.add(
+        Offset(
+          horizontal + step * index,
+          top + chartHeight * (1 - normalized),
+        ),
+      );
+    }
+
+    final linePath = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var index = 1; index < points.length; index++) {
+      final previous = points[index - 1];
+      final current = points[index];
+      final controlX = (previous.dx + current.dx) / 2;
+      linePath.cubicTo(controlX, previous.dy, controlX, current.dy, current.dx, current.dy);
+    }
+
+    final fillPath = Path.from(linePath)
+      ..lineTo(points.last.dx, top + chartHeight)
+      ..lineTo(points.first.dx, top + chartHeight)
+      ..close();
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          AppColors.copper.withValues(alpha: AppColors.isLight ? 0.20 : 0.28),
+          AppColors.copper.withValues(alpha: 0.01),
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(fillPath, fillPaint);
+
+    final linePaint = Paint()
+      ..color = AppColors.copper
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(linePath, linePaint);
+
+    final pointPaint = Paint()..color = AppColors.copper;
+    for (final point in points) {
+      canvas.drawCircle(point, 2.8, pointPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RevenueTrendPainter oldDelegate) {
+    if (oldDelegate.values.length != values.length) return true;
+    for (var index = 0; index < values.length; index++) {
+      if (oldDelegate.values[index] != values[index]) return true;
+    }
+    return false;
   }
 }
 
@@ -651,101 +477,95 @@ class _ServicePerformancePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return PremiumSectionCard(
+      icon: Icons.content_cut_rounded,
+      title: 'Top dịch vụ',
+      subtitle: '${items.length} dịch vụ trong kỳ đã chọn',
+      child: items.isEmpty
+          ? const PremiumEmptyState(
+              icon: Icons.content_cut_rounded,
+              title: 'Chưa có hiệu suất dịch vụ',
+              message: 'Dữ liệu sẽ xuất hiện sau khi có hóa đơn trong kỳ.',
+            )
+          : Column(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Top dịch vụ',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                for (var index = 0; index < items.length; index++) ...[
+                  _ServicePerformanceRow(
+                    item: items[index],
+                    selected: index == selectedIndex,
+                    rank: index + 1,
+                    onTap: () {
+                      ref.read(selectedReportServiceIndexProvider.notifier).state = index;
+                    },
                   ),
-                ),
-                Text(
-                  '${items.length} mục',
-                  style: TextStyle(color: AppColors.textMuted),
-                ),
+                  if (index < items.length - 1)
+                    const PremiumDivider(indent: 52),
+                ],
               ],
             ),
-            const SizedBox(height: 18),
-            ...items.asMap().entries.map(
-              (entry) => _ServicePerformanceTile(
-                item: entry.value,
-                selected: entry.key == selectedIndex,
-                onTap: () {
-                  ref.read(selectedReportServiceIndexProvider.notifier).state =
-                      entry.key;
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
-class _ServicePerformanceTile extends StatelessWidget {
-  const _ServicePerformanceTile({
+class _ServicePerformanceRow extends StatelessWidget {
+  const _ServicePerformanceRow({
     required this.item,
     required this.selected,
+    required this.rank,
     required this.onTap,
   });
 
   final Map<String, Object?> item;
   final bool selected;
+  final int rank;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: selected ? AppColors.panelRaised : AppColors.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: selected ? AppColors.copper : AppColors.border,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          onTap: onTap,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 10,
-          ),
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.avatarFill,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.auto_graph_outlined, color: AppColors.copper),
-          ),
-          title: Text(
-            item['name'].toString(),
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              '${item['bookings']} lịch - ${item['share']} doanh thu',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          ),
-          trailing: Text(
-            item['revenue'].toString(),
-            style: const TextStyle(fontWeight: FontWeight.w700),
+    return Material(
+      color: selected ? AppColors.selectedSurface : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Row(
+            children: [
+              PremiumIconBadge(
+                icon: rank == 1 ? Icons.workspace_premium_outlined : Icons.auto_graph_outlined,
+                size: 36,
+                tone: rank == 1 ? AppColors.warning : AppColors.copper,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item['name']?.toString() ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${item['bookings']} lịch • ${item['share']} doanh thu',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                item['revenue']?.toString() ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
           ),
         ),
       ),
@@ -760,58 +580,91 @@ class _ReportServiceDetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (service == null) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Chọn một dịch vụ để xem chi tiết báo cáo.'),
+    final item = service;
+    if (item == null) {
+      return const PremiumSectionCard(
+        child: PremiumEmptyState(
+          icon: Icons.analytics_outlined,
+          title: 'Chọn một dịch vụ',
+          message: 'Doanh thu, số lịch, tỷ trọng và nhận định sẽ hiển thị ở đây.',
         ),
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              service!['name'].toString(),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricCard(
-                    label: 'Doanh thu',
-                    value: service!['revenue'].toString(),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MetricCard(
-                    label: 'Số lịch',
-                    value: '${service!['bookings']}',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MetricCard(
-                    label: 'Tỷ trọng',
-                    value: service!['share'].toString(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _DetailSection(
-              title: 'Nhận định',
-              content: service!['note'].toString(),
-            ),
-          ],
-        ),
+    return PremiumSectionCard(
+      icon: Icons.analytics_outlined,
+      title: item['name']?.toString() ?? 'Chi tiết dịch vụ',
+      subtitle: 'Hiệu suất trong khoảng thời gian đang chọn',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _MetricWrap(
+            metrics: [
+              ('Doanh thu', item['revenue']?.toString() ?? '-'),
+              ('Số lịch', item['bookings']?.toString() ?? '-'),
+              ('Tỷ trọng', item['share']?.toString() ?? '-'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          PremiumInfoRow(
+            icon: Icons.lightbulb_outline_rounded,
+            label: 'Nhận định',
+            value: item['note']?.toString() ?? 'Chưa có nhận định',
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _MetricWrap extends StatelessWidget {
+  const _MetricWrap({required this.metrics});
+
+  final List<(String, String)> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 520 ? metrics.length : 1;
+        const gap = 8.0;
+        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: width,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.featureSurface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        metric.$1,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        metric.$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -823,60 +676,81 @@ class _EmployeePerformancePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Hiệu suất nhân sự',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+    return PremiumSectionCard(
+      icon: Icons.groups_2_outlined,
+      title: 'Hiệu suất nhân sự',
+      subtitle: '${items.length} thành viên có dữ liệu trong kỳ',
+      child: items.isEmpty
+          ? const PremiumEmptyState(
+              icon: Icons.groups_2_outlined,
+              title: 'Chưa có dữ liệu nhân sự',
+              message: 'Hiệu suất sẽ xuất hiện khi hóa đơn có gắn nhân viên.',
+            )
+          : Column(
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  _EmployeePerformanceRow(item: items[index], rank: index + 1),
+                  if (index < items.length - 1)
+                    const PremiumDivider(indent: 52),
+                ],
+              ],
             ),
-            const SizedBox(height: 18),
-            ...items.map(
-              (item) => Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.panelRaised,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
+    );
+  }
+}
+
+class _EmployeePerformanceRow extends StatelessWidget {
+  const _EmployeePerformanceRow({required this.item, required this.rank});
+
+  final Map<String, Object?> item;
+  final int rank;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PremiumIconBadge(
+            icon: Icons.person_outline_rounded,
+            size: 36,
+            tone: rank == 1 ? AppColors.warning : AppColors.info,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item['name'] ?? ''} • ${item['role'] ?? ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${item['name']} - ${item['role']}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        Text(
-                          item['revenue'].toString(),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${item['clients']} khách - Rating ${item['rating']}',
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      item['focus'].toString(),
-                      style: TextStyle(color: AppColors.textMuted, height: 1.5),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  '${item['clients']} khách • Rating ${item['rating']}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
                 ),
-              ),
+                const SizedBox(height: 5),
+                Text(
+                  item['focus']?.toString() ?? '',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11.5, height: 1.4),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            item['revenue']?.toString() ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }
@@ -889,106 +763,47 @@ class _InsightsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Insight vận hành',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 18),
-            ...items.map(
-              (item) => Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.panelRaised,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.tips_and_updates_outlined,
-                      color: AppColors.copper,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        item,
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          height: 1.5,
+    return PremiumSectionCard(
+      icon: Icons.tips_and_updates_outlined,
+      title: 'Insight vận hành',
+      subtitle: 'Điểm đáng chú ý từ dữ liệu trong kỳ',
+      child: items.isEmpty
+          ? const PremiumEmptyState(
+              icon: Icons.tips_and_updates_outlined,
+              title: 'Chưa có insight',
+              message: 'Insight sẽ xuất hiện khi có đủ dữ liệu để tổng hợp.',
+            )
+          : Column(
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PremiumIconBadge(
+                          icon: Icons.auto_awesome_outlined,
+                          size: 32,
+                          tone: index == 0 ? AppColors.warning : AppColors.copper,
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            items[index],
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                  if (index < items.length - 1)
+                    const PremiumDivider(indent: 42),
+                ],
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(color: AppColors.textMuted)),
-          const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailSection extends StatelessWidget {
-  const _DetailSection({required this.title, required this.content});
-
-  final String title;
-  final String content;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(color: AppColors.textMuted)),
-          const SizedBox(height: 8),
-          Text(content, style: const TextStyle(height: 1.5)),
-        ],
-      ),
     );
   }
 }
@@ -1000,7 +815,6 @@ List<Map<String, Object?>> _mapList(Object? source) {
         .map((item) => Map<String, Object?>.from(item))
         .toList();
   }
-
   return const [];
 }
 
@@ -1008,7 +822,6 @@ List<String> _stringList(Object? source) {
   if (source is List) {
     return source.map((item) => item.toString()).toList();
   }
-
   return const [];
 }
 
@@ -1016,11 +829,9 @@ String _compactCurrency(double value) {
   if (value >= 1000000) {
     return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
   }
-
   if (value >= 1000) {
     return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
   }
-
   return value.toStringAsFixed(0);
 }
 
@@ -1073,18 +884,14 @@ Future<void> _exportReportsCsv(
     ];
 
     await file.writeAsString(lines.join('\n'));
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Đã xuất báo cáo: $outputPath')));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã xuất báo cáo: $outputPath')),
+    );
   } catch (error) {
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Xuất báo cáo thất bại: $error')));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Xuất báo cáo thất bại: $error')),
+    );
   }
 }
