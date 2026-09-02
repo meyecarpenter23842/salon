@@ -7,6 +7,7 @@ import 'package:salonmanager/app/app.dart';
 import 'package:salonmanager/app/navigation/desktop_navigation.dart';
 import 'package:salonmanager/core/providers/data_backend_provider.dart';
 import 'package:salonmanager/core/settings/local_settings_store.dart';
+import 'package:salonmanager/core/theme/salon_theme_template.dart';
 import 'package:salonmanager/features/customers/presentation/pages/customers_page.dart';
 import 'package:salonmanager/features/invoices/presentation/pages/invoices_page.dart';
 import 'package:salonmanager/features/services/presentation/pages/services_page.dart';
@@ -56,12 +57,14 @@ void main() {
   testWidgets('Theme templates load without crash', (
     WidgetTester tester,
   ) async {
-    final templates = ['salonNoirGold', 'salonEmerald', 'salonSapphire'];
+    tester.view.physicalSize = const Size(1366, 768);
+    addTearDown(tester.view.resetPhysicalSize);
 
-    for (final template in templates) {
-      tester.view.physicalSize = const Size(1366, 768);
-      SharedPreferences.setMockInitialValues({'theme_template': template});
-      await LocalSettingsStore.instance.initialize();
+    SharedPreferences.setMockInitialValues({});
+    await LocalSettingsStore.instance.initialize();
+
+    for (final template in SalonThemeTemplate.values) {
+      await LocalSettingsStore.instance.saveThemeTemplate(template);
 
       await tester.pumpWidget(
         ProviderScope(
@@ -76,8 +79,6 @@ void main() {
       expect(find.byType(SalonManagerApp), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
-
-    addTearDown(tester.view.resetPhysicalSize);
   });
 
   testWidgets('Common desktop sizes render core tabs', (
@@ -91,26 +92,22 @@ void main() {
       Size(1024, 768),
     ];
 
-    // Track overflow errors to surface in reason message
     final List<String> overflowErrors = [];
-    final void Function(FlutterErrorDetails)? prevHandler =
-        FlutterError.onError;
+    final void Function(FlutterErrorDetails)? prevHandler = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
       final msg = details.toString();
       overflowErrors.add(msg);
-      // Print full diagnostics so overflow location can be identified from logs.
       FlutterError.dumpErrorToConsole(details, forceReport: true);
-      // still delegate to original handler if present
       prevHandler?.call(details);
     };
 
     try {
       for (final size in sizes) {
         tester.view.physicalSize = size;
-        SharedPreferences.setMockInitialValues({
-          'theme_template': 'salonNoirGold',
-        });
-        await LocalSettingsStore.instance.initialize();
+        SharedPreferences.setMockInitialValues({});
+        await LocalSettingsStore.instance.saveThemeTemplate(
+          SalonThemeTemplate.salonNoirGold,
+        );
 
         await tester.pumpWidget(
           ProviderScope(
@@ -136,7 +133,6 @@ void main() {
           overflowErrors.clear();
           container.read(desktopSectionProvider.notifier).state = section;
           await tester.pump(const Duration(milliseconds: 800));
-          // Consume any exception - if it's overflow, fail with detail
           final exception = tester.takeException();
           if (exception != null) {
             final detail = overflowErrors.isNotEmpty ? overflowErrors.last : '';
@@ -149,8 +145,6 @@ void main() {
     } finally {
       FlutterError.onError = prevHandler;
     }
-
-    addTearDown(tester.view.resetPhysicalSize);
   });
 }
 

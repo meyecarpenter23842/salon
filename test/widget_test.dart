@@ -49,8 +49,7 @@ void main() {
       expect(theme.cardTheme.elevation, isNotNull);
       expect(theme.cardTheme.elevation!, greaterThan(0));
 
-      final filledBackground =
-          theme.filledButtonTheme.style?.backgroundColor;
+      final filledBackground = theme.filledButtonTheme.style?.backgroundColor;
       expect(filledBackground, isNotNull);
       expect(
         filledBackground!.resolve(<WidgetState>{}),
@@ -73,7 +72,6 @@ void main() {
         isNot(outlinedBackground.resolve(<WidgetState>{WidgetState.pressed})),
       );
 
-      // Exercise real hit testing instead of mutating the navigation provider.
       await tester.tap(find.text('Lịch hẹn').first);
       await pumpUi(tester);
       expect(container.read(desktopSectionProvider), DesktopSection.appointments);
@@ -83,7 +81,6 @@ void main() {
       await pumpUi(tester);
       expect(container.read(desktopSectionProvider), DesktopSection.overview);
 
-      // Overview actions must be real navigation controls, not disabled mock UI.
       await tester.tap(find.byKey(const Key('overview-open-appointments')));
       await pumpUi(tester);
       expect(container.read(desktopSectionProvider), DesktopSection.appointments);
@@ -125,29 +122,10 @@ void main() {
       expect(container.read(desktopSectionProvider), DesktopSection.employees);
       expect(find.text('Nhân viên'), findsWidgets);
 
-      await LocalSettingsStore.instance.saveThemeTemplate(
-        SalonThemeTemplate.salonSapphire,
-      );
-      expect(
-        LocalSettingsStore.instance.readThemeTemplate(),
-        SalonThemeTemplate.salonSapphire,
-      );
-
-      await LocalSettingsStore.instance.saveThemeTemplate(
-        SalonThemeTemplate.salonEmerald,
-      );
-      expect(
-        LocalSettingsStore.instance.readThemeTemplate(),
-        SalonThemeTemplate.salonEmerald,
-      );
-
-      await LocalSettingsStore.instance.saveThemeTemplate(
-        SalonThemeTemplate.salonNoirGold,
-      );
-      expect(
-        LocalSettingsStore.instance.readThemeTemplate(),
-        SalonThemeTemplate.salonNoirGold,
-      );
+      for (final template in SalonThemeTemplate.values) {
+        await LocalSettingsStore.instance.saveThemeTemplate(template);
+        expect(LocalSettingsStore.instance.readThemeTemplate(), template);
+      }
     },
   );
 }

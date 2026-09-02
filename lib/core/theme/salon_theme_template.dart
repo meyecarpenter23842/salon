@@ -1,36 +1,35 @@
-enum SalonThemeTemplate { salonNoirGold, salonEmerald, salonSapphire }
+enum SalonThemeTemplate {
+  salonNoirGold,
+  salonIvory,
+  salonEmerald,
+  salonRosePlum,
+}
 
 extension SalonThemeTemplateX on SalonThemeTemplate {
-  String get label {
-    switch (this) {
-      case SalonThemeTemplate.salonNoirGold:
-        return 'Salon Noir Gold';
-      case SalonThemeTemplate.salonEmerald:
-        return 'Salon Emerald';
-      case SalonThemeTemplate.salonSapphire:
-        return 'Salon Sapphire';
-    }
-  }
+  String get label => switch (this) {
+    SalonThemeTemplate.salonNoirGold => 'Noir Gold',
+    SalonThemeTemplate.salonIvory => 'Ivory Copper',
+    SalonThemeTemplate.salonEmerald => 'Emerald Graphite',
+    SalonThemeTemplate.salonRosePlum => 'Rose Plum',
+  };
 
-  String get title {
-    switch (this) {
-      case SalonThemeTemplate.salonNoirGold:
-        return 'Salon Noir Gold';
-      case SalonThemeTemplate.salonEmerald:
-        return 'Salon Emerald';
-      case SalonThemeTemplate.salonSapphire:
-        return 'Salon Sapphire';
-    }
-  }
+  String get title => switch (this) {
+    SalonThemeTemplate.salonNoirGold => 'Salon Noir Gold',
+    SalonThemeTemplate.salonIvory => 'Salon Ivory Copper',
+    SalonThemeTemplate.salonEmerald => 'Salon Emerald Graphite',
+    SalonThemeTemplate.salonRosePlum => 'Salon Rose Plum',
+  };
 
-  String get description {
-    switch (this) {
-      case SalonThemeTemplate.salonNoirGold:
-        return 'Nền đen vàng cổ điển, sang trọng, gần giao diện legacy.';
-      case SalonThemeTemplate.salonEmerald:
-        return 'Xanh ngọc đậm trên nền đen-xanh, mềm, sang và cân bằng.';
-      case SalonThemeTemplate.salonSapphire:
-        return 'Navy/blue-black với xanh dương điện, rõ số liệu, hiện đại.';
-    }
-  }
+  String get description => switch (this) {
+    SalonThemeTemplate.salonNoirGold =>
+      'Than đen mờ, vàng champagne tiết chế, cảm giác salon cao cấp.',
+    SalonThemeTemplate.salonIvory =>
+      'Ivory và beige ấm, chữ cocoa, điểm copper nhẹ theo phong cách editorial.',
+    SalonThemeTemplate.salonEmerald =>
+      'Graphite đậm với emerald rõ nét, hiện đại, sạch và thiên về vận hành.',
+    SalonThemeTemplate.salonRosePlum =>
+      'Plum sâu, rose-gold mềm, giàu chiều sâu và mang cảm giác boutique.',
+  };
+
+  bool get isLight => this == SalonThemeTemplate.salonIvory;
 }

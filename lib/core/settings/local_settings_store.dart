@@ -43,11 +43,13 @@ class LocalSettingsStore {
   SalonThemeTemplate readThemeTemplate() {
     final storedValue = _preferences?.getString(_themeTemplateKey);
 
+    // Compatibility with legacy template names that existed before the
+    // four-reference visual contract was locked.
     if (storedValue == 'royalDark') {
       return SalonThemeTemplate.salonNoirGold;
     }
-    if (storedValue == 'royalLight') {
-      return SalonThemeTemplate.salonSapphire;
+    if (storedValue == 'royalLight' || storedValue == 'salonSapphire') {
+      return SalonThemeTemplate.salonIvory;
     }
 
     return SalonThemeTemplate.values.firstWhere(
