@@ -146,14 +146,12 @@ class _ServicesView extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, viewport) {
-        final shortViewport = viewport.maxHeight < 520;
-
         Widget buildBody() {
           return LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxWidth < 1180;
+              final stacked = constraints.maxWidth < 1080;
 
-              if (compact) {
+              if (stacked) {
                 return Column(
                   children: [
                     Expanded(
@@ -176,7 +174,7 @@ class _ServicesView extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    flex: 5,
+                    flex: 11,
                     child: _ServiceListPanel(
                       items: items,
                       selectedIndex: effectiveIndex,
@@ -184,7 +182,7 @@ class _ServicesView extends ConsumerWidget {
                   ),
                   const SizedBox(width: AppDimens.cardGap),
                   Expanded(
-                    flex: 4,
+                    flex: 9,
                     child: _ServiceDetailPanel(service: selectedService),
                   ),
                 ],
@@ -193,17 +191,16 @@ class _ServicesView extends ConsumerWidget {
           );
         }
 
+        final shortViewport = viewport.maxHeight < 590;
         if (shortViewport) {
           return ListView(
             primary: false,
             children: [
-              const _ServicesHero(),
-              const SizedBox(height: AppDimens.heroGap),
-              _ServicesSummaryRow(items: items),
-              const SizedBox(height: AppDimens.sectionGap),
               _ServicesToolbar(selectedCategory: category),
-              const SizedBox(height: AppDimens.sectionGap),
-              SizedBox(height: 680, child: buildBody()),
+              const SizedBox(height: 12),
+              _ServicesSummaryRow(items: items),
+              const SizedBox(height: 14),
+              SizedBox(height: 620, child: buildBody()),
             ],
           );
         }
@@ -211,140 +208,14 @@ class _ServicesView extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _ServicesHero(),
-            const SizedBox(height: AppDimens.heroGap),
-            _ServicesSummaryRow(items: items),
-            const SizedBox(height: AppDimens.sectionGap),
             _ServicesToolbar(selectedCategory: category),
-            const SizedBox(height: AppDimens.sectionGap),
+            const SizedBox(height: 12),
+            _ServicesSummaryRow(items: items),
+            const SizedBox(height: 14),
             Expanded(child: buildBody()),
           ],
         );
       },
-    );
-  }
-}
-
-class _ServicesHero extends StatelessWidget {
-  const _ServicesHero();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Dịch vụ',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Catalog dịch vụ hiện đã đi theo typed flow và runtime SQLite, giữ nguyên desktop layout để chuẩn bị cho bước CRUD thật tiếp theo.',
-            style: TextStyle(color: AppColors.textMuted, height: 1.6),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ServicesSummaryRow extends StatelessWidget {
-  const _ServicesSummaryRow({required this.items});
-
-  final List<ServiceCatalogItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeCount = items.where((item) => item.isActive).length;
-    final hiddenCount = items.where((item) => !item.isActive).length;
-    final topService = items
-        .where((item) => item.popularityLabel == 'Bán chạy')
-        .length;
-
-    final cards = [
-      _SummaryCard(label: 'Tổng dịch vụ', value: '${items.length}'),
-      _SummaryCard(label: 'Đang áp dụng', value: '$activeCount'),
-      _SummaryCard(label: 'Tạm ẩn', value: '$hiddenCount'),
-      _SummaryCard(label: 'Bán chạy', value: '$topService'),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
-          return Column(
-            children: [
-              for (var index = 0; index < cards.length; index++) ...[
-                cards[index],
-                if (index < cards.length - 1) const SizedBox(height: 12),
-              ],
-            ],
-          );
-        }
-
-        if (constraints.maxWidth < 1280) {
-          final columns = constraints.maxWidth < 1080 ? 2 : 3;
-          final cardWidth =
-              (constraints.maxWidth - (columns - 1) * 12) / columns;
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final card in cards) SizedBox(width: cardWidth, child: card),
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            for (var index = 0; index < cards.length; index++) ...[
-              Expanded(child: cards[index]),
-              if (index < cards.length - 1) const SizedBox(width: 12),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: AppColors.textMuted),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -371,28 +242,29 @@ class _ServicesToolbar extends ConsumerWidget {
                   ref.read(selectedServiceIndexProvider.notifier).state = 0;
                 },
                 decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Tìm theo tên, nhóm dịch vụ hoặc mô tả...',
+                  prefixIcon: Icon(Icons.search_rounded, size: 20),
+                  hintText: 'Tìm dịch vụ, nhóm hoặc mô tả',
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            FilledButton.tonalIcon(
+            const SizedBox(width: 10),
+            FilledButton.icon(
               onPressed: () => _openServiceEditor(context, ref),
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Thêm dịch vụ'),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 8,
+          runSpacing: 8,
           children: categories
               .map(
                 (item) => FilterChip(
                   label: Text(item),
                   selected: item == selectedCategory,
+                  showCheckmark: false,
                   onSelected: (_) {
                     ref.read(serviceCategoryFilterProvider.notifier).state =
                         item;
@@ -407,6 +279,121 @@ class _ServicesToolbar extends ConsumerWidget {
   }
 }
 
+class _ServicesSummaryRow extends StatelessWidget {
+  const _ServicesSummaryRow({required this.items});
+
+  final List<ServiceCatalogItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeCount = items.where((item) => item.isActive).length;
+    final hiddenCount = items.where((item) => !item.isActive).length;
+    final topService = items
+        .where((item) => item.popularityLabel == 'Bán chạy')
+        .length;
+
+    final metrics = [
+      _SummaryMetric(
+        icon: Icons.content_cut_rounded,
+        label: 'Tổng dịch vụ',
+        value: '${items.length}',
+      ),
+      _SummaryMetric(
+        icon: Icons.check_circle_outline_rounded,
+        label: 'Đang áp dụng',
+        value: '$activeCount',
+      ),
+      _SummaryMetric(
+        icon: Icons.visibility_off_outlined,
+        label: 'Tạm ẩn',
+        value: '$hiddenCount',
+      ),
+      _SummaryMetric(
+        icon: Icons.trending_up_rounded,
+        label: 'Bán chạy',
+        value: '$topService',
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.panelAlt,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 760) {
+            return Wrap(
+              spacing: 22,
+              runSpacing: 12,
+              children: metrics,
+            );
+          }
+
+          return Row(
+            children: [
+              for (var index = 0; index < metrics.length; index++) ...[
+                Expanded(child: metrics[index]),
+                if (index < metrics.length - 1)
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: AppColors.workspaceDivider,
+                  ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17, color: AppColors.textMuted),
+          const SizedBox(width: 9),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ServiceListPanel extends ConsumerWidget {
   const _ServiceListPanel({required this.items, required this.selectedIndex});
 
@@ -416,54 +403,77 @@ class _ServiceListPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 13),
+            child: Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Danh mục dịch vụ',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Danh mục dịch vụ',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Chọn một dịch vụ để xem và chỉnh sửa thông tin.',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 Text(
                   '${items.length} mục',
-                  style: TextStyle(color: AppColors.textMuted),
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            if (items.isEmpty)
-              const Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Text(
-                      'Không có dịch vụ phù hợp với bộ lọc hiện tại.',
-                    ),
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  primary: false,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) => _ServiceTile(
-                    service: items[index],
-                    selected: index == selectedIndex,
-                    onTap: () {
-                      ref.read(selectedServiceIndexProvider.notifier).state =
-                          index;
-                    },
+          ),
+          Divider(height: 1, color: AppColors.workspaceDivider),
+          if (items.isEmpty)
+            const Expanded(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'Không có dịch vụ phù hợp với bộ lọc hiện tại.',
                   ),
                 ),
               ),
-          ],
-        ),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                primary: false,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                itemCount: items.length,
+                itemBuilder: (context, index) => _ServiceTile(
+                  service: items[index],
+                  selected: index == selectedIndex,
+                  onTap: () {
+                    ref.read(selectedServiceIndexProvider.notifier).state =
+                        index;
+                  },
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -486,71 +496,113 @@ class _ServiceTile extends StatelessWidget {
         ? AppColors.success
         : AppColors.warning;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: selected ? AppColors.panelRaised : AppColors.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: selected ? AppColors.copper : AppColors.border,
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        color: selected ? AppColors.selectedSurface : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
         clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 10,
-          ),
+        child: InkWell(
           onTap: onTap,
-          leading: Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: AppColors.avatarFill,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.content_cut_rounded, color: AppColors.copper),
-          ),
-          title: Text(
-            service.name,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          mouseCursor: SystemMouseCursors.click,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(
               children: [
-                Text('${service.category} • ${service.durationLabel}'),
-                const SizedBox(height: 4),
-                Text(
-                  service.popularityLabel,
-                  style: TextStyle(color: AppColors.textMuted),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  width: 3,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.copper : Colors.transparent,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.copper.withValues(alpha: 0.14)
+                        : AppColors.panelAlt,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.content_cut_rounded,
+                    size: 17,
+                    color: selected ? AppColors.copper : AppColors.textMuted,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        service.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${service.category} · ${service.durationLabel} · ${service.popularityLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      service.priceLabel,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          service.statusLabel,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                service.priceLabel,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                service.statusLabel,
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -566,153 +618,171 @@ class _ServiceDetailPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (service == null) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Chọn một dịch vụ để xem chi tiết.'),
+      return Card(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.content_cut_rounded,
+                  size: 28,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(height: 10),
+                const Text('Chọn một dịch vụ để xem chi tiết.'),
+              ],
+            ),
+          ),
         ),
       );
     }
 
-    final statusColor = service!.isActive
+    final current = service!;
+    final statusColor = current.isActive
         ? AppColors.success
         : AppColors.warning;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                primary: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            service!.name,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            service!.statusLabel,
-                            style: TextStyle(
-                              color: statusColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _DetailMetricCard(
-                            label: 'Giá',
-                            value: service!.priceLabel,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _DetailMetricCard(
-                            label: 'Thời lượng',
-                            value: service!.durationLabel,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _DetailMetricCard(
-                            label: 'Nhóm',
-                            value: service!.category,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _DetailSection(
-                      title: 'Độ phổ biến',
-                      content: service!.popularityLabel,
-                    ),
-                    const SizedBox(height: 12),
-                    _DetailSection(
-                      title: 'Mô tả',
-                      content: service!.description,
-                    ),
-                    const SizedBox(height: 18),
-                    _ServiceFormulaPanel(service: service!),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(
-                  child: FilledButton.tonal(
-                    onPressed: () =>
-                        _openServiceEditor(context, ref, service: service),
-                    child: const Text('Sửa dịch vụ'),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.copper.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.content_cut_rounded,
+                    size: 19,
+                    color: AppColors.copper,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        _toggleServiceActive(context, ref, service!),
-                    child: Text(
-                      service!.isActive ? 'Ẩn dịch vụ' : 'Bật dịch vụ',
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        current.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${current.category} · ${current.popularityLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.11),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        current.statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailMetricCard extends StatelessWidget {
-  const _DetailMetricCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(color: AppColors.textMuted)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          Divider(height: 1, color: AppColors.workspaceDivider),
+          Expanded(
+            child: SingleChildScrollView(
+              primary: false,
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ServiceFacts(service: current),
+                  const SizedBox(height: 22),
+                  Text(
+                    'Mô tả',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.25,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    current.description,
+                    style: const TextStyle(fontSize: 13, height: 1.55),
+                  ),
+                  const SizedBox(height: 22),
+                  Divider(height: 1, color: AppColors.workspaceDivider),
+                  const SizedBox(height: 18),
+                  _ServiceFormulaPanel(service: current),
+                ],
+              ),
+            ),
+          ),
+          Divider(height: 1, color: AppColors.workspaceDivider),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () =>
+                        _openServiceEditor(context, ref, service: current),
+                    icon: const Icon(Icons.edit_outlined, size: 17),
+                    label: const Text('Sửa dịch vụ'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed: () => _toggleServiceActive(context, ref, current),
+                  child: Text(current.isActive ? 'Ẩn' : 'Bật lại'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -720,35 +790,80 @@ class _DetailMetricCard extends StatelessWidget {
   }
 }
 
-class _DetailSection extends StatelessWidget {
-  const _DetailSection({required this.title, required this.content});
+class _ServiceFacts extends StatelessWidget {
+  const _ServiceFacts({required this.service});
 
-  final String title;
-  final String content;
+  final ServiceCatalogItem service;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(color: AppColors.textMuted)),
-          const SizedBox(height: 8),
-          Text(content, style: const TextStyle(height: 1.5)),
-        ],
-      ),
+    final facts = [
+      _ServiceFact(label: 'Giá', value: service.priceLabel),
+      _ServiceFact(label: 'Thời lượng', value: service.durationLabel),
+      _ServiceFact(label: 'Độ phổ biến', value: service.popularityLabel),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 430) {
+          return Wrap(
+            spacing: 24,
+            runSpacing: 16,
+            children: facts,
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var index = 0; index < facts.length; index++) ...[
+              Expanded(child: facts[index]),
+              if (index < facts.length - 1)
+                Container(
+                  width: 1,
+                  height: 42,
+                  margin: const EdgeInsets.symmetric(horizontal: 14),
+                  color: AppColors.workspaceDivider,
+                ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
 
-// ?? Formula Panel ??????????????????????????????????????????????????????????????
+class _ServiceFact extends StatelessWidget {
+  const _ServiceFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+}
 
 class _ServiceFormulaPanel extends ConsumerWidget {
   const _ServiceFormulaPanel({required this.service});
@@ -769,72 +884,66 @@ class _ServiceFormulaPanel extends ConsumerWidget {
 
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
           decoration: BoxDecoration(
-            color: AppColors.panelRaised,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
+            color: AppColors.panelAlt,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    size: 15,
+                    color: AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 7),
                   const Expanded(
                     child: Text(
-                      'Định lượng (chủ xem)',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      'Định lượng · chỉ chủ xem',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                  FilledButton.tonal(
+                  TextButton(
                     onPressed: () => _openFormulaEditor(
                       context,
                       ref,
                       service: service,
                       existing: formula.isEmpty ? null : formula.first,
                     ),
-                    style: FilledButton.styleFrom(
+                    style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 9),
                     ),
                     child: Text(formula.isEmpty ? 'Thêm' : 'Sửa'),
                   ),
                 ],
               ),
-              if (formula.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  formula.first.formulaText,
-                  style: const TextStyle(height: 1.6),
+              const SizedBox(height: 7),
+              Text(
+                formula.isEmpty ? 'Chưa có định lượng.' : formula.first.formulaText,
+                style: TextStyle(
+                  color: formula.isEmpty
+                      ? AppColors.textMuted
+                      : AppColors.textPrimary,
+                  fontSize: 12,
+                  height: 1.5,
                 ),
-                if (formula.first.isHiddenFromStaff) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.lock_outline,
-                        size: 14,
-                        color: AppColors.textMuted,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Ẩn với nhân viên',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ] else ...[
-                const SizedBox(height: 10),
+              ),
+              if (formula.isNotEmpty && formula.first.isHiddenFromStaff) ...[
+                const SizedBox(height: 7),
                 Text(
-                  'Chưa có định lượng.',
-                  style: TextStyle(color: AppColors.textMuted),
+                  'Ẩn với nhân viên',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ],
@@ -949,8 +1058,6 @@ class _FormulaEditorDialogState extends State<_FormulaEditorDialog> {
     );
   }
 }
-
-// ?? Service Editor ??????????????????????????????????????????????????????????????
 
 class _ServiceEditorDialog extends StatefulWidget {
   const _ServiceEditorDialog({this.service, required this.existingServices});
