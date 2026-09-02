@@ -118,7 +118,7 @@ class _DesktopShellPageState extends ConsumerState<DesktopShellPage> {
     if (!kReleaseMode) {
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => const StaffWorkstationPage(),
+        builder: (_) => const StaffWorkstationPage(),
       );
       return;
     }
@@ -163,67 +163,80 @@ class _DesktopSidebar extends ConsumerWidget {
         ? AppDimens.navigationSidebarCollapsedWidth
         : AppDimens.navigationSidebarWidth;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
+    // Width changes are intentionally immediate. Animating the outer width while
+    // switching child layout modes creates transient invalid constraints for both
+    // the sidebar and responsive workspace cards.
+    return Container(
       width: width,
       color: AppColors.navigationSidebarSurface,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(color: AppColors.navigationSidebarBorder),
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(color: AppColors.navigationSidebarBorder),
+        ),
+      ),
+      child: Column(
+        children: [
+          _SidebarBrand(
+            collapsed: collapsed,
+            canToggle: canToggle,
+            onToggle: onToggle,
           ),
-        ),
-        child: Column(
-          children: [
-            _SidebarBrand(
-              collapsed: collapsed,
-              canToggle: canToggle,
-              onToggle: onToggle,
-            ),
-            Expanded(
-              child: ListView(
-                primary: false,
-                padding: EdgeInsets.fromLTRB(
-                  collapsed ? 8 : 10,
-                  10,
-                  collapsed ? 8 : 10,
-                  12,
-                ),
-                children: [
-                  for (final group in const [
-                    DesktopNavigationGroup.operations,
-                    DesktopNavigationGroup.management,
-                    DesktopNavigationGroup.insights,
-                  ]) ...[
-                    _SidebarGroupLabel(group: group, collapsed: collapsed),
-                    for (final item in desktopNavigationItems.where(
-                      (item) => item.group == group,
-                    ))
-                      _SidebarItem(
-                        icon: item.section.icon,
-                        label: item.section.label,
-                        selected: item.section == selectedSection,
-                        collapsed: collapsed,
-                        onTap: () {
-                          ref.read(desktopSectionProvider.notifier).state =
-                              item.section;
-                        },
-                      ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
+          Expanded(
+            child: ListView(
+              primary: false,
+              padding: EdgeInsets.fromLTRB(
+                collapsed ? 8 : 10,
+                10,
+                collapsed ? 8 : 10,
+                12,
               ),
+              children: [
+                for (final group in const [
+                  DesktopNavigationGroup.operations,
+                  DesktopNavigationGroup.management,
+                  DesktopNavigationGroup.insights,
+                ]) ...[
+                  if (!collapsed)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+                      child: Text(
+                        group.label.toUpperCase(),
+                        style: TextStyle(
+                          color: AppColors.textMuted.withValues(alpha: 0.72),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.05,
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(height: 4),
+                  for (final item in desktopNavigationItems.where(
+                    (item) => item.group == group,
+                  ))
+                    _SidebarItem(
+                      icon: item.section.icon,
+                      label: item.section.label,
+                      selected: item.section == selectedSection,
+                      collapsed: collapsed,
+                      onTap: () {
+                        ref.read(desktopSectionProvider.notifier).state =
+                            item.section;
+                      },
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ],
             ),
-            _SidebarFooter(
-              selectedSection: selectedSection,
-              collapsed: collapsed,
-              canToggle: canToggle,
-              onToggle: onToggle,
-              onOpenStaffWorkstation: onOpenStaffWorkstation,
-            ),
-          ],
-        ),
+          ),
+          _SidebarFooter(
+            selectedSection: selectedSection,
+            collapsed: collapsed,
+            canToggle: canToggle,
+            onToggle: onToggle,
+            onOpenStaffWorkstation: onOpenStaffWorkstation,
+          ),
+        ],
       ),
     );
   }
@@ -251,9 +264,8 @@ class _SidebarBrand extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: collapsed
-            ? MainAxisAlignment.center
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
         children: [
           const _SalonMark(),
           if (!collapsed) ...[
@@ -325,31 +337,6 @@ class _SalonMark extends StatelessWidget {
   }
 }
 
-class _SidebarGroupLabel extends StatelessWidget {
-  const _SidebarGroupLabel({required this.group, required this.collapsed});
-
-  final DesktopNavigationGroup group;
-  final bool collapsed;
-
-  @override
-  Widget build(BuildContext context) {
-    if (collapsed) return const SizedBox(height: 4);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
-      child: Text(
-        group.label.toUpperCase(),
-        style: TextStyle(
-          color: AppColors.textMuted.withValues(alpha: 0.72),
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.05,
-        ),
-      ),
-    );
-  }
-}
-
 class _SidebarItem extends StatelessWidget {
   const _SidebarItem({
     required this.icon,
@@ -367,13 +354,13 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Material(
+    final item = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(9),
         hoverColor: AppColors.navigationSidebarHover,
-        child: Ink(
+        child: Container(
           height: AppDimens.navigationItemHeight,
           decoration: BoxDecoration(
             color: selected
@@ -440,7 +427,7 @@ class _SidebarItem extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
-      child: collapsed ? Tooltip(message: label, child: content) : content,
+      child: collapsed ? Tooltip(message: label, child: item) : item,
     );
   }
 }
@@ -514,7 +501,7 @@ class _SidebarFooter extends ConsumerWidget {
                   version.when(
                     data: (value) => value,
                     loading: () => '',
-                    error: (error, stackTrace) => 'v?',
+                    error: (_, __) => 'v?',
                   ),
                   style: TextStyle(
                     color: AppColors.textMuted.withValues(alpha: 0.72),
@@ -545,7 +532,7 @@ class _SidebarAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = Material(
+    final action = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -590,7 +577,7 @@ class _SidebarAction extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
-      child: collapsed ? Tooltip(message: label, child: button) : button,
+      child: collapsed ? Tooltip(message: label, child: action) : action,
     );
   }
 }
@@ -618,15 +605,13 @@ class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
       if (!mounted || next == null || !next.hasUpdate || next.manifest == null) {
         return;
       }
-
-      final previousVersion = previous?.manifest?.latestVersion;
-      final nextVersion = next.manifest!.latestVersion;
-      if (previousVersion == nextVersion) return;
-
+      if (previous?.manifest?.latestVersion == next.manifest!.latestVersion) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Có bản cập nhật mới $nextVersion. Mở Cài đặt để xem chi tiết.',
+            'Có bản cập nhật mới ${next.manifest!.latestVersion}. Mở Cài đặt để xem chi tiết.',
           ),
         ),
       );
@@ -756,9 +741,7 @@ class _WorkspaceTopBar extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: onOpenStaffWorkstation,
                   icon: const Icon(Icons.storefront_outlined, size: 17),
-                  label: compact
-                      ? const Text('Nhân viên')
-                      : const Text('Bàn nhân viên'),
+                  label: Text(compact ? 'Nhân viên' : 'Bàn nhân viên'),
                 ),
               ],
             ),
