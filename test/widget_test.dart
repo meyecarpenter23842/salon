@@ -45,6 +45,34 @@ void main() {
       expect(find.text('Tính tiền nhanh'), findsNothing);
       expect(tester.takeException(), isNull);
 
+      final theme = Theme.of(tester.element(find.byType(Scaffold).first));
+      expect(theme.cardTheme.elevation, isNotNull);
+      expect(theme.cardTheme.elevation!, greaterThan(0));
+
+      final filledBackground =
+          theme.filledButtonTheme.style?.backgroundColor;
+      expect(filledBackground, isNotNull);
+      expect(
+        filledBackground!.resolve(<WidgetState>{}),
+        isNot(filledBackground.resolve(<WidgetState>{WidgetState.hovered})),
+      );
+      expect(
+        filledBackground.resolve(<WidgetState>{WidgetState.hovered}),
+        isNot(filledBackground.resolve(<WidgetState>{WidgetState.pressed})),
+      );
+
+      final outlinedBackground =
+          theme.outlinedButtonTheme.style?.backgroundColor;
+      expect(outlinedBackground, isNotNull);
+      expect(
+        outlinedBackground!.resolve(<WidgetState>{}),
+        isNot(outlinedBackground.resolve(<WidgetState>{WidgetState.hovered})),
+      );
+      expect(
+        outlinedBackground.resolve(<WidgetState>{WidgetState.hovered}),
+        isNot(outlinedBackground.resolve(<WidgetState>{WidgetState.pressed})),
+      );
+
       // Exercise real hit testing instead of mutating the navigation provider.
       await tester.tap(find.text('Lịch hẹn').first);
       await pumpUi(tester);
@@ -66,14 +94,23 @@ void main() {
       await pumpUi(tester);
 
       await tester.tap(find.byTooltip('Thu gọn menu'));
-      await pumpUi(tester);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(milliseconds: 180));
       final preferences = await SharedPreferences.getInstance();
       expect(preferences.getBool('salon_sidebar_collapsed'), isTrue);
       expect(find.byTooltip('Mở rộng menu'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       await tester.tap(find.byTooltip('Mở rộng menu'));
-      await pumpUi(tester);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(milliseconds: 180));
       expect(preferences.getBool('salon_sidebar_collapsed'), isFalse);
+      expect(find.text('VẬN HÀNH'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       for (final section in DesktopSection.values) {
         container.read(desktopSectionProvider.notifier).state = section;
