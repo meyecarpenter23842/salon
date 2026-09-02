@@ -168,8 +168,8 @@ class _DesktopSidebar extends ConsumerWidget {
     // the sidebar and responsive workspace cards.
     return Container(
       width: width,
-      color: AppColors.navigationSidebarSurface,
       decoration: BoxDecoration(
+        color: AppColors.navigationSidebarSurface,
         border: Border(
           right: BorderSide(color: AppColors.navigationSidebarBorder),
         ),
