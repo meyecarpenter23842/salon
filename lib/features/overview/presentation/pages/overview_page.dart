@@ -7,7 +7,9 @@ import '../../../../app/navigation/desktop_navigation.dart';
 import '../../../../core/models/appointment_entry.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/premium_workspace.dart';
 
 class OverviewPage extends ConsumerWidget {
   const OverviewPage({super.key});
@@ -30,14 +32,22 @@ class OverviewPage extends ConsumerWidget {
           onOpenCustomers: () => openSection(DesktopSection.customers),
           onOpenReports: () => openSection(DesktopSection.reports),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Text('Không tải được lịch hôm nay: $error'),
+        loading: () => const PremiumLoadingState(
+          label: 'Đang tải lịch hôm nay…',
+        ),
+        error: (error, stackTrace) => PremiumErrorState(
+          title: 'Không tải được lịch hôm nay',
+          message: '$error',
+          onRetry: () => ref.invalidate(appointmentsViewProvider),
         ),
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => Center(
-        child: Text('Không tải được tổng quan: $error'),
+      loading: () => const PremiumLoadingState(
+        label: 'Đang tải tổng quan salon…',
+      ),
+      error: (error, stackTrace) => PremiumErrorState(
+        title: 'Không tải được tổng quan',
+        message: '$error',
+        onRetry: () => ref.invalidate(overviewSummaryProvider),
       ),
     );
   }
@@ -357,7 +367,8 @@ class _AppointmentRow extends StatelessWidget {
             mouseCursor: SystemMouseCursors.click,
             borderRadius: BorderRadius.circular(12),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
+              duration: AppMotion.duration(context, AppMotion.quick),
+              curve: AppMotion.standardCurve,
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               decoration: BoxDecoration(
                 color: emphasize

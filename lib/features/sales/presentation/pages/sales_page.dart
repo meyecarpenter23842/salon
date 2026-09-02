@@ -5,6 +5,7 @@ import '../../../../core/models/retail_product_item.dart';
 import '../../../../core/models/retail_product_upsert_input.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 
@@ -30,11 +31,11 @@ class SalesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productsState = ref.watch(salesFilteredProductsProvider);
     return productsState.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => PremiumEmptyState(
-        icon: Icons.error_outline_rounded,
+      loading: () => const PremiumLoadingState(label: 'Đang tải sản phẩm…'),
+      error: (error, _) => PremiumErrorState(
         title: 'Không tải được sản phẩm',
         message: '$error',
+        onRetry: () => ref.invalidate(salesFilteredProductsProvider),
       ),
       data: (items) => _SalesView(items: items),
     );
@@ -126,7 +127,7 @@ class _SalesView extends ConsumerWidget {
     WidgetRef ref, {
     RetailProductItem? existing,
   }) async {
-    final input = await showDialog<RetailProductUpsertInput>(
+    final input = await showAppDialog<RetailProductUpsertInput>(
       context: context,
       builder: (_) => _RetailProductEditorDialog(existing: existing),
     );
@@ -265,6 +266,10 @@ class _SalesWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detail = PremiumAnimatedDetail(
+      transitionKey: ValueKey(selected?.id ?? 'sales-product-empty'),
+      child: _ProductDetail(product: selected),
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 760) {
@@ -273,7 +278,7 @@ class _SalesWorkspace extends StatelessWidget {
             children: [
               SizedBox(height: 300, child: _ProductList(items: items, selectedIndex: selectedIndex)),
               const SizedBox(height: 12),
-              SizedBox(height: 360, child: _ProductDetail(product: selected)),
+              SizedBox(height: 360, child: detail),
             ],
           );
         }
@@ -282,7 +287,7 @@ class _SalesWorkspace extends StatelessWidget {
           children: [
             Expanded(flex: 11, child: _ProductList(items: items, selectedIndex: selectedIndex)),
             const SizedBox(width: 12),
-            Expanded(flex: 9, child: _ProductDetail(product: selected)),
+            Expanded(flex: 9, child: detail),
           ],
         );
       },
@@ -316,52 +321,45 @@ class _ProductList extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final item = items[index];
                 final selected = index == selectedIndex;
-                return Material(
-                  color: selected ? AppColors.selectedSurface : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => ref.read(salesSelectedProductIndexProvider.notifier).state = index,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      child: Row(
-                        children: [
-                          PremiumIconBadge(
-                            icon: Icons.shopping_bag_outlined,
-                            size: 36,
-                            tone: item.isActive ? AppColors.copper : AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${item.productType}${item.brand.isEmpty ? '' : ' • ${item.brand}'}${item.volumeLabel.isEmpty ? '' : ' • ${item.volumeLabel}'}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
-                                ),
-                              ],
+                return PremiumInteractiveSurface(
+                  selected: selected,
+                  onTap: () => ref.read(salesSelectedProductIndexProvider.notifier).state = index,
+                  child: Row(
+                    children: [
+                      PremiumIconBadge(
+                        icon: Icons.shopping_bag_outlined,
+                        size: 36,
+                        tone: item.isActive ? AppColors.copper : AppColors.textMuted,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${item.productType}${item.brand.isEmpty ? '' : ' • ${item.brand}'}${item.volumeLabel.isEmpty ? '' : ' • ${item.volumeLabel}'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(item.salePriceLabel, style: const TextStyle(fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 4),
-                              PremiumStatusPill(
-                                label: item.isActive ? 'Đang bán' : 'Tạm ẩn',
-                                tone: item.isActive ? AppColors.success : AppColors.textMuted,
-                              ),
-                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(item.salePriceLabel, style: const TextStyle(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
+                          PremiumStatusPill(
+                            label: item.isActive ? 'Đang bán' : 'Tạm ẩn',
+                            tone: item.isActive ? AppColors.success : AppColors.textMuted,
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
                 );
               },
@@ -479,7 +477,7 @@ class _ProductDetail extends ConsumerWidget {
   }
 
   Future<void> _openProductEditor(BuildContext context, WidgetRef ref, RetailProductItem existing) async {
-    final input = await showDialog<RetailProductUpsertInput>(
+    final input = await showAppDialog<RetailProductUpsertInput>(
       context: context,
       builder: (_) => _RetailProductEditorDialog(existing: existing),
     );

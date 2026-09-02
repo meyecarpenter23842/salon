@@ -25,11 +25,11 @@ class ReportsPage extends ConsumerWidget {
 
     return reports.when(
       data: (summary) => _ReportsView(summary: summary, backend: backend),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => PremiumEmptyState(
-        icon: Icons.query_stats_rounded,
+      loading: () => const PremiumLoadingState(label: 'Đang tải báo cáo…'),
+      error: (error, _) => PremiumErrorState(
         title: 'Không tải được báo cáo',
         message: '$error',
+        onRetry: () => ref.invalidate(reportsSummaryProvider),
       ),
     );
   }
@@ -54,6 +54,12 @@ class _ReportsView extends ConsumerWidget {
     final selectedService = servicePerformance.isEmpty
         ? null
         : servicePerformance[effectiveIndex];
+    final serviceDetail = PremiumAnimatedDetail(
+      transitionKey: ValueKey(
+        selectedService?['name']?.toString() ?? 'report-service-empty',
+      ),
+      child: _ReportServiceDetailPanel(service: selectedService),
+    );
 
     return ListView(
       key: const Key('reports-premium-workspace'),
@@ -109,7 +115,7 @@ class _ReportsView extends ConsumerWidget {
             );
             final right = Column(
               children: [
-                _ReportServiceDetailPanel(service: selectedService),
+                serviceDetail,
                 const SizedBox(height: 14),
                 _EmployeePerformancePanel(items: employeePerformance),
                 const SizedBox(height: 14),
@@ -522,52 +528,46 @@ class _ServicePerformanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.selectedSurface : Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          child: Row(
-            children: [
-              PremiumIconBadge(
-                icon: rank == 1 ? Icons.workspace_premium_outlined : Icons.auto_graph_outlined,
-                size: 36,
-                tone: rank == 1 ? AppColors.warning : AppColors.copper,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['name']?.toString() ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item['bookings']} lịch • ${item['share']} doanh thu',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                item['revenue']?.toString() ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ],
+    return PremiumInteractiveSurface(
+      selected: selected,
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      child: Row(
+        children: [
+          PremiumIconBadge(
+            icon: rank == 1 ? Icons.workspace_premium_outlined : Icons.auto_graph_outlined,
+            size: 36,
+            tone: rank == 1 ? AppColors.warning : AppColors.copper,
           ),
-        ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['name']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${item['bookings']} lịch • ${item['share']} doanh thu',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            item['revenue']?.toString() ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }
