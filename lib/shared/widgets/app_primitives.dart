@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 
 enum AppBadgeTone { accent, success, warning, info, neutral }
 
@@ -130,8 +131,8 @@ class AppChoiceButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
+          duration: AppMotion.duration(context, AppMotion.quick),
+          curve: AppMotion.standardCurve,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
             color: backgroundColor,

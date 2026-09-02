@@ -12,6 +12,7 @@ import '../core/models/offline_update_summary.dart';
 import '../core/providers/repository_providers.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_dimens.dart';
+import '../core/theme/app_motion.dart';
 import '../features/appointments/presentation/pages/appointments_page.dart';
 import '../features/customers/presentation/pages/customers_page.dart';
 import '../features/employees/presentation/pages/employees_page.dart';
@@ -22,11 +23,10 @@ import '../features/reports/presentation/pages/reports_page.dart';
 import '../features/sales/presentation/pages/sales_page.dart';
 import '../features/services/presentation/pages/services_page.dart';
 import '../features/settings/presentation/pages/settings_page.dart';
+import '../shared/widgets/app_motion.dart';
 import 'navigation/desktop_navigation.dart';
 
 const _sidebarCollapsedPreferenceKey = 'salon_sidebar_collapsed';
-const _sidebarMotionDuration = Duration(milliseconds: 220);
-const _controlMotionDuration = Duration(milliseconds: 140);
 
 final _appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
@@ -118,7 +118,7 @@ class _DesktopShellPageState extends ConsumerState<DesktopShellPage> {
 
   Future<void> _openStaffWorkstation() async {
     if (!kReleaseMode) {
-      await showDialog<void>(
+      await showAppDialog<void>(
         context: context,
         builder: (_) => const StaffWorkstationPage(),
       );
@@ -187,10 +187,13 @@ class _DesktopSidebarState extends ConsumerState<_DesktopSidebar> {
     }
 
     // Expand the rail first, then reveal labels once the full width is ready.
-    _expandLayoutTimer = Timer(_sidebarMotionDuration, () {
-      if (!mounted || widget.collapsed) return;
-      setState(() => _showExpandedLayout = true);
-    });
+    _expandLayoutTimer = Timer(
+      AppMotion.duration(context, AppMotion.moderate),
+      () {
+        if (!mounted || widget.collapsed) return;
+        setState(() => _showExpandedLayout = true);
+      },
+    );
   }
 
   @override
@@ -210,8 +213,8 @@ class _DesktopSidebarState extends ConsumerState<_DesktopSidebar> {
         : AppDimens.navigationSidebarWidth;
 
     return AnimatedContainer(
-      duration: _sidebarMotionDuration,
-      curve: Curves.easeOutCubic,
+      duration: AppMotion.duration(context, AppMotion.moderate),
+      curve: AppMotion.standardCurve,
       width: targetWidth,
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
@@ -407,6 +410,7 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controlDuration = AppMotion.duration(context, AppMotion.quick);
     final item = Material(
       color: Colors.transparent,
       child: InkWell(
@@ -417,8 +421,8 @@ class _SidebarItem extends StatelessWidget {
         splashColor: AppColors.copper.withValues(alpha: 0.16),
         highlightColor: AppColors.navigationSidebarPressed,
         child: AnimatedContainer(
-          duration: _controlMotionDuration,
-          curve: Curves.easeOutCubic,
+          duration: controlDuration,
+          curve: AppMotion.standardCurve,
           height: AppDimens.navigationItemHeight,
           decoration: BoxDecoration(
             color: selected
@@ -433,7 +437,7 @@ class _SidebarItem extends StatelessWidget {
                 top: 8,
                 bottom: 8,
                 child: AnimatedOpacity(
-                  duration: _controlMotionDuration,
+                  duration: controlDuration,
                   opacity: selected ? 1 : 0,
                   child: Container(
                     width: 3,
@@ -726,24 +730,7 @@ class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
                     horizontalPadding,
                     verticalPadding,
                   ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) {
-                      final fade = CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      );
-                      final slide = Tween<Offset>(
-                        begin: const Offset(0.012, 0),
-                        end: Offset.zero,
-                      ).animate(fade);
-                      return FadeTransition(
-                        opacity: fade,
-                        child: SlideTransition(position: slide, child: child),
-                      );
-                    },
+                  child: AppMotionSwitcher(
                     child: KeyedSubtree(
                       key: ValueKey(widget.selectedSection),
                       child: _buildSectionBody(widget.selectedSection),
