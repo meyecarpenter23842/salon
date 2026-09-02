@@ -36,6 +36,7 @@ abstract interface class CustomersRepository {
     String? query,
     String? tier,
     int? recentDays,
+    int? inactiveDays,
   });
 
   Future<CustomerProfile> saveCustomer(

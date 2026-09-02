@@ -16,20 +16,35 @@ class SqliteCustomersRepository implements CustomersRepository {
     String? query,
     String? tier,
     int? recentDays,
+    int? inactiveDays,
   }) async {
+    if (recentDays != null && inactiveDays != null) {
+      throw ArgumentError(
+        'recentDays and inactiveDays are mutually exclusive activity filters.',
+      );
+    }
+
     final database = await _database.database;
     final normalizedQuery = query?.trim().toLowerCase();
     final normalizedTier = tier?.trim();
-    final days = (recentDays ?? 30).clamp(1, 3650);
-    final threshold = DateTime.now()
-        .subtract(Duration(days: days))
-        .toIso8601String();
-
     final clauses = <String>[];
     final args = <Object?>[];
 
-    clauses.add('COALESCE(last_visit_at, updated_at) >= ?');
-    args.add(threshold);
+    if (recentDays != null) {
+      final days = recentDays.clamp(1, 3650);
+      final threshold = DateTime.now()
+          .subtract(Duration(days: days))
+          .toIso8601String();
+      clauses.add('last_visit_at IS NOT NULL AND last_visit_at >= ?');
+      args.add(threshold);
+    } else if (inactiveDays != null) {
+      final days = inactiveDays.clamp(1, 3650);
+      final threshold = DateTime.now()
+          .subtract(Duration(days: days))
+          .toIso8601String();
+      clauses.add('(last_visit_at IS NULL OR last_visit_at < ?)');
+      args.add(threshold);
+    }
 
     if (normalizedQuery != null && normalizedQuery.isNotEmpty) {
       clauses.add(
@@ -47,8 +62,8 @@ class SqliteCustomersRepository implements CustomersRepository {
 
     final rows = await database.query(
       'customers',
-      where: clauses.join(' AND '),
-      whereArgs: args,
+      where: clauses.isEmpty ? null : clauses.join(' AND '),
+      whereArgs: clauses.isEmpty ? null : args,
       orderBy:
           'total_spent DESC, visit_count DESC, full_name COLLATE NOCASE ASC',
     );
