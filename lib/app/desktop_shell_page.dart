@@ -25,6 +25,8 @@ import '../features/settings/presentation/pages/settings_page.dart';
 import 'navigation/desktop_navigation.dart';
 
 const _sidebarCollapsedPreferenceKey = 'salon_sidebar_collapsed';
+const _sidebarMotionDuration = Duration(milliseconds: 220);
+const _controlMotionDuration = Duration(milliseconds: 140);
 
 final _appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
@@ -142,7 +144,7 @@ class _DesktopShellPageState extends ConsumerState<DesktopShellPage> {
   }
 }
 
-class _DesktopSidebar extends ConsumerWidget {
+class _DesktopSidebar extends ConsumerStatefulWidget {
   const _DesktopSidebar({
     required this.selectedSection,
     required this.collapsed,
@@ -158,85 +160,136 @@ class _DesktopSidebar extends ConsumerWidget {
   final VoidCallback onOpenStaffWorkstation;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final width = collapsed
+  ConsumerState<_DesktopSidebar> createState() => _DesktopSidebarState();
+}
+
+class _DesktopSidebarState extends ConsumerState<_DesktopSidebar> {
+  Timer? _expandLayoutTimer;
+  late bool _showExpandedLayout;
+
+  @override
+  void initState() {
+    super.initState();
+    _showExpandedLayout = !widget.collapsed;
+  }
+
+  @override
+  void didUpdateWidget(covariant _DesktopSidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.collapsed == widget.collapsed) return;
+
+    _expandLayoutTimer?.cancel();
+    if (widget.collapsed) {
+      // Switch to the compact child before the outer rail starts shrinking.
+      // This keeps every intermediate width valid during the animation.
+      _showExpandedLayout = false;
+      return;
+    }
+
+    // Expand the rail first, then reveal labels once the full width is ready.
+    _expandLayoutTimer = Timer(_sidebarMotionDuration, () {
+      if (!mounted || widget.collapsed) return;
+      setState(() => _showExpandedLayout = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _expandLayoutTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final targetWidth = widget.collapsed
+        ? AppDimens.navigationSidebarCollapsedWidth
+        : AppDimens.navigationSidebarWidth;
+    final useCollapsedLayout = widget.collapsed || !_showExpandedLayout;
+    final layoutWidth = useCollapsedLayout
         ? AppDimens.navigationSidebarCollapsedWidth
         : AppDimens.navigationSidebarWidth;
 
-    // Width changes are intentionally immediate. Animating the outer width while
-    // switching child layout modes creates transient invalid constraints for both
-    // the sidebar and responsive workspace cards.
-    return Container(
-      width: width,
+    return AnimatedContainer(
+      duration: _sidebarMotionDuration,
+      curve: Curves.easeOutCubic,
+      width: targetWidth,
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: AppColors.navigationSidebarSurface,
         border: Border(
           right: BorderSide(color: AppColors.navigationSidebarBorder),
         ),
       ),
-      child: Column(
-        children: [
-          _SidebarBrand(
-            collapsed: collapsed,
-            canToggle: canToggle,
-            onToggle: onToggle,
-          ),
-          Expanded(
-            child: ListView(
-              primary: false,
-              padding: EdgeInsets.fromLTRB(
-                collapsed ? 8 : 10,
-                10,
-                collapsed ? 8 : 10,
-                12,
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: layoutWidth,
+          height: double.infinity,
+          child: Column(
+            children: [
+              _SidebarBrand(
+                collapsed: useCollapsedLayout,
+                canToggle: widget.canToggle,
+                onToggle: widget.onToggle,
               ),
-              children: [
-                for (final group in const [
-                  DesktopNavigationGroup.operations,
-                  DesktopNavigationGroup.management,
-                  DesktopNavigationGroup.insights,
-                ]) ...[
-                  if (!collapsed)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
-                      child: Text(
-                        group.label.toUpperCase(),
-                        style: TextStyle(
-                          color: AppColors.textMuted.withValues(alpha: 0.72),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.05,
+              Expanded(
+                child: ListView(
+                  primary: false,
+                  padding: EdgeInsets.fromLTRB(
+                    useCollapsedLayout ? 8 : 10,
+                    10,
+                    useCollapsedLayout ? 8 : 10,
+                    12,
+                  ),
+                  children: [
+                    for (final group in const [
+                      DesktopNavigationGroup.operations,
+                      DesktopNavigationGroup.management,
+                      DesktopNavigationGroup.insights,
+                    ]) ...[
+                      if (!useCollapsedLayout)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+                          child: Text(
+                            group.label.toUpperCase(),
+                            style: TextStyle(
+                              color: AppColors.textMuted.withValues(alpha: 0.72),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.05,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 4),
+                      for (final item in desktopNavigationItems.where(
+                        (item) => item.group == group,
+                      ))
+                        _SidebarItem(
+                          icon: item.section.icon,
+                          label: item.section.label,
+                          selected: item.section == widget.selectedSection,
+                          collapsed: useCollapsedLayout,
+                          onTap: () {
+                            ref.read(desktopSectionProvider.notifier).state =
+                                item.section;
+                          },
                         ),
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 4),
-                  for (final item in desktopNavigationItems.where(
-                    (item) => item.group == group,
-                  ))
-                    _SidebarItem(
-                      icon: item.section.icon,
-                      label: item.section.label,
-                      selected: item.section == selectedSection,
-                      collapsed: collapsed,
-                      onTap: () {
-                        ref.read(desktopSectionProvider.notifier).state =
-                            item.section;
-                      },
-                    ),
-                  const SizedBox(height: 8),
-                ],
-              ],
-            ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+              _SidebarFooter(
+                selectedSection: widget.selectedSection,
+                collapsed: useCollapsedLayout,
+                canToggle: widget.canToggle,
+                onToggle: widget.onToggle,
+                onOpenStaffWorkstation: widget.onOpenStaffWorkstation,
+              ),
+            ],
           ),
-          _SidebarFooter(
-            selectedSection: selectedSection,
-            collapsed: collapsed,
-            canToggle: canToggle,
-            onToggle: onToggle,
-            onOpenStaffWorkstation: onOpenStaffWorkstation,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -269,7 +322,7 @@ class _SidebarBrand extends StatelessWidget {
         children: [
           const _SalonMark(),
           if (!collapsed) ...[
-            const SizedBox(width: 11),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -306,7 +359,6 @@ class _SidebarBrand extends StatelessWidget {
                 tooltip: 'Thu gọn menu',
                 icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
                 iconSize: 18,
-                color: AppColors.textMuted,
               ),
           ],
         ],
@@ -326,7 +378,8 @@ class _SalonMark extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.shellAccentSurface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.navigationSidebarBorder),
+        border: Border.all(color: AppColors.cardBorder),
+        boxShadow: AppColors.surfaceShadow,
       ),
       child: Icon(
         Icons.content_cut_rounded,
@@ -358,23 +411,30 @@ class _SidebarItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(9),
+        mouseCursor: SystemMouseCursors.click,
+        borderRadius: BorderRadius.circular(10),
         hoverColor: AppColors.navigationSidebarHover,
-        child: Container(
+        splashColor: AppColors.copper.withValues(alpha: 0.16),
+        highlightColor: AppColors.navigationSidebarPressed,
+        child: AnimatedContainer(
+          duration: _controlMotionDuration,
+          curve: Curves.easeOutCubic,
           height: AppDimens.navigationItemHeight,
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.navigationSidebarActive
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Stack(
             children: [
-              if (selected)
-                Positioned(
-                  left: 0,
-                  top: 8,
-                  bottom: 8,
+              Positioned(
+                left: 0,
+                top: 8,
+                bottom: 8,
+                child: AnimatedOpacity(
+                  duration: _controlMotionDuration,
+                  opacity: selected ? 1 : 0,
                   child: Container(
                     width: 3,
                     decoration: BoxDecoration(
@@ -383,6 +443,7 @@ class _SidebarItem extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 12),
                 child: Row(
@@ -390,15 +451,20 @@ class _SidebarItem extends StatelessWidget {
                       ? MainAxisAlignment.center
                       : MainAxisAlignment.start,
                   children: [
-                    Icon(
-                      icon,
-                      size: 19,
-                      color: selected
-                          ? AppColors.copper
-                          : AppColors.navigationSidebarText,
+                    SizedBox(
+                      width: 20,
+                      child: Center(
+                        child: Icon(
+                          icon,
+                          size: 19,
+                          color: selected
+                              ? AppColors.copper
+                              : AppColors.navigationSidebarText,
+                        ),
+                      ),
                     ),
                     if (!collapsed) ...[
-                      const SizedBox(width: 11),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           label,
@@ -426,7 +492,7 @@ class _SidebarItem extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
+      padding: const EdgeInsets.only(bottom: 4),
       child: collapsed ? Tooltip(message: label, child: item) : item,
     );
   }
@@ -489,7 +555,6 @@ class _SidebarFooter extends ConsumerWidget {
                 onPressed: onToggle,
                 icon: const Icon(Icons.keyboard_double_arrow_right_rounded),
                 iconSize: 18,
-                color: AppColors.textMuted,
               ),
             )
           else if (!collapsed)
@@ -536,8 +601,11 @@ class _SidebarAction extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(9),
+        mouseCursor: SystemMouseCursors.click,
+        borderRadius: BorderRadius.circular(10),
         hoverColor: AppColors.navigationSidebarHover,
+        splashColor: AppColors.copper.withValues(alpha: 0.16),
+        highlightColor: AppColors.navigationSidebarPressed,
         child: SizedBox(
           height: AppDimens.navigationItemHeight,
           child: Padding(
@@ -547,9 +615,18 @@ class _SidebarAction extends StatelessWidget {
                   ? MainAxisAlignment.center
                   : MainAxisAlignment.start,
               children: [
-                Icon(icon, size: 19, color: AppColors.navigationSidebarText),
+                SizedBox(
+                  width: 20,
+                  child: Center(
+                    child: Icon(
+                      icon,
+                      size: 19,
+                      color: AppColors.navigationSidebarText,
+                    ),
+                  ),
+                ),
                 if (!collapsed) ...[
-                  const SizedBox(width: 11),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       label,
@@ -576,7 +653,7 @@ class _SidebarAction extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
+      padding: const EdgeInsets.only(bottom: 4),
       child: collapsed ? Tooltip(message: label, child: action) : action,
     );
   }
@@ -619,31 +696,65 @@ class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
 
     final latestUpdate = ref.watch(offlineUpdateLastResultProvider);
 
-    return ColoredBox(
-      color: AppColors.workspaceBackground,
-      child: Column(
-        children: [
-          SizedBox(
-            height: AppDimens.workspaceTopBarHeight,
-            child: _WorkspaceTopBar(
-              selectedSection: widget.selectedSection,
-              updateSummary: latestUpdate,
-              onOpenStaffWorkstation: widget.onOpenStaffWorkstation,
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.workspaceHorizontalPadding,
-                AppDimens.workspaceVerticalPadding,
-                AppDimens.workspaceHorizontalPadding,
-                AppDimens.workspaceVerticalPadding,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalPadding = constraints.maxWidth >= 1380
+            ? 28.0
+            : constraints.maxWidth >= 1050
+            ? 22.0
+            : 16.0;
+        final verticalPadding = constraints.maxHeight >= 760 ? 20.0 : 14.0;
+
+        return ColoredBox(
+          color: AppColors.workspaceBackground,
+          child: Column(
+            children: [
+              SizedBox(
+                height: AppDimens.workspaceTopBarHeight,
+                child: _WorkspaceTopBar(
+                  selectedSection: widget.selectedSection,
+                  updateSummary: latestUpdate,
+                  horizontalPadding: horizontalPadding,
+                  onOpenStaffWorkstation: widget.onOpenStaffWorkstation,
+                ),
               ),
-              child: _buildSectionBody(widget.selectedSection),
-            ),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    verticalPadding,
+                    horizontalPadding,
+                    verticalPadding,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final fade = CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      );
+                      final slide = Tween<Offset>(
+                        begin: const Offset(0.012, 0),
+                        end: Offset.zero,
+                      ).animate(fade);
+                      return FadeTransition(
+                        opacity: fade,
+                        child: SlideTransition(position: slide, child: child),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey(widget.selectedSection),
+                      child: _buildSectionBody(widget.selectedSection),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -666,11 +777,13 @@ class _WorkspaceTopBar extends StatelessWidget {
   const _WorkspaceTopBar({
     required this.selectedSection,
     required this.onOpenStaffWorkstation,
+    required this.horizontalPadding,
     this.updateSummary,
   });
 
   final DesktopSection selectedSection;
   final VoidCallback onOpenStaffWorkstation;
+  final double horizontalPadding;
   final OfflineUpdateSummary? updateSummary;
 
   @override
@@ -687,7 +800,10 @@ class _WorkspaceTopBar extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: 13,
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -766,7 +882,7 @@ class _TopBarStatus extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.panelRaised,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: AppColors.workspaceDivider),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

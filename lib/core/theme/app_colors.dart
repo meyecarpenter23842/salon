@@ -50,9 +50,9 @@ class AppColors {
     const Color(0xFF1D1511),
   );
   static Color get border => _pick(
-    const Color(0xFF295448),
-    const Color(0xFF2A3D66),
-    const Color(0xFF6E5A38),
+    const Color(0xFF1F4037),
+    const Color(0xFF22324F),
+    const Color(0xFF493A25),
   );
   static Color get borderStrong => _pick(
     const Color(0xFF2FB188),
@@ -169,15 +169,29 @@ class AppColors {
   // of hardcoding colors in DesktopShellPage.
   static Color get workspaceBackground => background;
   static Color get navigationSidebarSurface => espresso;
-  static Color get navigationSidebarBorder => border.withValues(alpha: 0.72);
+  static Color get navigationSidebarBorder => border.withValues(alpha: 0.58);
   static Color get navigationSidebarHover =>
-      textPrimary.withValues(alpha: 0.055);
+      textPrimary.withValues(alpha: 0.085);
+  static Color get navigationSidebarPressed =>
+      copper.withValues(alpha: 0.14);
   static Color get navigationSidebarActive => selectedSurface;
   static Color get navigationSidebarIndicator => copper;
   static Color get navigationSidebarText => textSecondary;
   static Color get navigationSidebarTextActive => textPrimary;
-  static Color get workspaceTopBarSurface => panel.withValues(alpha: 0.98);
-  static Color get workspaceDivider => border.withValues(alpha: 0.72);
+  static Color get workspaceTopBarSurface => panel.withValues(alpha: 0.985);
+  static Color get workspaceDivider => border.withValues(alpha: 0.56);
+
+  // Surface and control tokens. Borders stay deliberately subtle so depth comes
+  // from tonal separation and shadow instead of outlining every container.
+  static Color get cardBorder => border.withValues(alpha: 0.68);
+  static Color get controlBorder => border.withValues(alpha: 0.82);
+  static Color get controlHoverBorder => borderStrong.withValues(alpha: 0.72);
+  static Color get controlHoverSurface => _pick(
+    const Color(0xFF18342B),
+    const Color(0xFF1B2B49),
+    const Color(0xFF30231A),
+  );
+  static Color get controlPressedSurface => selectedSurface;
 
   // Token aliases for componentized color usage.
   static Color get appBackground => background;
@@ -191,6 +205,19 @@ class AppColors {
   static Color get appDanger => danger;
   static Color get appTextPrimary => textPrimary;
   static Color get appTextSecondary => textSecondary;
+
+  static List<BoxShadow> get surfaceShadow => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.24),
+      blurRadius: 16,
+      offset: const Offset(0, 6),
+    ),
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.1),
+      blurRadius: 3,
+      offset: const Offset(0, 1),
+    ),
+  ];
 
   static List<BoxShadow> get luxuryShadow => [
     BoxShadow(
