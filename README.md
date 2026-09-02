@@ -9,7 +9,7 @@
 - Các màn hình Khách hàng, Lịch hẹn, Dịch vụ, Nhân sự, Hóa đơn và Thiết lập đã có luồng thao tác chính.
 - Lịch hẹn hỗ trợ nhiều dịch vụ trong một booking và hóa đơn có thể prefill từ toàn bộ dịch vụ của lịch hẹn.
 - Overview đã tổng hợp KPI và khối tổng quan từ SQLite runtime.
-- Reports đang đọc dữ liệu từ SQLite runtime; nếu database trống thì repository sẽ seed dữ liệu mẫu ban đầu để tránh màn hình rỗng.
+- Reports đọc dữ liệu thật từ SQLite runtime; database mới/rỗng giữ trạng thái rỗng và không tự seed dữ liệu mẫu.
 - Reports period selector đã nối query thật theo kỳ: Hôm nay, 7 ngày, 30 ngày, Tháng này.
 - Đã có tab Bán hàng để quản lý sản phẩm bán lẻ và cấu hình ẩn/hiện cho cửa sổ nhân viên.
 - Backup/Restore dữ liệu SQLite đã được tích hợp trong màn hình Cài đặt.
@@ -105,12 +105,15 @@ Lưu ý:
 
 ## Trạng thái dữ liệu thật và dữ liệu demo
 
-- Appointments, Customers, Services, Employees, Sales, Invoices: đã dùng runtime repository SQLite.
-- Overview: KPI, khách nổi bật, quick checkout và biểu đồ doanh thu đã tổng hợp từ SQLite runtime cục bộ.
-- Reports: đang dùng repository SQLite; có cơ chế seed dữ liệu mẫu ban đầu nếu database chưa có dữ liệu.
+- Appointments, Customers, Services, Employees, Sales, Invoices: dùng runtime repository SQLite.
+- Overview: KPI, khách nổi bật, quick checkout và biểu đồ doanh thu tổng hợp từ SQLite runtime cục bộ.
+- Reports: dùng SQLite runtime và trả trạng thái zero/empty khi chưa có dữ liệu thật.
+- Database production mới không tự tạo customer/service/employee/appointment/invoice mẫu.
+- Fake data chỉ thuộc backend fake được chọn rõ ràng trong test/demo; không được dùng để bootstrap SQLite production.
+- Invoice draft trên DB sạch được giữ tạm trong memory cho tới khi chọn khách thật; việc chỉ mở màn Tính tiền không tạo record nghiệp vụ giả trong SQLite.
 - Settings: đang dùng SettingsRepository dựa trên LocalSettingsStore (SharedPreferences), không lưu vào SQLite.
 
-Có thể dùng Overview và Reports để đọc nhanh số liệu vận hành cục bộ của máy đang chạy app. Với máy mới chưa phát sinh dữ liệu, Reports có thể hiển thị dữ liệu seed ban đầu.
+Có thể dùng Overview và Reports để đọc nhanh số liệu vận hành cục bộ của máy đang chạy app. Với máy mới chưa phát sinh dữ liệu, các màn này hiển thị số 0/empty state thay vì số liệu mẫu.
 
 ## Startup hardening
 
@@ -122,7 +125,7 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 
 ## Checklist preview trước publish
 
-1. Mở app trên Windows và kiểm tra khởi động mới với database trống.
+1. Mở app trên Windows và kiểm tra khởi động mới với database trống; xác nhận không có dữ liệu khách/dịch vụ/nhân viên/lịch/hóa đơn mẫu tự xuất hiện.
 2. Tạo khách hàng, dịch vụ, lịch hẹn nhiều dịch vụ, rồi xuất hóa đơn từ lịch đó.
 3. Thêm hoặc sửa nhân sự, đổi trạng thái và mở lại app để xác nhận dữ liệu còn giữ.
 4. Sửa tên salon, tiền tệ, nhắc lịch trong Thiết lập và mở lại app để xác nhận persistence.
@@ -131,8 +134,8 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 
 ## Hạn chế còn lại
 
-- Reports có thể hiển thị dữ liệu seed ở máy mới (khi chưa có dữ liệu phát sinh thực tế).
-- Chưa có bộ test migration hoặc test riêng cho các error path khi bootstrap.
+- Chưa có bộ test migration đầy đủ hoặc test riêng cho tất cả error path khi bootstrap.
+- Appointment correctness/transaction, checkout transaction, customer query semantics, settings ownership và backup safety tiếp tục được xử lý theo master issue.
 - README này mô tả publish nội bộ trên Windows, chưa bao gồm code signing hay installer chuyên biệt.
 
 ## Phương án update offline đã chốt
@@ -145,4 +148,3 @@ Tham khảo chi tiết tại:
 
 - `offline_update/README.md`
 - `offline_update/version.json.example`
-
