@@ -15,6 +15,8 @@ import '../../../../core/models/retail_product_upsert_input.dart';
 import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_motion.dart';
+import '../../../../shared/widgets/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 
@@ -42,7 +44,7 @@ Future<void> _updateInvoicePaymentMethod(BuildContext context, WidgetRef ref, St
 }
 
 Future<void> _openDiscountEditor(BuildContext context, WidgetRef ref, InvoiceDraft draft) async {
-  final discount = await showDialog<int>(
+  final discount = await showAppDialog<int>(
     context: context,
     builder: (_) => _InvoiceDiscountDialog(
       currentDiscount: draft.discountAmount,
@@ -61,7 +63,7 @@ Future<void> _openDiscountEditor(BuildContext context, WidgetRef ref, InvoiceDra
 Future<void> _openInvoiceServicePicker(BuildContext context, WidgetRef ref, InvoiceDraft draft) async {
   final services = await ref.read(servicesRepositoryProvider).fetchServicesView();
   if (!context.mounted) return;
-  final selected = await showDialog<ServiceCatalogItem>(
+  final selected = await showAppDialog<ServiceCatalogItem>(
     context: context,
     builder: (_) => _InvoiceServicePickerDialog(
       services: services.where((service) => service.isActive).toList(growable: false),
@@ -91,7 +93,7 @@ Future<void> _updateInvoiceLineQuantity(
 Future<void> _openInvoiceProductPicker(BuildContext context, WidgetRef ref, InvoiceDraft draft) async {
   final products = await ref.read(retailProductsRepositoryProvider).fetchProducts();
   if (!context.mounted) return;
-  final selected = await showDialog<RetailProductItem>(
+  final selected = await showAppDialog<RetailProductItem>(
     context: context,
     builder: (_) => _InvoiceProductPickerDialog(
       products: products.where((product) => product.isActive).toList(growable: false),
@@ -117,7 +119,7 @@ Future<void> _openInvoiceProductPicker(BuildContext context, WidgetRef ref, Invo
 }
 
 Future<RetailProductItem?> _openRetailProductEditor(BuildContext context, WidgetRef ref) {
-  return showDialog<RetailProductItem>(
+  return showAppDialog<RetailProductItem>(
     context: context,
     builder: (_) => _RetailProductEditorDialog(
       onSave: (input) => ref.read(retailProductsRepositoryProvider).saveProduct(input),
@@ -127,7 +129,7 @@ Future<RetailProductItem?> _openRetailProductEditor(BuildContext context, Widget
 
 Future<void> _openLineDiscountEditor(BuildContext context, WidgetRef ref, InvoiceDraftLine line) async {
   final subtotal = line.unitPrice * line.quantity;
-  final discount = await showDialog<int>(
+  final discount = await showAppDialog<int>(
     context: context,
     builder: (_) => _InvoiceDiscountDialog(
       currentDiscount: line.discountAmount,
@@ -180,7 +182,7 @@ String _buildPaymentQrPayload(InvoiceDraft draft, CustomerProfile? customer) {
 
 Future<void> _showPaymentQrDialog(BuildContext context, InvoiceDraft draft, CustomerProfile? customer) async {
   final payload = _buildPaymentQrPayload(draft, customer);
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Row(
@@ -274,17 +276,33 @@ class InvoicesPage extends ConsumerWidget {
         data: (history) => filteredCustomersState.when(
           data: (filtered) => allCustomersState.when(
             data: (all) => _BillingView(draft: draft, history: history, filteredCustomers: filtered, allCustomers: all),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Không tải được khách hàng: $error')),
+            loading: () => const PremiumLoadingState(label: 'Đang tải khách hàng…'),
+            error: (error, _) => PremiumErrorState(
+              title: 'Không tải được khách hàng',
+              message: '$error',
+              onRetry: () => ref.invalidate(customersViewProvider),
+            ),
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Không tải được khách hàng tính tiền: $error')),
+          loading: () => const PremiumLoadingState(label: 'Đang lọc khách tính tiền…'),
+          error: (error, _) => PremiumErrorState(
+            title: 'Không tải được khách hàng tính tiền',
+            message: '$error',
+            onRetry: () => ref.invalidate(invoiceFilteredCustomersProvider),
+          ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Không tải được lịch sử hóa đơn: $error')),
+        loading: () => const PremiumLoadingState(label: 'Đang tải lịch sử hóa đơn…'),
+        error: (error, _) => PremiumErrorState(
+          title: 'Không tải được lịch sử hóa đơn',
+          message: '$error',
+          onRetry: () => ref.invalidate(invoiceHistoryProvider),
+        ),
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Không tải được hóa đơn: $error')),
+      loading: () => const PremiumLoadingState(label: 'Đang tải hóa đơn…'),
+      error: (error, _) => PremiumErrorState(
+        title: 'Không tải được hóa đơn',
+        message: '$error',
+        onRetry: () => ref.invalidate(invoiceDraftProvider),
+      ),
     );
   }
 }
@@ -496,42 +514,31 @@ class _CustomerBillingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.selectedSurface : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? AppColors.borderStrong.withValues(alpha: 0.46) : Colors.transparent),
+    return PremiumInteractiveSurface(
+      selected: selected,
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 19,
+            backgroundColor: AppColors.iconSurface,
+            foregroundColor: AppColors.copper,
+            child: Text(customer.initials, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 19,
-                backgroundColor: AppColors.iconSurface,
-                foregroundColor: AppColors.copper,
-                child: Text(customer.initials, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(customer.fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 3),
-                    Text(customer.phone, style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                  ],
-                ),
-              ),
-              if (selected) Icon(Icons.check_circle_rounded, color: AppColors.copper, size: 18) else Text(customer.tier, style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
-            ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(customer.fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Text(customer.phone, style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+              ],
+            ),
           ),
-        ),
+          if (selected) Icon(Icons.check_circle_rounded, color: AppColors.copper, size: 18) else Text(customer.tier, style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+        ],
       ),
     );
   }
@@ -1037,7 +1044,8 @@ class _PaymentMethodButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(11),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: AppMotion.duration(context, AppMotion.quick),
+          curve: AppMotion.standardCurve,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
             color: selected ? AppColors.selectedSurface : AppColors.panel,

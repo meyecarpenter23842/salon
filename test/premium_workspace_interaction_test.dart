@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:salonmanager/core/theme/app_motion.dart';
@@ -30,6 +31,33 @@ void main() {
 
     expect(animated.duration, AppMotion.quick);
     await tester.tap(find.text('row'));
+    expect(taps, 1);
+  });
+
+  testWidgets('workspace surface is keyboard focusable and activates with enter', (
+    WidgetTester tester,
+  ) async {
+    var taps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: PremiumInteractiveSurface(
+            onTap: () => taps++,
+            child: const Text('keyboard row'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    final inkWell = tester.widget<InkWell>(find.byType(InkWell));
+    expect(inkWell.canRequestFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
     expect(taps, 1);
   });
 
@@ -82,5 +110,38 @@ void main() {
 
     expect(find.byType(AnimatedSwitcher), findsOneWidget);
     expect(find.text('detail'), findsOneWidget);
+  });
+
+  testWidgets('shared loading and error states expose clear recovery UI', (
+    WidgetTester tester,
+  ) async {
+    var retries = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Column(
+          children: [
+            const Expanded(
+              child: PremiumLoadingState(label: 'Đang tải thử nghiệm…'),
+            ),
+            Expanded(
+              child: PremiumErrorState(
+                title: 'Không tải được dữ liệu',
+                message: 'Lỗi thử nghiệm',
+                onRetry: () => retries++,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Đang tải thử nghiệm…'), findsOneWidget);
+    expect(find.text('Không tải được dữ liệu'), findsOneWidget);
+    expect(find.text('Lỗi thử nghiệm'), findsOneWidget);
+
+    await tester.tap(find.text('Thử lại'));
+    expect(retries, 1);
   });
 }

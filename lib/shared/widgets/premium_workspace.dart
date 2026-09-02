@@ -142,55 +142,71 @@ class PremiumInteractiveSurface extends StatefulWidget {
 class _PremiumInteractiveSurfaceState extends State<PremiumInteractiveSurface> {
   bool _hovered = false;
   bool _pressed = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
     final radius = BorderRadius.circular(widget.borderRadius);
     final background = _backgroundColor(enabled);
-    final borderColor = widget.selected
+    final borderColor = _focused && enabled
+        ? AppColors.copper.withValues(alpha: 0.78)
+        : widget.selected
         ? AppColors.borderStrong.withValues(alpha: 0.55)
         : _hovered && enabled
         ? AppColors.controlHoverBorder.withValues(alpha: 0.72)
         : Colors.transparent;
 
-    return MouseRegion(
-      onEnter: enabled ? (_) => setState(() => _hovered = true) : null,
-      onExit: enabled
-          ? (_) => setState(() {
-              _hovered = false;
-              _pressed = false;
-            })
-          : null,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: widget.onTap,
-          onHighlightChanged: enabled
-              ? (value) {
-                  if (_pressed == value) return;
-                  setState(() => _pressed = value);
-                }
-              : null,
-          mouseCursor: enabled
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
+    return Semantics(
+      button: enabled,
+      enabled: enabled,
+      selected: widget.selected,
+      child: MouseRegion(
+        onEnter: enabled ? (_) => setState(() => _hovered = true) : null,
+        onExit: enabled
+            ? (_) => setState(() {
+                _hovered = false;
+                _pressed = false;
+              })
+            : null,
+        child: Material(
+          color: Colors.transparent,
           borderRadius: radius,
-          hoverColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          child: AnimatedContainer(
-            duration: AppMotion.duration(context, AppMotion.quick),
-            curve: AppMotion.standardCurve,
-            padding: widget.padding,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: radius,
-              border: Border.all(color: borderColor),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            canRequestFocus: enabled,
+            onFocusChange: enabled
+                ? (value) {
+                    if (_focused == value) return;
+                    setState(() => _focused = value);
+                  }
+                : null,
+            onHighlightChanged: enabled
+                ? (value) {
+                    if (_pressed == value) return;
+                    setState(() => _pressed = value);
+                  }
+                : null,
+            mouseCursor: enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            borderRadius: radius,
+            hoverColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            child: AnimatedContainer(
+              duration: AppMotion.duration(context, AppMotion.quick),
+              curve: AppMotion.standardCurve,
+              padding: widget.padding,
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: radius,
+                border: Border.all(color: borderColor),
+              ),
+              child: widget.child,
             ),
-            child: widget.child,
           ),
         ),
       ),
@@ -210,7 +226,7 @@ class _PremiumInteractiveSurfaceState extends State<PremiumInteractiveSurface> {
           : AppColors.controlPressedSurface;
     }
     if (widget.selected) return AppColors.selectedSurface;
-    if (_hovered) return AppColors.controlHoverSurface;
+    if (_hovered || _focused) return AppColors.controlHoverSurface;
     return Colors.transparent;
   }
 }
@@ -474,6 +490,111 @@ class PremiumInfoRow extends StatelessWidget {
   }
 }
 
+class PremiumLoadingState extends StatelessWidget {
+  const PremiumLoadingState({
+    super.key,
+    this.label = 'Đang tải dữ liệu…',
+  });
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PremiumErrorState extends StatelessWidget {
+  const PremiumErrorState({
+    super.key,
+    required this.title,
+    required this.message,
+    this.onRetry,
+  });
+
+  final String title;
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                PremiumIconBadge(
+                  icon: Icons.error_outline_rounded,
+                  size: 48,
+                  tone: AppColors.danger,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textMuted,
+                    height: 1.4,
+                  ),
+                ),
+                if (onRetry != null) ...[
+                  const SizedBox(height: 14),
+                  OutlinedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Thử lại'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PremiumEmptyState extends StatelessWidget {
   const PremiumEmptyState({
     super.key,
@@ -488,30 +609,33 @@ class PremiumEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              PremiumIconBadge(icon: icon, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 5),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textMuted,
+    return Semantics(
+      container: true,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                PremiumIconBadge(icon: icon, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-            ],
+                const SizedBox(height: 5),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
