@@ -711,37 +711,42 @@ class _ServicePerformanceTile extends StatelessWidget {
           color: selected ? AppColors.copper : AppColors.border,
         ),
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 10,
-        ),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.avatarFill,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 10,
           ),
-          alignment: Alignment.center,
-          child: Icon(Icons.auto_graph_outlined, color: AppColors.copper),
-        ),
-        title: Text(
-          item['name'].toString(),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            '${item['bookings']} lịch - ${item['share']} doanh thu',
-            style: TextStyle(color: AppColors.textMuted),
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.avatarFill,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            alignment: Alignment.center,
+            child: Icon(Icons.auto_graph_outlined, color: AppColors.copper),
           ),
-        ),
-        trailing: Text(
-          item['revenue'].toString(),
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          title: Text(
+            item['name'].toString(),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${item['bookings']} lịch - ${item['share']} doanh thu',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ),
+          trailing: Text(
+            item['revenue'].toString(),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
       ),
     );

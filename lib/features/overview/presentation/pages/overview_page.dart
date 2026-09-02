@@ -493,7 +493,8 @@ class _OverviewContentGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 1200;
+        final compact =
+            constraints.maxWidth < 1200 || constraints.maxHeight < 680;
 
         if (compact) {
           return ListView(
@@ -788,83 +789,81 @@ class _FeaturedCustomersPanelState extends State<_FeaturedCustomersPanel> {
         separatorBuilder: (context, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final customer = widget.customers[index];
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.panelRaised,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.panelRaised,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 36,
+                  width: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.copper),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    customer['initials'].toString(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Container(
-                            height: 36,
-                            width: 36,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.copper),
-                            ),
-                            alignment: Alignment.center,
+                          Expanded(
                             child: Text(
-                              customer['initials'].toString(),
+                              customer['name'].toString(),
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
-                                fontSize: 12,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        customer['name'].toString(),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    AppBadge(
-                                      label: customer['tier'].toString(),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  customer['service'].toString(),
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  customer['note'].toString(),
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    height: 1.4,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '${customer['appointmentTime']} • ${customer['spendLabel']}',
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          AppBadge(label: customer['tier'].toString()),
                         ],
                       ),
-                    );
+                      const SizedBox(height: 3),
+                      Text(
+                        customer['service'].toString(),
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        customer['note'].toString(),
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          height: 1.4,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${customer['appointmentTime']} • ${customer['spendLabel']}',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
         },
       ),
     );

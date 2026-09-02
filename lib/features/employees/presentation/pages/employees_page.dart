@@ -489,64 +489,67 @@ class _EmployeeListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
         color: selected ? AppColors.panelRaised : AppColors.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: selected ? AppColors.copper : AppColors.border,
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 10,
-        ),
-        onTap: onTap,
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.avatarFill,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.copper),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: selected ? AppColors.copper : AppColors.border,
           ),
-          alignment: Alignment.center,
-          child: Text(
-            employee['initials'].toString(),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 10,
+          ),
+          onTap: onTap,
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.avatarFill,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.copper),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              employee['initials'].toString(),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          title: Text(
+            employee['name'].toString(),
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
-        ),
-        title: Text(
-          employee['name'].toString(),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${employee['role']} • ${employee['shift']}'),
+                const SizedBox(height: 4),
+                Text(
+                  employee['specialty'].toString(),
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${employee['role']} • ${employee['shift']}'),
-              const SizedBox(height: 4),
+              _StatusLabel(text: employee['status'].toString()),
+              const SizedBox(height: 6),
               Text(
-                employee['specialty'].toString(),
+                employee['todaySchedule'].toString(),
                 style: TextStyle(color: AppColors.textMuted),
               ),
             ],
           ),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _StatusLabel(text: employee['status'].toString()),
-            const SizedBox(height: 6),
-            Text(
-              employee['todaySchedule'].toString(),
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          ],
         ),
       ),
     );
