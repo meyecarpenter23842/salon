@@ -521,64 +521,70 @@ class SqliteInvoicesRepository implements InvoicesRepository {
       lines: draft.lines,
     );
 
-    await database.insert(
-      'invoices',
-      InvoiceMapper.toDatabase(archivedDraft),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-
-    for (final line in draft.lines) {
-      final archivedLine = line.copyWith(
-        id: 'line-$archivedInvoiceId-${line.id}',
-        invoiceId: archivedInvoiceId,
-      );
-      await database.insert(
-        'invoice_items',
-        InvoiceDraftMapper.toDatabase(archivedLine),
+    await database.transaction((transaction) async {
+      await transaction.insert(
+        'invoices',
+        InvoiceMapper.toDatabase(archivedDraft),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-    }
 
-    if (draft.appointmentId != null) {
-      await database.update(
-        'appointments',
-        {'status': 'Hoàn thành', 'updated_at': now.toIso8601String()},
-        where: 'id = ?',
-        whereArgs: [draft.appointmentId],
+      for (final line in draft.lines) {
+        final archivedLine = line.copyWith(
+          id: 'line-$archivedInvoiceId-${line.id}',
+          invoiceId: archivedInvoiceId,
+        );
+        await transaction.insert(
+          'invoice_items',
+          InvoiceDraftMapper.toDatabase(archivedLine),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      if (draft.appointmentId != null) {
+        await transaction.update(
+          'appointments',
+          {'status': 'Hoàn thành', 'updated_at': now.toIso8601String()},
+          where: 'id = ?',
+          whereArgs: [draft.appointmentId],
+        );
+      }
+
+      await _applyCustomerCheckoutMetrics(transaction, draft, now);
+
+      final resetDraft = InvoiceDraft(
+        id: _draftInvoiceId,
+        appointmentId: null,
+        customerId: draft.customerId,
+        discountAmount: 0,
+        paymentMethod: InvoiceDraft.paymentMethods.first,
+        paidAt: null,
+        createdAt: now,
+        updatedAt: now,
+        lines: const [],
       );
-    }
 
-    await _applyCustomerCheckoutMetrics(database, draft, now);
+      await transaction.delete(
+        'invoice_items',
+        where: 'invoice_id = ?',
+        whereArgs: const [_draftInvoiceId],
+      );
+      final resetCount = await transaction.update(
+        'invoices',
+        InvoiceMapper.toDatabase(resetDraft),
+        where: 'id = ?',
+        whereArgs: const [_draftInvoiceId],
+      );
+      if (resetCount != 1) {
+        throw StateError('Invoice draft disappeared during checkout.');
+      }
+    });
 
-    final resetDraft = InvoiceDraft(
-      id: _draftInvoiceId,
-      appointmentId: null,
-      customerId: draft.customerId,
-      discountAmount: 0,
-      paymentMethod: InvoiceDraft.paymentMethods.first,
-      paidAt: null,
-      createdAt: now,
-      updatedAt: now,
-      lines: const [],
-    );
-
-    await database.delete(
-      'invoice_items',
-      where: 'invoice_id = ?',
-      whereArgs: const [_draftInvoiceId],
-    );
-    await database.update(
-      'invoices',
-      InvoiceMapper.toDatabase(resetDraft),
-      where: 'id = ?',
-      whereArgs: const [_draftInvoiceId],
-    );
-
+    _transientDraft = null;
     return _loadDraft(database);
   }
 
   Future<void> _applyCustomerCheckoutMetrics(
-    Database database,
+    DatabaseExecutor database,
     InvoiceDraft draft,
     DateTime paidAt,
   ) async {
@@ -667,7 +673,7 @@ class SqliteInvoicesRepository implements InvoicesRepository {
   }
 
   Future<Map<String, Object?>?> _findAppointment(
-    Database database,
+    DatabaseExecutor database,
     String appointmentId,
   ) async {
     final rows = await database.query(
