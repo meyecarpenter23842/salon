@@ -127,7 +127,7 @@ class _EmployeesView extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, viewport) {
-        final shortViewport = viewport.maxHeight < 620;
+        final shortViewport = viewport.maxHeight < 760;
 
         final content = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
