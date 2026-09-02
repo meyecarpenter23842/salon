@@ -4,6 +4,7 @@ import '../database/customer_mapper.dart';
 import '../database/salon_database.dart';
 import '../models/customer_profile.dart';
 import '../models/customer_upsert_input.dart';
+import '../models/entity_id.dart';
 import 'repository_contracts.dart';
 
 class SqliteCustomersRepository implements CustomersRepository {
@@ -81,19 +82,7 @@ class SqliteCustomersRepository implements CustomersRepository {
         ? null
         : await _findById(database, existingId);
     final now = DateTime.now();
-    var id =
-        existingCustomer?.id ??
-        CustomerMapper.buildIdFromIdentity(
-          fullName: input.fullName,
-          phone: input.phone,
-        );
-
-    if (existingCustomer == null) {
-      final duplicate = await _findById(database, id);
-      if (duplicate != null) {
-        id = '$id-${now.millisecondsSinceEpoch}';
-      }
-    }
+    final id = existingCustomer?.id ?? EntityId.create('customer');
 
     final customer = CustomerProfile.fromUpsertInput(
       id: id,

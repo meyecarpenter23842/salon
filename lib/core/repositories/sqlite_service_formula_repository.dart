@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/salon_database.dart';
 import '../database/service_formula_mapper.dart';
+import '../models/entity_id.dart';
 import '../models/service_formula_item.dart';
 import 'repository_contracts.dart';
 
@@ -36,7 +37,7 @@ class SqliteServiceFormulaRepository implements ServiceFormulaRepository {
     final now = DateTime.now();
 
     final item = ServiceFormulaItem(
-      id: existing?.id ?? 'formula-${now.microsecondsSinceEpoch}',
+      id: existing?.id ?? EntityId.create('formula'),
       serviceId: serviceId,
       serviceName: serviceName,
       formulaText: formulaText,
