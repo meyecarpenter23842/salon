@@ -228,8 +228,8 @@ class _SettingsHub extends StatelessWidget {
         icon: Icons.palette_outlined,
         title: 'Theme & Visual',
         subtitle:
-            'Noir Gold đang là mặc định. Mở để đổi template và xem preview.',
-        metrics: [template.title, '3 template desktop'],
+            'Bốn theme đã chốt dùng chung một hệ component và hierarchy desktop.',
+        metrics: [template.title, '4 theme desktop'],
         onTap: () => _showSettingsHubDialog(
           context,
           title: 'Theme & Visual',
@@ -240,7 +240,7 @@ class _SettingsHub extends StatelessWidget {
         icon: Icons.storefront_outlined,
         title: 'Salon Profile',
         subtitle: 'Tên salon, tiền tệ, nhắc lịch và cấu hình vận hành cục bộ.',
-        metrics: [salonName, '$currency ? $appointmentReminder'],
+        metrics: [salonName, '$currency • $appointmentReminder'],
         onTap: () => _showSettingsHubDialog(
           context,
           title: 'Salon Profile',
@@ -410,7 +410,7 @@ class _SettingsHero extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Theme desktop đã hỗ trợ 3 template: Noir Gold (legacy đen-vàng), Emerald luxury và Sapphire premium dashboard.',
+            '4 theme đã chốt: Noir Gold, Ivory Copper, Emerald Graphite và Rose Plum.',
             style: TextStyle(color: AppColors.textMuted, height: 1.6),
           ),
           const SizedBox(height: 12),
@@ -546,7 +546,7 @@ class _ThemeTemplatePanel extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Chọn giao diện phù hợp phong cách vận hành: Noir Gold (đen-vàng), Emerald hoặc Sapphire.',
+              'Chọn một trong 4 theme đã chốt: Noir Gold, Ivory Copper, Emerald Graphite hoặc Rose Plum.',
               style: TextStyle(color: AppColors.textMuted, height: 1.6),
             ),
             const SizedBox(height: 18),
@@ -580,19 +580,22 @@ class _ThemeOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final previewBackground = switch (template) {
-      SalonThemeTemplate.salonNoirGold => const Color(0xFF080605),
-      SalonThemeTemplate.salonEmerald => const Color(0xFF071311),
-      SalonThemeTemplate.salonSapphire => const Color(0xFF080D1A),
+      SalonThemeTemplate.salonNoirGold => const Color(0xFF0B0B0C),
+      SalonThemeTemplate.salonIvory => const Color(0xFFF7F3EE),
+      SalonThemeTemplate.salonEmerald => const Color(0xFF0A0E10),
+      SalonThemeTemplate.salonRosePlum => const Color(0xFF100A0E),
     };
     final previewPanel = switch (template) {
-      SalonThemeTemplate.salonNoirGold => const Color(0xFF231A14),
-      SalonThemeTemplate.salonEmerald => const Color(0xFF10231D),
-      SalonThemeTemplate.salonSapphire => const Color(0xFF142038),
+      SalonThemeTemplate.salonNoirGold => const Color(0xFF1D1F21),
+      SalonThemeTemplate.salonIvory => const Color(0xFFFFFCF8),
+      SalonThemeTemplate.salonEmerald => const Color(0xFF182126),
+      SalonThemeTemplate.salonRosePlum => const Color(0xFF2A1820),
     };
     final previewText = switch (template) {
-      SalonThemeTemplate.salonNoirGold => const Color(0xFFFFF2D9),
-      SalonThemeTemplate.salonEmerald => const Color(0xFFE5FFF5),
-      SalonThemeTemplate.salonSapphire => const Color(0xFFEAF1FF),
+      SalonThemeTemplate.salonNoirGold => const Color(0xFFF6F0E7),
+      SalonThemeTemplate.salonIvory => const Color(0xFF2E251F),
+      SalonThemeTemplate.salonEmerald => const Color(0xFFF3F7F5),
+      SalonThemeTemplate.salonRosePlum => const Color(0xFFFFF3EF),
     };
 
     return Container(
@@ -753,14 +756,19 @@ class _ThemeOptionTile extends StatelessWidget {
                       style: TextStyle(color: AppColors.textMuted, height: 1.5),
                     ),
                     const SizedBox(height: 12),
-                    Text(switch (template) {
-                      SalonThemeTemplate.salonNoirGold =>
-                        'Noir Gold legacy: tương phản cao, đậm chất salon cao cấp cổ điển.',
-                      SalonThemeTemplate.salonEmerald =>
-                        'Dark Emerald: mềm mắt, cân bằng sang trọng và thân thiện tư vấn.',
-                      SalonThemeTemplate.salonSapphire =>
-                        'Sapphire: hiện đại, sắc nét số liệu, hợp dashboard nhiều chỉ số.',
-                    }, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(
+                      switch (template) {
+                        SalonThemeTemplate.salonNoirGold =>
+                          'Noir Gold: charcoal mờ, champagne gold tiết chế và chiều sâu cao cấp.',
+                        SalonThemeTemplate.salonIvory =>
+                          'Ivory Copper: sáng, thoáng, editorial với cocoa text và copper nhẹ.',
+                        SalonThemeTemplate.salonEmerald =>
+                          'Emerald Graphite: sắc nét, hiện đại, thiên về vận hành và dữ liệu.',
+                        SalonThemeTemplate.salonRosePlum =>
+                          'Rose Plum: plum sâu, rose-gold mềm và cảm giác boutique salon.',
+                      },
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -1348,7 +1356,7 @@ class _SettingRow extends StatelessWidget {
   }
 }
 
-// ?? Payment Config Panel ????????????????????????????????????????????????????????
+// Payment Config Panel
 
 class _PaymentConfigPanel extends ConsumerWidget {
   const _PaymentConfigPanel({required this.summary});
@@ -1608,7 +1616,7 @@ class _PaymentConfigEditorDialogState
   }
 }
 
-// ?? Backup / Restore Panel ?????????????????????????????????????????????????????
+// Backup / Restore Panel
 
 class _BackupRestorePanel extends ConsumerStatefulWidget {
   const _BackupRestorePanel();
@@ -1661,7 +1669,6 @@ class _BackupRestorePanelState extends ConsumerState<_BackupRestorePanel> {
 
     if (confirmed == null || !mounted) return;
 
-    // Show progress
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Đang phục hồi dữ liệu...')));
@@ -1672,7 +1679,6 @@ class _BackupRestorePanelState extends ConsumerState<_BackupRestorePanel> {
     if (!mounted) return;
 
     if (result.success) {
-      // Invalidate all data providers so UI reloads from the restored db
       ref.invalidate(overviewSummaryProvider);
       ref.invalidate(appointmentsViewProvider);
       ref.invalidate(customersViewProvider);
