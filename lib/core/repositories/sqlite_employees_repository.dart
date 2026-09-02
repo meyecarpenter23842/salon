@@ -4,6 +4,7 @@ import '../data/fake/fake_salon_data_source.dart';
 import '../database/salon_database.dart';
 import '../database/salon_database_seed.dart';
 import '../models/employee_upsert_input.dart';
+import '../models/entity_id.dart';
 import 'repository_contracts.dart';
 
 class SqliteEmployeesRepository implements EmployeesRepository {
@@ -36,9 +37,7 @@ class SqliteEmployeesRepository implements EmployeesRepository {
         ? null
         : await _findById(database, existingId);
     final now = DateTime.now().toIso8601String();
-    final id =
-        existing?['id']?.toString() ??
-        'emp-${DateTime.now().microsecondsSinceEpoch}';
+    final id = existing?['id']?.toString() ?? EntityId.create('emp');
 
     final row = <String, Object?>{
       'id': id,

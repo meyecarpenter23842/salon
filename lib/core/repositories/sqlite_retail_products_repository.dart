@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/retail_product_mapper.dart';
 import '../database/salon_database.dart';
+import '../models/entity_id.dart';
 import '../models/retail_product_item.dart';
 import '../models/retail_product_upsert_input.dart';
 import 'repository_contracts.dart';
@@ -59,7 +60,7 @@ class SqliteRetailProductsRepository implements RetailProductsRepository {
         : await _findById(database, existingId);
     final now = DateTime.now();
     final item = RetailProductMapper.fromUpsertInput(
-      id: existing?.id ?? 'product-${now.microsecondsSinceEpoch}',
+      id: existing?.id ?? EntityId.create('product'),
       input: input,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,

@@ -4,6 +4,7 @@ import '../data/fake/fake_salon_data_source.dart';
 import '../database/salon_database.dart';
 import '../database/salon_database_seed.dart';
 import '../database/service_mapper.dart';
+import '../models/entity_id.dart';
 import '../models/service_catalog_item.dart';
 import '../models/service_upsert_input.dart';
 import 'repository_contracts.dart';
@@ -41,7 +42,7 @@ class SqliteServicesRepository implements ServicesRepository {
         : await _findById(database, existingId);
     final now = DateTime.now();
     final service = ServiceCatalogItem.fromUpsertInput(
-      id: existing?.id ?? 'service-${now.microsecondsSinceEpoch}',
+      id: existing?.id ?? EntityId.create('service'),
       input: input,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
