@@ -15,7 +15,7 @@ class SalonDatabase {
 
   Database? _database;
 
-  Future<Database> initialize() async {
+  Future<Database> initialize({bool preserveExistingTestDatabase = false}) async {
     if (_database != null) {
       return _database!;
     }
@@ -23,7 +23,8 @@ class SalonDatabase {
     await DatabaseBootstrap.ensureInitialized();
 
     final databasePath = await _resolveDatabasePath();
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (Platform.environment.containsKey('FLUTTER_TEST') &&
+        !preserveExistingTestDatabase) {
       final dbFile = File(databasePath);
       if (await dbFile.exists()) {
         await dbFile.delete();

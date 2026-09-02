@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'package:sqflite/sqflite.dart';
 
+import '../database/database_bootstrap.dart';
+import '../database/database_schema.dart';
 import '../database/salon_database.dart';
 
 /// Result của thao tác backup hoặc restore.
@@ -17,12 +20,37 @@ class BackupResult {
   });
 }
 
-/// Dịch vụ backup/restore cơ sở dữ liệu SQLite local cho Windows desktop.
+/// Kết quả kiểm tra một tệp SQLite trước khi dùng làm backup/restore.
+class BackupValidationResult {
+  final bool isValid;
+  final String message;
+  final int? schemaVersion;
+
+  const BackupValidationResult({
+    required this.isValid,
+    required this.message,
+    this.schemaVersion,
+  });
+}
+
+/// Dịch vụ backup/restore cơ sở dữ liệu SQLite local cho desktop.
 ///
-/// Backup: copy file .db hiện tại vào thư mục backup có tên timestamp.
-/// Restore: copy file backup về đúng vị trí DB, đóng/mở lại kết nối an toàn.
+/// Backup dùng `VACUUM INTO` để tạo snapshot nhất quán ngay cả khi database
+/// đang mở. Restore chỉ thay file live sau khi source và temp copy đều vượt
+/// qua integrity/schema validation, đồng thời luôn tạo safety backup của dữ
+/// liệu hiện tại trước khi swap.
 class BackupService {
   const BackupService();
+
+  static const _requiredSalonTables = <String>{
+    'customers',
+    'employees',
+    'services',
+    'appointments',
+    'invoices',
+    'invoice_items',
+    'app_settings',
+  };
 
   // ── Đường dẫn ──────────────────────────────────────────────────────────────
 
@@ -74,9 +102,7 @@ class BackupService {
 
   // ── Backup ─────────────────────────────────────────────────────────────────
 
-  /// Tạo bản sao lưu vào thư mục backup mặc định với tên có timestamp.
-  ///
-  /// Trả về [BackupResult] kèm đường dẫn tệp vừa tạo nếu thành công.
+  /// Tạo snapshot SQLite nhất quán vào thư mục backup mặc định.
   Future<BackupResult> createBackup() async {
     try {
       final dbPath = await resolveDatabasePath();
@@ -88,21 +114,24 @@ class BackupService {
         );
       }
 
-      final backupDirPath = await resolveBackupDirectory();
-      final backupDir = Directory(backupDirPath);
-      if (!await backupDir.exists()) {
-        await backupDir.create(recursive: true);
+      final backupPath = await _nextAvailableBackupPath(
+        prefix: 'salon_manager_backup',
+        timestamp: DateTime.now(),
+      );
+
+      await _createSqliteSnapshot(backupPath);
+      final validation = await validateBackupFile(backupPath);
+      if (!validation.isValid) {
+        await _deleteFileIfExists(File(backupPath));
+        return BackupResult(
+          success: false,
+          message: 'Bản sao lưu vừa tạo không vượt qua kiểm tra: ${validation.message}',
+        );
       }
-
-      final ts = DateTime.now();
-      final fileName = _buildBackupFileName(ts);
-      final backupPath = path.join(backupDirPath, fileName);
-
-      await dbFile.copy(backupPath);
 
       return BackupResult(
         success: true,
-        message: 'Đã tạo bản sao lưu: $fileName',
+        message: 'Đã tạo bản sao lưu an toàn: ${path.basename(backupPath)}',
         filePath: backupPath,
       );
     } catch (e) {
@@ -123,7 +152,7 @@ class BackupService {
         .where(
           (entity) =>
               entity is File &&
-              path.basename(entity.path).endsWith('.db') &&
+              path.basename(entity.path).toLowerCase().endsWith('.db') &&
               path.basename(entity.path).startsWith('salon_manager_'),
         )
         .cast<File>()
@@ -133,27 +162,173 @@ class BackupService {
     return files;
   }
 
+  // ── Validation ─────────────────────────────────────────────────────────────
+
+  /// Kiểm tra tệp trước khi restore.
+  ///
+  /// Một backup hợp lệ phải là SQLite đọc được, qua `integrity_check`, có các
+  /// bảng lõi của Salon và có schema version mà app hiện tại hiểu được.
+  Future<BackupValidationResult> validateBackupFile(String filePath) async {
+    final trimmedPath = filePath.trim();
+    if (!trimmedPath.toLowerCase().endsWith('.db')) {
+      return const BackupValidationResult(
+        isValid: false,
+        message: 'Tệp không hợp lệ. Chỉ chấp nhận tệp .db.',
+      );
+    }
+
+    final file = File(trimmedPath);
+    if (!await file.exists()) {
+      return const BackupValidationResult(
+        isValid: false,
+        message: 'Không tìm thấy tệp sao lưu.',
+      );
+    }
+
+    if (await file.length() < 100) {
+      return const BackupValidationResult(
+        isValid: false,
+        message: 'Tệp quá nhỏ để là một database SQLite hợp lệ.',
+      );
+    }
+
+    await DatabaseBootstrap.ensureInitialized();
+    Database? database;
+    try {
+      database = await openDatabase(
+        trimmedPath,
+        readOnly: true,
+        singleInstance: false,
+      );
+      return await _validateOpenDatabase(database, requireCurrentSchema: false);
+    } catch (e) {
+      return BackupValidationResult(
+        isValid: false,
+        message: 'Không thể đọc database SQLite: $e',
+      );
+    } finally {
+      await database?.close();
+    }
+  }
+
+  Future<BackupValidationResult> _validateOpenDatabase(
+    Database database, {
+    required bool requireCurrentSchema,
+  }) async {
+    try {
+      final integrityRows = await database.rawQuery('PRAGMA integrity_check');
+      final integrityValue = integrityRows.isEmpty
+          ? ''
+          : integrityRows.first.values.firstOrNull?.toString().trim().toLowerCase() ?? '';
+      if (integrityRows.length != 1 || integrityValue != 'ok') {
+        return const BackupValidationResult(
+          isValid: false,
+          message: 'SQLite integrity_check không đạt.',
+        );
+      }
+
+      final tableRows = await database.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      );
+      final tables = tableRows
+          .map((row) => row['name']?.toString())
+          .whereType<String>()
+          .toSet();
+      final missingTables = _requiredSalonTables.difference(tables);
+      if (missingTables.isNotEmpty) {
+        return BackupValidationResult(
+          isValid: false,
+          message: 'Không đúng schema Salon. Thiếu bảng: ${missingTables.join(', ')}.',
+        );
+      }
+
+      final userVersionRows = await database.rawQuery('PRAGMA user_version');
+      final userVersion = _readFirstInt(userVersionRows);
+      if (userVersion == null || userVersion <= 0) {
+        return const BackupValidationResult(
+          isValid: false,
+          message: 'Không đọc được schema version của database.',
+        );
+      }
+      if (userVersion > DatabaseSchema.version) {
+        return BackupValidationResult(
+          isValid: false,
+          message:
+              'Backup dùng schema $userVersion mới hơn schema ${DatabaseSchema.version} của ứng dụng hiện tại.',
+          schemaVersion: userVersion,
+        );
+      }
+
+      final settingRows = await database.query(
+        'app_settings',
+        columns: const ['value'],
+        where: 'key = ?',
+        whereArgs: const ['schema_version'],
+        limit: 1,
+      );
+      final settingVersion = settingRows.isEmpty
+          ? null
+          : int.tryParse(settingRows.first['value']?.toString() ?? '');
+      if (settingVersion == null || settingVersion <= 0) {
+        return BackupValidationResult(
+          isValid: false,
+          message: 'Database Salon không có schema_version hợp lệ.',
+          schemaVersion: userVersion,
+        );
+      }
+      if (settingVersion > DatabaseSchema.version) {
+        return BackupValidationResult(
+          isValid: false,
+          message:
+              'Backup khai báo schema $settingVersion mới hơn schema ${DatabaseSchema.version} của ứng dụng hiện tại.',
+          schemaVersion: settingVersion,
+        );
+      }
+
+      if (requireCurrentSchema &&
+          (userVersion != DatabaseSchema.version ||
+              settingVersion != DatabaseSchema.version)) {
+        return BackupValidationResult(
+          isValid: false,
+          message:
+              'Database sau phục hồi chưa ở schema ${DatabaseSchema.version} hiện tại.',
+          schemaVersion: userVersion,
+        );
+      }
+
+      return BackupValidationResult(
+        isValid: true,
+        message: 'Database SQLite và schema Salon hợp lệ.',
+        schemaVersion: userVersion,
+      );
+    } catch (e) {
+      return BackupValidationResult(
+        isValid: false,
+        message: 'Không thể xác minh schema database: $e',
+      );
+    }
+  }
+
+  int? _readFirstInt(List<Map<String, Object?>> rows) {
+    if (rows.isEmpty || rows.first.isEmpty) return null;
+    final value = rows.first.values.first;
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   // ── Restore ────────────────────────────────────────────────────────────────
 
-  /// Phục hồi database từ tệp backup chỉ định.
-  ///
-  /// Trình tự an toàn:
-  /// 1. Kiểm tra tệp nguồn hợp lệ (.db, tồn tại).
-  /// 2. Tạo auto-safety backup của DB hiện tại.
-  /// 3. Copy tệp nguồn vào vị trí tạm (`.restore_tmp`).
-  /// 4. Đóng database connection.
-  /// 5. Đổi tên DB hiện tại → `.old`, đổi tên `.restore_tmp` → DB path.
-  /// 6. Xóa `.old`. Mở lại database.
-  /// 7. Nếu bước 5 lỗi: khôi phục `.old` → DB path, ném lại lỗi.
+  /// Phục hồi database từ tệp backup chỉ định theo flow an toàn.
   Future<BackupResult> restoreFromBackup(String backupFilePath) async {
-    if (!backupFilePath.trim().endsWith('.db')) {
+    final sourcePath = backupFilePath.trim();
+    if (!sourcePath.toLowerCase().endsWith('.db')) {
       return const BackupResult(
         success: false,
         message: 'Tệp không hợp lệ. Chỉ chấp nhận tệp .db.',
       );
     }
 
-    final sourceFile = File(backupFilePath);
+    final sourceFile = File(sourcePath);
     if (!await sourceFile.exists()) {
       return const BackupResult(
         success: false,
@@ -162,129 +337,266 @@ class BackupService {
     }
 
     final dbPath = await resolveDatabasePath();
-    final dbFile = File(dbPath);
+    if (await _pathsReferToSameFile(sourcePath, dbPath)) {
+      return const BackupResult(
+        success: false,
+        message: 'Không thể phục hồi từ chính tệp database đang hoạt động.',
+      );
+    }
 
-    // Đảm bảo thư mục DB tồn tại
+    // Validate source trước khi tạo safety backup hoặc chạm vào DB live.
+    final sourceValidation = await validateBackupFile(sourcePath);
+    if (!sourceValidation.isValid) {
+      return BackupResult(
+        success: false,
+        message: 'Tệp sao lưu không hợp lệ: ${sourceValidation.message}',
+      );
+    }
+
+    final dbFile = File(dbPath);
     final dbDir = Directory(path.dirname(dbPath));
     if (!await dbDir.exists()) {
       await dbDir.create(recursive: true);
     }
 
-    // Tạo auto-safety backup trước khi thay đổi bất cứ thứ gì
-    if (await dbFile.exists()) {
+    final hadCurrentDatabase = await dbFile.exists();
+    String? safetyBackupPath;
+
+    if (hadCurrentDatabase) {
       try {
-        final safetyResult = await _createSafetyBackup(dbFile);
-        if (!safetyResult) {
-          return const BackupResult(
-            success: false,
-            message:
-                'Không thể tạo bản sao lưu an toàn trước khi phục hồi. Thao tác bị hủy.',
-          );
-        }
+        safetyBackupPath = await _createSafetyBackup();
       } catch (e) {
         return BackupResult(
           success: false,
-          message: 'Lỗi khi tạo sao lưu an toàn: $e. Thao tác bị hủy.',
+          message: 'Không thể tạo bản sao lưu an toàn trước khi phục hồi: $e. Thao tác bị hủy.',
         );
       }
     }
 
-    // Copy source → temp file (nếu fail: db chưa bị đụng vào)
-    final tmpPath = '$dbPath.restore_tmp';
+    // Copy source vào cùng volume/thư mục với DB live để bước rename sau đó là
+    // atomic trong phạm vi filesystem. Temp copy cũng được validate lần hai.
+    final nonce = DateTime.now().microsecondsSinceEpoch;
+    final tmpPath = '$dbPath.restore_tmp_$nonce.db';
+    final oldPath = '$dbPath.restore_old_$nonce.db';
     try {
       await sourceFile.copy(tmpPath);
+      final tmpValidation = await validateBackupFile(tmpPath);
+      if (!tmpValidation.isValid) {
+        await _deleteFileIfExists(File(tmpPath));
+        return BackupResult(
+          success: false,
+          message: 'Bản sao tạm không vượt qua kiểm tra: ${tmpValidation.message}',
+        );
+      }
     } catch (e) {
+      await _deleteFileIfExists(File(tmpPath));
       return BackupResult(
         success: false,
-        message: 'Không thể đọc tệp sao lưu: $e',
+        message: 'Không thể chuẩn bị tệp phục hồi: $e',
       );
     }
 
-    // Đóng database trước khi thay thế file
     await SalonDatabase.instance.close();
 
-    // Swap an toàn: rename DB → .old, rename .tmp → DB
-    final dbOldPath = '$dbPath.old';
     try {
-      if (await dbFile.exists()) {
-        await dbFile.rename(dbOldPath);
+      if (hadCurrentDatabase && await dbFile.exists()) {
+        await dbFile.rename(oldPath);
       }
+
+      // Không để WAL/SHM/journal cũ còn mang tên DB live và bị SQLite mới đọc.
+      await _deleteDatabaseSidecars(dbPath);
       await File(tmpPath).rename(dbPath);
-      final oldFile = File(dbOldPath);
-      if (await oldFile.exists()) {
-        await oldFile.delete();
-      }
     } catch (e) {
-      // Rollback: khôi phục DB cũ
-      final oldFile = File(dbOldPath);
-      if (await oldFile.exists()) {
-        try {
-          await oldFile.rename(dbPath);
-        } catch (_) {
-          // best effort
-        }
-      }
-      // Dọn temp
-      final tmpFile = File(tmpPath);
-      if (await tmpFile.exists()) {
-        try {
-          await tmpFile.delete();
-        } catch (_) {
-          // best effort
-        }
-      }
-      // Mở lại database dù restore thất bại để app không bị crash
-      await SalonDatabase.instance.initialize();
+      final rollbackSucceeded = await _rollbackAfterFailedRestore(
+        dbPath: dbPath,
+        oldPath: oldPath,
+        safetyBackupPath: safetyBackupPath,
+        hadCurrentDatabase: hadCurrentDatabase,
+      );
+      await _deleteFileIfExists(File(tmpPath));
       return BackupResult(
         success: false,
-        message:
-            'Lỗi khi thay thế tệp dữ liệu: $e. Dữ liệu cũ được giữ nguyên.',
+        message: rollbackSucceeded
+            ? 'Lỗi khi thay thế tệp dữ liệu: $e. Dữ liệu trước phục hồi đã được khôi phục.'
+            : 'Lỗi khi thay thế tệp dữ liệu: $e. Không thể tự khôi phục DB live; hãy dùng bản pre_restore trong thư mục backup.',
       );
     }
 
-    // Mở lại database
     try {
-      await SalonDatabase.instance.initialize();
+      final restoredDatabase = await SalonDatabase.instance.initialize(
+        preserveExistingTestDatabase: true,
+      );
+      final verification = await _validateOpenDatabase(
+        restoredDatabase,
+        requireCurrentSchema: true,
+      );
+      if (!verification.isValid) {
+        throw StateError(verification.message);
+      }
+
+      await _deleteFileIfExists(File(oldPath));
+      await _deleteFileIfExists(File(tmpPath));
+      return const BackupResult(
+        success: true,
+        message: 'Đã phục hồi và xác minh dữ liệu thành công.',
+      );
     } catch (e) {
+      final rollbackSucceeded = await _rollbackAfterFailedRestore(
+        dbPath: dbPath,
+        oldPath: oldPath,
+        safetyBackupPath: safetyBackupPath,
+        hadCurrentDatabase: hadCurrentDatabase,
+      );
+      await _deleteFileIfExists(File(tmpPath));
       return BackupResult(
         success: false,
-        message:
-            'Phục hồi tệp thành công nhưng không thể mở lại database: $e. Hãy khởi động lại ứng dụng.',
+        message: rollbackSucceeded
+            ? 'Database phục hồi không vượt qua kiểm tra sau khi mở: $e. Dữ liệu trước phục hồi đã được khôi phục.'
+            : 'Database phục hồi không hợp lệ và không thể tự rollback: $e. Hãy dùng bản pre_restore trong thư mục backup.',
       );
     }
-
-    return const BackupResult(
-      success: true,
-      message:
-          'Đã phục hồi dữ liệu thành công. Vui lòng kiểm tra lại dữ liệu vừa tải.',
-    );
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  String _buildBackupFileName(DateTime ts) {
-    final y = ts.year.toString().padLeft(4, '0');
-    final mo = ts.month.toString().padLeft(2, '0');
-    final d = ts.day.toString().padLeft(2, '0');
-    final h = ts.hour.toString().padLeft(2, '0');
-    final mi = ts.minute.toString().padLeft(2, '0');
-    return 'salon_manager_backup_$y-$mo-${d}_$h$mi.db';
+  Future<String> _createSafetyBackup() async {
+    final safetyPath = await _nextAvailableBackupPath(
+      prefix: 'salon_manager_pre_restore',
+      timestamp: DateTime.now(),
+    );
+    await _createSqliteSnapshot(safetyPath);
+
+    final validation = await validateBackupFile(safetyPath);
+    if (!validation.isValid) {
+      await _deleteFileIfExists(File(safetyPath));
+      throw StateError(validation.message);
+    }
+    return safetyPath;
   }
 
-  Future<bool> _createSafetyBackup(File dbFile) async {
+  Future<void> _createSqliteSnapshot(String targetPath) async {
+    final targetFile = File(targetPath);
+    if (await targetFile.exists()) {
+      throw StateError('Tệp backup đích đã tồn tại: $targetPath');
+    }
+
+    final database = await SalonDatabase.instance.initialize(
+      preserveExistingTestDatabase: true,
+    );
+    final escapedTarget = targetPath.replaceAll("'", "''");
+    await database.execute("VACUUM INTO '$escapedTarget'");
+  }
+
+  Future<String> _nextAvailableBackupPath({
+    required String prefix,
+    required DateTime timestamp,
+  }) async {
     final backupDirPath = await resolveBackupDirectory();
     final backupDir = Directory(backupDirPath);
     if (!await backupDir.exists()) {
       await backupDir.create(recursive: true);
     }
-    final ts = DateTime.now();
-    final y = ts.year.toString().padLeft(4, '0');
-    final mo = ts.month.toString().padLeft(2, '0');
-    final d = ts.day.toString().padLeft(2, '0');
-    final h = ts.hour.toString().padLeft(2, '0');
-    final mi = ts.minute.toString().padLeft(2, '0');
-    final safetyName = 'salon_manager_pre_restore_$y-$mo-${d}_$h$mi.db';
-    await dbFile.copy(path.join(backupDirPath, safetyName));
-    return true;
+
+    final stamp = _formatTimestamp(timestamp);
+    var candidate = path.join(backupDirPath, '${prefix}_$stamp.db');
+    var suffix = 1;
+    while (await File(candidate).exists()) {
+      candidate = path.join(
+        backupDirPath,
+        '${prefix}_${stamp}_${suffix.toString().padLeft(2, '0')}.db',
+      );
+      suffix++;
+    }
+    return candidate;
+  }
+
+  String _formatTimestamp(DateTime value) {
+    final y = value.year.toString().padLeft(4, '0');
+    final mo = value.month.toString().padLeft(2, '0');
+    final d = value.day.toString().padLeft(2, '0');
+    final h = value.hour.toString().padLeft(2, '0');
+    final mi = value.minute.toString().padLeft(2, '0');
+    return '$y-$mo-${d}_$h$mi';
+  }
+
+  Future<bool> _pathsReferToSameFile(String first, String second) async {
+    final firstPath = await _canonicalPath(first);
+    final secondPath = await _canonicalPath(second);
+    return firstPath == secondPath;
+  }
+
+  Future<String> _canonicalPath(String value) async {
+    var resolved = path.normalize(path.absolute(value));
+    try {
+      resolved = path.normalize(await File(resolved).resolveSymbolicLinks());
+    } catch (_) {
+      // Nếu resolve symlink không được, normalized absolute path vẫn đủ cho
+      // đường dẫn local thông thường.
+    }
+    return Platform.isWindows ? resolved.toLowerCase() : resolved;
+  }
+
+  Future<bool> _rollbackAfterFailedRestore({
+    required String dbPath,
+    required String oldPath,
+    required String? safetyBackupPath,
+    required bool hadCurrentDatabase,
+  }) async {
+    try {
+      await SalonDatabase.instance.close();
+      await _deleteFileIfExists(File(dbPath));
+      await _deleteDatabaseSidecars(dbPath);
+
+      if (hadCurrentDatabase) {
+        var restoredPreviousData = false;
+        if (safetyBackupPath != null && await File(safetyBackupPath).exists()) {
+          try {
+            await File(safetyBackupPath).copy(dbPath);
+            restoredPreviousData = true;
+          } catch (_) {
+            restoredPreviousData = false;
+          }
+        }
+
+        if (!restoredPreviousData) {
+          final oldFile = File(oldPath);
+          if (!await oldFile.exists()) {
+            return false;
+          }
+          await oldFile.rename(dbPath);
+        }
+      }
+
+      final database = await SalonDatabase.instance.initialize(
+        preserveExistingTestDatabase: true,
+      );
+      final verification = await _validateOpenDatabase(
+        database,
+        requireCurrentSchema: true,
+      );
+      if (!verification.isValid) {
+        return false;
+      }
+
+      await _deleteFileIfExists(File(oldPath));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _deleteDatabaseSidecars(String databasePath) async {
+    for (final suffix in const ['-wal', '-shm', '-journal']) {
+      await _deleteFileIfExists(File('$databasePath$suffix'));
+    }
+  }
+
+  Future<void> _deleteFileIfExists(File file) async {
+    if (!await file.exists()) return;
+    try {
+      await file.delete();
+    } catch (_) {
+      // Cleanup best effort; không được che lỗi nghiệp vụ chính.
+    }
   }
 }
