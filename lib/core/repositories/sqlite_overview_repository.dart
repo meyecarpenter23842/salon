@@ -44,20 +44,28 @@ class SqliteOverviewRepository implements OverviewRepository {
       startYesterday,
       startToday,
     );
-    final completedToday = await _countAppointments(
+    final customersToday = await _countAppointmentCustomers(
       database,
       startToday,
       startTomorrow,
-      status: 'Hoàn thành',
     );
-    final completedYesterday = await _countAppointments(
+    final customersYesterday = await _countAppointmentCustomers(
       database,
       startYesterday,
       startToday,
-      status: 'Hoàn thành',
     );
     final revenueToday = await _sumRevenue(database, startToday, startTomorrow);
     final revenueYesterday = await _sumRevenue(
+      database,
+      startYesterday,
+      startToday,
+    );
+    final paidBillsToday = await _countPaidInvoices(
+      database,
+      startToday,
+      startTomorrow,
+    );
+    final paidBillsYesterday = await _countPaidInvoices(
       database,
       startYesterday,
       startToday,
@@ -70,32 +78,39 @@ class SqliteOverviewRepository implements OverviewRepository {
     );
     final quickCheckout = await _buildQuickCheckoutSummary(database);
     final revenueSeries = await _buildRevenueSeries(database, startToday);
-
-    final nextSlotValue = nextAppointment == null
-        ? 'Chưa có lịch tiếp theo'
-        : '${_timeLabel(_parseDateTime(nextAppointment['starts_at']))} - ${nextAppointment['customer_name'] ?? 'Khách'}';
-    final nextSlotNote = nextAppointment == null
-        ? 'Ca hiện tại chưa có lịch cần ưu tiên.'
-        : (nextAppointment['service_name']?.toString().trim().isNotEmpty ??
-              false)
-        ? nextAppointment['service_name'].toString()
-        : 'Đang chờ xác nhận dịch vụ';
+    final teamStatus = await _buildTeamStatus(
+      database,
+      now,
+      startToday,
+      startTomorrow,
+    );
+    final topSales = await _buildTopSales(database, startToday, startTomorrow);
+    final operationalAlerts = await _buildOperationalAlerts(
+      database,
+      now,
+      startToday,
+      startTomorrow,
+    );
 
     return {
       'kpis': [
         {
-          'title': 'Khách đặt lịch',
+          'title': 'Khách hôm nay',
+          'value': customersToday.toString(),
+          'note': _deltaLabel(
+            customersToday,
+            customersYesterday,
+            unit: 'khách',
+          ),
+        },
+        {
+          'title': 'Lịch hôm nay',
           'value': appointmentsToday.toString(),
           'note': _deltaLabel(
             appointmentsToday,
             appointmentsYesterday,
             unit: 'lịch',
           ),
-        },
-        {
-          'title': 'Khách đã làm',
-          'value': completedToday.toString(),
-          'note': _deltaLabel(completedToday, completedYesterday, unit: 'lịch'),
         },
         {
           'title': 'Doanh thu hôm nay',
@@ -108,11 +123,28 @@ class SqliteOverviewRepository implements OverviewRepository {
           ),
         },
         {
-          'title': 'Lịch tiếp theo',
-          'value': nextSlotValue,
-          'note': nextSlotNote,
+          'title': 'Bill đã thu',
+          'value': paidBillsToday.toString(),
+          'note': _deltaLabel(
+            paidBillsToday,
+            paidBillsYesterday,
+            unit: 'bill',
+          ),
         },
       ],
+      'nextAppointment': nextAppointment == null
+          ? null
+          : {
+              'time': _timeLabel(_parseDateTime(nextAppointment['starts_at'])),
+              'customer': nextAppointment['customer_name']?.toString() ?? 'Khách',
+              'service': _fallbackText(
+                nextAppointment['service_name'],
+                'Chưa có dịch vụ',
+              ),
+            },
+      'teamStatus': teamStatus,
+      'topSales': topSales,
+      'operationalAlerts': operationalAlerts,
       'featuredCustomers': featuredCustomers,
       'quickCheckoutLines': quickCheckout['lines'],
       'quickCheckoutCustomer': quickCheckout['customerName'],
@@ -149,6 +181,32 @@ class SqliteOverviewRepository implements OverviewRepository {
     return result ?? 0;
   }
 
+  Future<int> _countAppointmentCustomers(
+    Database database,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final rows = await database.rawQuery(
+      'SELECT COUNT(DISTINCT customer_id) AS total '
+      'FROM appointments WHERE starts_at >= ? AND starts_at < ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return _toInt(rows.first['total']);
+  }
+
+  Future<int> _countPaidInvoices(
+    Database database,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final rows = await database.rawQuery(
+      'SELECT COUNT(*) AS total FROM invoices '
+      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return _toInt(rows.first['total']);
+  }
+
   Future<int> _sumRevenue(
     Database database,
     DateTime start,
@@ -176,12 +234,224 @@ class SqliteOverviewRepository implements OverviewRepository {
       orderBy: 'starts_at ASC',
       limit: 1,
     );
+    return rows.isEmpty ? null : rows.first;
+  }
 
-    if (rows.isEmpty) {
-      return null;
+  Future<List<Map<String, Object?>>> _buildTeamStatus(
+    Database database,
+    DateTime now,
+    DateTime startToday,
+    DateTime startTomorrow,
+  ) async {
+    final employees = await database.query(
+      'employees',
+      columns: const [
+        'id',
+        'full_name',
+        'initials',
+        'role',
+        'status',
+        'shift_label',
+        'specialty',
+      ],
+      orderBy: 'role ASC, full_name ASC',
+    );
+    final appointments = await database.query(
+      'appointments',
+      columns: const [
+        'employee_id',
+        'customer_name',
+        'service_name',
+        'starts_at',
+        'status',
+      ],
+      where: 'starts_at >= ? AND starts_at < ?',
+      whereArgs: [startToday.toIso8601String(), startTomorrow.toIso8601String()],
+      orderBy: 'starts_at ASC',
+    );
+
+    final items = <Map<String, Object?>>[];
+    for (final employee in employees) {
+      final employeeId = employee['id']?.toString() ?? '';
+      final employeeAppointments = appointments
+          .where((row) => row['employee_id']?.toString() == employeeId)
+          .toList(growable: false);
+      Map<String, Object?>? active;
+      Map<String, Object?>? upcoming;
+      for (final appointment in employeeAppointments) {
+        if (active == null && appointment['status']?.toString() == 'Đang làm') {
+          active = appointment;
+        }
+        final startsAt = _parseDateTime(appointment['starts_at']);
+        if (upcoming == null &&
+            !startsAt.isBefore(now) &&
+            appointment['status']?.toString() != 'Hoàn thành') {
+          upcoming = appointment;
+        }
+      }
+
+      final employeeStatus = employee['status']?.toString() ?? 'Đang làm việc';
+      final isOff = employeeStatus != 'Đang làm việc';
+      final state = isOff
+          ? employeeStatus
+          : active != null
+              ? 'Đang bận'
+              : 'Sẵn sàng';
+      final detail = active != null
+          ? '${_fallbackText(active['customer_name'], 'Khách')} · ${_fallbackText(active['service_name'], 'Dịch vụ')}'
+          : upcoming != null
+              ? '${_timeLabel(_parseDateTime(upcoming['starts_at']))} · ${_fallbackText(upcoming['customer_name'], 'Khách')}'
+              : _fallbackText(
+                  employee['specialty'],
+                  _fallbackText(employee['shift_label'], 'Chưa có lịch tiếp theo'),
+                );
+
+      items.add({
+        'id': employeeId,
+        'name': employee['full_name']?.toString() ?? 'Nhân viên',
+        'initials': _fallbackText(
+          employee['initials'],
+          _initials(employee['full_name']?.toString() ?? ''),
+        ),
+        'role': employee['role']?.toString() ?? '',
+        'state': state,
+        'detail': detail,
+        'tone': isOff ? 'muted' : active != null ? 'warning' : 'success',
+      });
     }
 
-    return rows.first;
+    items.sort((a, b) {
+      int rank(Map<String, Object?> item) => switch (item['tone']) {
+        'warning' => 0,
+        'success' => 1,
+        _ => 2,
+      };
+      final rankCompare = rank(a).compareTo(rank(b));
+      if (rankCompare != 0) return rankCompare;
+      return a['name'].toString().compareTo(b['name'].toString());
+    });
+    return items;
+  }
+
+  Future<List<Map<String, Object?>>> _buildTopSales(
+    Database database,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final rows = await database.rawQuery(
+      'SELECT item_type, title, '
+      'SUM(quantity) AS qty, COALESCE(SUM(total_price), 0) AS revenue '
+      'FROM invoice_items '
+      'INNER JOIN invoices ON invoices.id = invoice_items.invoice_id '
+      'WHERE invoices.paid_at IS NOT NULL '
+      'AND invoices.paid_at >= ? AND invoices.paid_at < ? '
+      'GROUP BY item_type, title '
+      'ORDER BY revenue DESC, qty DESC, title ASC LIMIT 6',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+
+    return rows
+        .map(
+          (row) => {
+            'title': row['title']?.toString() ?? 'Mục bán',
+            'type': row['item_type']?.toString() == 'product'
+                ? 'Sản phẩm'
+                : 'Dịch vụ',
+            'quantity': _toInt(row['qty']),
+            'revenue': _toInt(row['revenue']),
+            'revenueLabel': _currency(_toInt(row['revenue'])),
+          },
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, Object?>>> _buildOperationalAlerts(
+    Database database,
+    DateTime now,
+    DateTime startToday,
+    DateTime startTomorrow,
+  ) async {
+    final overdueRows = await database.rawQuery(
+      'SELECT COUNT(*) AS total FROM appointments '
+      'WHERE starts_at >= ? AND starts_at < ? AND starts_at < ? '
+      "AND status IN ('Đã đặt', 'Chờ xác nhận')",
+      [
+        startToday.toIso8601String(),
+        startTomorrow.toIso8601String(),
+        now.toIso8601String(),
+      ],
+    );
+    final waitingRows = await database.rawQuery(
+      'SELECT COUNT(*) AS total FROM appointments '
+      'WHERE starts_at >= ? AND starts_at < ? AND status = ?',
+      [startToday.toIso8601String(), startTomorrow.toIso8601String(), 'Chờ xác nhận'],
+    );
+    final unpaidRows = await database.rawQuery(
+      'SELECT COUNT(*) AS total FROM appointments a '
+      'WHERE a.starts_at >= ? AND a.starts_at < ? AND a.status = ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoices i '
+      'WHERE i.appointment_id = a.id AND i.paid_at IS NOT NULL) ',
+      [startToday.toIso8601String(), startTomorrow.toIso8601String(), 'Hoàn thành'],
+    );
+    final draftRows = await database.rawQuery(
+      'SELECT COUNT(ii.id) AS total FROM invoices i '
+      'LEFT JOIN invoice_items ii ON ii.invoice_id = i.id '
+      "WHERE i.id = 'invoice-draft-001' AND TRIM(i.customer_id) != ''",
+    );
+
+    final overdue = _toInt(overdueRows.first['total']);
+    final waiting = _toInt(waitingRows.first['total']);
+    final unpaid = _toInt(unpaidRows.first['total']);
+    final draftItems = _toInt(draftRows.first['total']);
+    final alerts = <Map<String, Object?>>[];
+
+    if (overdue > 0) {
+      alerts.add({
+        'severity': 'critical',
+        'count': overdue,
+        'title': 'Lịch đã quá giờ',
+        'detail': 'Có lịch đã tới giờ nhưng chưa bắt đầu hoặc chưa xác nhận.',
+        'route': 'appointments',
+      });
+    }
+    if (waiting > 0) {
+      alerts.add({
+        'severity': 'warning',
+        'count': waiting,
+        'title': 'Chờ xác nhận',
+        'detail': 'Cần xác nhận khách trước giờ hẹn trong hôm nay.',
+        'route': 'appointments',
+      });
+    }
+    if (unpaid > 0) {
+      alerts.add({
+        'severity': 'warning',
+        'count': unpaid,
+        'title': 'Hoàn thành chưa có bill',
+        'detail': 'Lịch đã hoàn thành nhưng chưa thấy hóa đơn đã thanh toán.',
+        'route': 'invoices',
+      });
+    }
+    if (draftItems > 0) {
+      alerts.add({
+        'severity': 'info',
+        'count': draftItems,
+        'title': 'Bill đang mở',
+        'detail': 'Có bill đang làm dở tại quầy tính tiền.',
+        'route': 'invoices',
+      });
+    }
+    if (alerts.isEmpty) {
+      alerts.add({
+        'severity': 'success',
+        'count': 0,
+        'title': 'Ca làm đang sạch',
+        'detail': 'Chưa có việc tồn cần ưu tiên xử lý.',
+        'route': 'appointments',
+      });
+    }
+    return alerts;
   }
 
   Future<List<Map<String, Object?>>> _buildFeaturedCustomers(
@@ -250,12 +520,7 @@ class SqliteOverviewRepository implements OverviewRepository {
       orderBy: 'starts_at ASC',
       limit: 1,
     );
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return rows.first;
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<int> _sumCustomerRevenue(
@@ -269,7 +534,6 @@ class SqliteOverviewRepository implements OverviewRepository {
       'WHERE customer_id = ? AND paid_at IS NOT NULL AND paid_at >= ?',
       [customerId, startThisMonth.toIso8601String()],
     );
-
     return _toInt(rows.first['total']);
   }
 
@@ -349,22 +613,16 @@ class SqliteOverviewRepository implements OverviewRepository {
       whereArgs: [customerId],
       limit: 1,
     );
-
-    if (rows.isEmpty) {
-      return 'Chưa chọn khách';
-    }
-
-    return rows.first['full_name']?.toString() ?? 'Chưa chọn khách';
+    return rows.isEmpty
+        ? 'Chưa chọn khách'
+        : rows.first['full_name']?.toString() ?? 'Chưa chọn khách';
   }
 
   Future<String?> _findAppointmentStaff(
     Database database,
     String? appointmentId,
   ) async {
-    if (appointmentId == null || appointmentId.isEmpty) {
-      return null;
-    }
-
+    if (appointmentId == null || appointmentId.isEmpty) return null;
     final rows = await database.query(
       'appointments',
       columns: const ['staff_name'],
@@ -372,11 +630,7 @@ class SqliteOverviewRepository implements OverviewRepository {
       whereArgs: [appointmentId],
       limit: 1,
     );
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
+    if (rows.isEmpty) return null;
     final name = rows.first['staff_name']?.toString().trim() ?? '';
     return name.isEmpty ? null : name;
   }
@@ -390,8 +644,7 @@ class SqliteOverviewRepository implements OverviewRepository {
       'SELECT substr(paid_at, 1, 10) AS day_key, COALESCE(SUM(total_amount), 0) AS total '
       'FROM invoices '
       'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
-      'GROUP BY day_key '
-      'ORDER BY day_key ASC',
+      'GROUP BY day_key ORDER BY day_key ASC',
       [
         start.toIso8601String(),
         startToday.add(const Duration(days: 1)).toIso8601String(),
@@ -401,7 +654,6 @@ class SqliteOverviewRepository implements OverviewRepository {
     final totalsByDay = <String, int>{
       for (final row in rows) row['day_key'].toString(): _toInt(row['total']),
     };
-
     return List.generate(7, (index) {
       final day = start.add(Duration(days: index));
       final dayKey = day.toIso8601String().substring(0, 10);
@@ -419,22 +671,15 @@ class SqliteOverviewRepository implements OverviewRepository {
     bool currency = false,
   }) {
     if (previous <= 0) {
-      if (current <= 0) {
-        return 'Chưa phát sinh so với hôm qua';
-      }
+      if (current <= 0) return 'Chưa phát sinh so với hôm qua';
       return currency
           ? 'Tăng mới ${_currency(current)} so với hôm qua'
           : 'Tăng mới $current $unit so với hôm qua';
     }
-
     final delta = current - previous;
-    if (delta == 0) {
-      return 'Giữ nguyên so với hôm qua';
-    }
-
+    if (delta == 0) return 'Giữ nguyên so với hôm qua';
     final ratio = (delta.abs() / previous) * 100;
-    final prefix = delta > 0 ? 'Tăng' : 'Giảm';
-    return '$prefix ${ratio.round()}% so với hôm qua';
+    return '${delta > 0 ? 'Tăng' : 'Giảm'} ${ratio.round()}% so với hôm qua';
   }
 
   String _buildPaymentNote({
@@ -454,32 +699,24 @@ class SqliteOverviewRepository implements OverviewRepository {
     if (visitCount >= 10) {
       return 'Khách quay lại đều, đã có $visitCount lượt ghé salon.';
     }
-    if (totalSpent > 0) {
-      return 'Tổng chi tiêu hiện tại ${_currency(totalSpent)}.';
-    }
+    if (totalSpent > 0) return 'Tổng chi tiêu hiện tại ${_currency(totalSpent)}.';
     return 'Khách mới, cần tiếp tục làm giàu dữ liệu hành vi.';
   }
 
   String _appointmentTimeLabel(Map<String, Object?>? row) {
-    if (row == null) {
-      return 'Chưa có lịch tiếp theo';
-    }
-
+    if (row == null) return 'Chưa có lịch tiếp theo';
     final startsAt = _parseDateTime(row['starts_at']);
     final now = DateTime.now();
     final startToday = DateTime(now.year, now.month, now.day);
     final startTomorrow = startToday.add(const Duration(days: 1));
     final time = _timeLabel(startsAt);
-
     if (!startsAt.isBefore(startToday) && startsAt.isBefore(startTomorrow)) {
       return '$time hôm nay';
     }
-
     if (!startsAt.isBefore(startTomorrow) &&
         startsAt.isBefore(startTomorrow.add(const Duration(days: 1)))) {
       return '$time ngày mai';
     }
-
     return '$time ${DateFormat('dd/MM').format(startsAt)}';
   }
 
@@ -511,19 +748,13 @@ class SqliteOverviewRepository implements OverviewRepository {
         .split(RegExp(r'\s+'))
         .where((part) => part.isNotEmpty)
         .toList();
-    if (parts.isEmpty) {
-      return '?';
-    }
-    if (parts.length == 1) {
-      return _firstRune(parts.first).toUpperCase();
-    }
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return _firstRune(parts.first).toUpperCase();
     return '${_firstRune(parts.first)}${_firstRune(parts.last)}'.toUpperCase();
   }
 
   String _firstRune(String value) {
-    if (value.isEmpty) {
-      return '?';
-    }
+    if (value.isEmpty) return '?';
     return String.fromCharCodes(value.runes.take(1));
   }
 
@@ -532,21 +763,15 @@ class SqliteOverviewRepository implements OverviewRepository {
     return text.isEmpty ? fallback : text;
   }
 
-  String _timeLabel(DateTime value) {
-    return DateFormat('HH:mm').format(value);
-  }
+  String _timeLabel(DateTime value) => DateFormat('HH:mm').format(value);
 
   DateTime _parseDateTime(Object? value) {
     return DateTime.tryParse(value?.toString() ?? '') ?? DateTime.now();
   }
 
   int _toInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
+    if (value is int) return value;
+    if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
