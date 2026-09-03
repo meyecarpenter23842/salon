@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/navigation/desktop_navigation.dart';
+import '../../../../core/models/appointment_upsert_input.dart';
 import '../../../../core/models/customer_profile.dart';
 import '../../../../core/models/customer_upsert_input.dart';
 import '../../../../core/models/invoice_draft.dart';
+import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primitives.dart';
@@ -17,6 +19,8 @@ final customerRecentDaysFilterProvider = StateProvider<int?>((ref) => null);
 final customerInactiveDaysFilterProvider = StateProvider<int?>((ref) => null);
 final customerServiceFilterProvider = StateProvider<String?>((ref) => null);
 final selectedCustomerIndexProvider = StateProvider<int>((ref) => 0);
+final customerProfileDetailIdProvider = StateProvider<String?>((ref) => null);
+final customerProfileTabProvider = StateProvider<int>((ref) => 0);
 
 final customerServiceOptionsProvider = FutureProvider<List<String>>((ref) async {
   final services = await ref.watch(servicesRepositoryProvider).fetchServicesView();
@@ -51,7 +55,7 @@ final filteredCustomersProvider = FutureProvider<List<CustomerProfile>>((ref) as
       .toList(growable: false);
 });
 
-Future<void> _openCustomerEditor(
+Future<CustomerProfile?> _openCustomerEditor(
   BuildContext context,
   WidgetRef ref, {
   CustomerProfile? customer,
@@ -60,26 +64,36 @@ Future<void> _openCustomerEditor(
     context: context,
     builder: (_) => _CustomerEditorDialog(customer: customer),
   );
-  if (input == null || !context.mounted) return;
+  if (input == null || !context.mounted) return null;
 
-  final saved = await ref
-      .read(customersRepositoryProvider)
-      .saveCustomer(input, existingId: customer?.id);
-  if (!context.mounted) return;
+  try {
+    final saved = await ref
+        .read(customersRepositoryProvider)
+        .saveCustomer(input, existingId: customer?.id);
+    if (!context.mounted) return null;
 
-  ref.read(selectedCustomerIndexProvider.notifier).state = 0;
-  ref.read(customersRefreshProvider.notifier).state++;
-  ref.invalidate(filteredCustomersProvider);
+    ref.read(selectedCustomerIndexProvider.notifier).state = 0;
+    ref.read(customersRefreshProvider.notifier).state++;
+    ref.invalidate(filteredCustomersProvider);
+    ref.invalidate(customersViewProvider);
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        customer == null
-            ? 'Đã thêm khách hàng ${saved.fullName}'
-            : 'Đã cập nhật hồ sơ ${saved.fullName}',
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          customer == null
+              ? 'Đã thêm khách hàng ${saved.fullName}'
+              : 'Đã cập nhật hồ sơ ${saved.fullName}',
+        ),
       ),
-    ),
-  );
+    );
+    return saved;
+  } catch (error) {
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_friendlyError(error))),
+    );
+    return null;
+  }
 }
 
 Future<void> _openCustomerBilling(
@@ -97,19 +111,95 @@ Future<void> _openCustomerBilling(
   );
 }
 
+Future<void> _openCustomerAppointment(
+  BuildContext context,
+  WidgetRef ref,
+  CustomerProfile customer,
+) async {
+  final services = await ref.read(servicesRepositoryProvider).fetchServicesView();
+  final employees = await ref.read(employeesRepositoryProvider).fetchEmployeesView();
+  if (!context.mounted) return;
+
+  final availableServices = services.where((service) => service.isActive).toList(growable: false);
+  if (availableServices.isEmpty || employees.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Cần có ít nhất một dịch vụ và một nhân viên trước khi tạo lịch.'),
+      ),
+    );
+    return;
+  }
+
+  final input = await showDialog<AppointmentUpsertInput>(
+    context: context,
+    builder: (_) => _CustomerAppointmentDialog(
+      customer: customer,
+      services: availableServices,
+      employees: employees,
+    ),
+  );
+  if (input == null || !context.mounted) return;
+
+  try {
+    final saved = await ref.read(appointmentsRepositoryProvider).saveAppointment(input);
+    if (!context.mounted) return;
+
+    ref.invalidate(appointmentsViewProvider);
+    ref.invalidate(overviewSummaryProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã tạo lịch ${saved.timeLabel} cho ${customer.fullName}'),
+        action: SnackBarAction(
+          label: 'Xem lịch',
+          onPressed: () {
+            ref.read(desktopSectionProvider.notifier).state = DesktopSection.appointments;
+          },
+        ),
+      ),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_friendlyError(error))),
+    );
+  }
+}
+
 class CustomersPage extends ConsumerWidget {
   const CustomersPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final detailId = ref.watch(customerProfileDetailIdProvider);
+    if (detailId != null) {
+      final customers = ref.watch(customersViewProvider);
+      return customers.when(
+        data: (items) {
+          final customer = _findCustomer(items, detailId);
+          if (customer == null) {
+            return _MissingCustomerProfile(
+              onBack: () => ref.read(customerProfileDetailIdProvider.notifier).state = null,
+            );
+          }
+          return _CustomerFullProfile(customer: customer);
+        },
+        loading: () => const PremiumLoadingState(label: 'Đang mở hồ sơ khách hàng…'),
+        error: (error, _) => PremiumErrorState(
+          title: 'Không mở được hồ sơ khách hàng',
+          message: '$error',
+          onRetry: () => ref.invalidate(customersViewProvider),
+        ),
+      );
+    }
+
     final customers = ref.watch(filteredCustomersProvider);
     return customers.when(
       data: (items) => _CustomersView(items: items),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => PremiumEmptyState(
-        icon: Icons.error_outline_rounded,
+      loading: () => const PremiumLoadingState(label: 'Đang tải khách hàng…'),
+      error: (error, _) => PremiumErrorState(
         title: 'Không tải được khách hàng',
         message: '$error',
+        onRetry: () => ref.invalidate(filteredCustomersProvider),
       ),
     );
   }
@@ -142,8 +232,7 @@ class _CustomersView extends ConsumerWidget {
                 icon: Icons.groups_2_outlined,
                 eyebrow: 'Quan hệ khách hàng',
                 title: 'Khách hàng',
-                subtitle:
-                    'Hồ sơ, hạng thành viên, thói quen dịch vụ và lịch sử thanh toán trong một workspace thống nhất.',
+                subtitle: 'Tìm khách nhanh, xem hồ sơ và tiếp tục đặt lịch hoặc tính tiền ngay từ một nơi.',
                 trailing: [
                   PremiumStatusPill(label: '$total hồ sơ', tone: AppColors.copper),
                   FilledButton.icon(
@@ -161,7 +250,7 @@ class _CustomersView extends ConsumerWidget {
             const SizedBox(height: 14),
             if (shortViewport)
               SizedBox(
-                height: 760,
+                height: 780,
                 child: _CustomerWorkspace(
                   items: items,
                   selectedIndex: effectiveIndex,
@@ -315,10 +404,8 @@ class _CustomerToolbar extends ConsumerWidget {
                       currentInactiveDays == option.inactiveDays,
                   showCheckmark: false,
                   onSelected: (_) {
-                    ref.read(customerRecentDaysFilterProvider.notifier).state =
-                        option.recentDays;
-                    ref.read(customerInactiveDaysFilterProvider.notifier).state =
-                        option.inactiveDays;
+                    ref.read(customerRecentDaysFilterProvider.notifier).state = option.recentDays;
+                    ref.read(customerInactiveDaysFilterProvider.notifier).state = option.inactiveDays;
                     ref.read(selectedCustomerIndexProvider.notifier).state = 0;
                   },
                 ),
@@ -385,8 +472,6 @@ class _CustomerWorkspace extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // After the desktop sidebar is deducted, a 1024–1280 window does not
-        // have enough room for a useful two-column CRM workspace. Stack early.
         if (constraints.maxWidth < 1040) {
           return ListView(
             primary: false,
@@ -396,7 +481,7 @@ class _CustomerWorkspace extends StatelessWidget {
                 child: _CustomerList(items: items, selectedIndex: selectedIndex),
               ),
               const SizedBox(height: 12),
-              SizedBox(height: 470, child: detail),
+              SizedBox(height: 500, child: detail),
             ],
           );
         }
@@ -479,18 +564,12 @@ class _CustomerList extends ConsumerWidget {
                                 _TierBadge(tier: customer.tier),
                                 Text(
                                   customer.phone,
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11.5,
-                                  ),
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
                                 ),
                                 if (customer.favoriteService.isNotEmpty)
                                   Text(
                                     customer.favoriteService,
-                                    style: TextStyle(
-                                      color: AppColors.textMuted,
-                                      fontSize: 11.5,
-                                    ),
+                                    style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
                                   ),
                               ],
                             ),
@@ -512,10 +591,7 @@ class _CustomerList extends ConsumerWidget {
                             const SizedBox(height: 3),
                             Text(
                               '${customer.visitCount} lượt',
-                              style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 11,
-                              ),
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                             ),
                           ],
                         ),
@@ -577,10 +653,7 @@ class _CustomerDetail extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        current.phone,
-                        style: TextStyle(color: AppColors.textMuted),
-                      ),
+                      Text(current.phone, style: TextStyle(color: AppColors.textMuted)),
                       const SizedBox(height: 6),
                       _TierBadge(tier: current.tier),
                     ],
@@ -601,9 +674,7 @@ class _CustomerDetail extends ConsumerWidget {
                   PremiumInfoRow(
                     icon: Icons.content_cut_rounded,
                     label: 'Dịch vụ yêu thích',
-                    value: current.favoriteService.isEmpty
-                        ? 'Chưa ghi nhận'
-                        : current.favoriteService,
+                    value: current.favoriteService.isEmpty ? 'Chưa ghi nhận' : current.favoriteService,
                   ),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
@@ -624,7 +695,7 @@ class _CustomerDetail extends ConsumerWidget {
                     value: current.note.isEmpty ? 'Chưa có ghi chú' : current.note,
                   ),
                   const SizedBox(height: 14),
-                  _InvoiceHistory(history: history),
+                  _InvoiceHistory(history: history, limit: 3),
                 ],
               ),
             ),
@@ -632,38 +703,506 @@ class _CustomerDetail extends ConsumerWidget {
           const PremiumDivider(),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final billing = FilledButton.icon(
-                  onPressed: () => _openCustomerBilling(context, ref, current),
-                  icon: const Icon(Icons.point_of_sale_outlined),
-                  label: const Text('Mở tính tiền'),
-                );
-                final edit = OutlinedButton.icon(
-                  onPressed: () => _openCustomerEditor(context, ref, customer: current),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Sửa hồ sơ'),
-                );
-
-                if (constraints.maxWidth < 360) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [billing, const SizedBox(height: 8), edit],
-                  );
-                }
-                return Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  key: const Key('customer-open-full-profile'),
+                  onPressed: () {
+                    ref.read(customerProfileTabProvider.notifier).state = 0;
+                    ref.read(customerProfileDetailIdProvider.notifier).state = current.id;
+                  },
+                  icon: const Icon(Icons.contact_page_outlined),
+                  label: const Text('Xem hồ sơ đầy đủ'),
+                ),
+                const SizedBox(height: 8),
+                Row(
                   children: [
-                    Expanded(child: billing),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openCustomerBilling(context, ref, current),
+                        icon: const Icon(Icons.point_of_sale_outlined),
+                        label: const Text('Tính tiền'),
+                      ),
+                    ),
                     const SizedBox(width: 8),
-                    Expanded(child: edit),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openCustomerEditor(context, ref, customer: current),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Sửa'),
+                      ),
+                    ),
                   ],
-                );
-              },
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _CustomerFullProfile extends ConsumerWidget {
+  const _CustomerFullProfile({required this.customer});
+
+  final CustomerProfile customer;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(customerInvoiceHistoryProvider(customer.id));
+    final selectedTab = ref.watch(customerProfileTabProvider);
+
+    return ListView(
+      key: const Key('customer-full-profile'),
+      primary: false,
+      padding: const EdgeInsets.only(bottom: 18),
+      children: [
+        PremiumSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextButton.icon(
+                key: const Key('customer-profile-back'),
+                onPressed: () => ref.read(customerProfileDetailIdProvider.notifier).state = null,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Quay lại danh sách khách'),
+              ),
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+                  final identity = Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PremiumIconBadge(
+                        icon: customer.tier.contains('VIP')
+                            ? Icons.workspace_premium_outlined
+                            : Icons.person_outline_rounded,
+                        size: 72,
+                        tone: customer.tier.contains('VIP') ? AppColors.warning : AppColors.copper,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  customer.fullName,
+                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                _TierBadge(tier: customer.tier),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 6,
+                              children: [
+                                _InlineMeta(icon: Icons.phone_outlined, text: customer.phone),
+                                if ((customer.email ?? '').trim().isNotEmpty)
+                                  _InlineMeta(icon: Icons.mail_outline_rounded, text: customer.email!),
+                                _InlineMeta(
+                                  icon: Icons.history_rounded,
+                                  text: 'Gần nhất: ${customer.lastVisitLabel}',
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+
+                  final actions = Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      FilledButton.icon(
+                        key: const Key('customer-profile-book'),
+                        onPressed: () => _openCustomerAppointment(context, ref, customer),
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: const Text('Đặt lịch'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('customer-profile-billing'),
+                        onPressed: () => _openCustomerBilling(context, ref, customer),
+                        icon: const Icon(Icons.point_of_sale_outlined),
+                        label: const Text('Tính tiền'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('customer-profile-edit'),
+                        onPressed: () => _openCustomerEditor(context, ref, customer: customer),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Sửa hồ sơ'),
+                      ),
+                    ],
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [identity, const SizedBox(height: 14), actions],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: identity),
+                      const SizedBox(width: 18),
+                      Flexible(child: actions),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              _CustomerProfileMetrics(customer: customer),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        PremiumSectionCard(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CustomerProfileTabs(
+                selected: selectedTab,
+                onSelected: (value) => ref.read(customerProfileTabProvider.notifier).state = value,
+              ),
+              const SizedBox(height: 14),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: KeyedSubtree(
+                  key: ValueKey(selectedTab),
+                  child: switch (selectedTab) {
+                    1 => _ServiceHistoryTab(history: history),
+                    2 => _NotesTab(customer: customer),
+                    3 => _PaymentsTab(history: history),
+                    _ => _CustomerOverviewTab(customer: customer, history: history),
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomerProfileMetrics extends StatelessWidget {
+  const _CustomerProfileMetrics({required this.customer});
+
+  final CustomerProfile customer;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      PremiumStatCard(
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Tổng chi tiêu',
+        value: customer.spentLabel,
+        tone: AppColors.copper,
+      ),
+      PremiumStatCard(
+        icon: Icons.refresh_rounded,
+        label: 'Số lần ghé',
+        value: '${customer.visitCount}',
+        tone: AppColors.success,
+      ),
+      PremiumStatCard(
+        icon: Icons.stars_outlined,
+        label: 'Điểm tích lũy',
+        value: '${customer.loyaltyPoints}',
+        tone: AppColors.warning,
+      ),
+      PremiumStatCard(
+        icon: Icons.calendar_today_outlined,
+        label: 'Lần ghé gần nhất',
+        value: customer.lastVisitLabel,
+        tone: AppColors.info,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 980
+            ? 4
+            : constraints.maxWidth >= 560
+                ? 2
+                : 1;
+        const gap = 10.0;
+        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [for (final card in cards) SizedBox(width: width, child: card)],
+        );
+      },
+    );
+  }
+}
+
+class _CustomerProfileTabs extends StatelessWidget {
+  const _CustomerProfileTabs({required this.selected, required this.onSelected});
+
+  final int selected;
+  final ValueChanged<int> onSelected;
+
+  static const tabs = [
+    (Icons.person_outline_rounded, 'Tổng quan'),
+    (Icons.content_cut_rounded, 'Lịch sử dịch vụ'),
+    (Icons.sticky_note_2_outlined, 'Ghi chú'),
+    (Icons.receipt_long_outlined, 'Thanh toán'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var index = 0; index < tabs.length; index++)
+          ChoiceChip(
+            key: Key('customer-profile-tab-$index'),
+            selected: selected == index,
+            showCheckmark: false,
+            avatar: Icon(tabs[index].$1, size: 16),
+            label: Text(tabs[index].$2),
+            onSelected: (_) => onSelected(index),
+          ),
+      ],
+    );
+  }
+}
+
+class _CustomerOverviewTab extends StatelessWidget {
+  const _CustomerOverviewTab({required this.customer, required this.history});
+
+  final CustomerProfile customer;
+  final AsyncValue<List<InvoiceDraft>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final details = PremiumSectionCard(
+              icon: Icons.auto_awesome_outlined,
+              title: 'Chăm sóc & sở thích',
+              child: Column(
+                children: [
+                  PremiumInfoRow(
+                    icon: Icons.content_cut_rounded,
+                    label: 'Dịch vụ yêu thích',
+                    value: customer.favoriteService.isEmpty ? 'Chưa ghi nhận' : customer.favoriteService,
+                  ),
+                  const PremiumDivider(indent: 42),
+                  PremiumInfoRow(
+                    icon: Icons.auto_fix_high_outlined,
+                    label: 'Hồ sơ tóc',
+                    value: customer.hairProfile.isEmpty ? 'Chưa có hồ sơ tóc' : customer.hairProfile,
+                  ),
+                  const PremiumDivider(indent: 42),
+                  PremiumInfoRow(
+                    icon: Icons.sticky_note_2_outlined,
+                    label: 'Ghi chú salon',
+                    value: customer.note.isEmpty ? 'Chưa có ghi chú' : customer.note,
+                  ),
+                ],
+              ),
+            );
+            final contact = PremiumSectionCard(
+              icon: Icons.contact_phone_outlined,
+              title: 'Thông tin liên hệ',
+              child: Column(
+                children: [
+                  PremiumInfoRow(
+                    icon: Icons.phone_outlined,
+                    label: 'Số điện thoại',
+                    value: customer.phone,
+                  ),
+                  const PremiumDivider(indent: 42),
+                  PremiumInfoRow(
+                    icon: Icons.mail_outline_rounded,
+                    label: 'Email',
+                    value: (customer.email ?? '').trim().isEmpty ? 'Chưa có email' : customer.email!,
+                  ),
+                  const PremiumDivider(indent: 42),
+                  PremiumInfoRow(
+                    icon: Icons.workspace_premium_outlined,
+                    label: 'Hạng thành viên',
+                    value: customer.tier,
+                  ),
+                ],
+              ),
+            );
+
+            if (constraints.maxWidth < 820) {
+              return Column(children: [details, const SizedBox(height: 12), contact]);
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: details),
+                const SizedBox(width: 12),
+                Expanded(child: contact),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _InvoiceHistory(history: history, limit: 3),
+      ],
+    );
+  }
+}
+
+class _ServiceHistoryTab extends StatelessWidget {
+  const _ServiceHistoryTab({required this.history});
+
+  final AsyncValue<List<InvoiceDraft>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    return history.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (error, _) => PremiumEmptyState(
+        icon: Icons.error_outline_rounded,
+        title: 'Không tải được lịch sử dịch vụ',
+        message: '$error',
+      ),
+      data: (invoices) {
+        final serviceInvoices = invoices
+            .where((invoice) => invoice.lines.any((line) => line.isService))
+            .toList(growable: false);
+        if (serviceInvoices.isEmpty) {
+          return const PremiumEmptyState(
+            icon: Icons.history_toggle_off_rounded,
+            title: 'Chưa có lịch sử dịch vụ',
+            message: 'Dịch vụ đã thanh toán của khách sẽ xuất hiện tại đây.',
+          );
+        }
+
+        return Column(
+          children: [
+            for (var index = 0; index < serviceInvoices.length; index++) ...[
+              _ServiceHistoryRow(invoice: serviceInvoices[index]),
+              if (index < serviceInvoices.length - 1) const PremiumDivider(indent: 48),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ServiceHistoryRow extends StatelessWidget {
+  const _ServiceHistoryRow({required this.invoice});
+
+  final InvoiceDraft invoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final services = invoice.lines.where((line) => line.isService).toList(growable: false);
+    final paidAt = invoice.paidAt ?? invoice.updatedAt;
+    final serviceTotal = services.fold<int>(0, (sum, line) => sum + line.totalPrice);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PremiumIconBadge(icon: Icons.content_cut_rounded, size: 38, tone: AppColors.copper),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  services.map((line) => line.quantity > 1 ? '${line.quantity} × ${line.title}' : line.title).join(' • '),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_dateTime(paidAt)} • ${invoice.paymentMethod}',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(_currency(serviceTotal), style: const TextStyle(fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotesTab extends ConsumerWidget {
+  const _NotesTab({required this.customer});
+
+  final CustomerProfile customer;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PremiumSectionCard(
+          icon: Icons.auto_awesome_outlined,
+          title: 'Hồ sơ tóc',
+          child: Text(
+            customer.hairProfile.isEmpty ? 'Chưa có hồ sơ tóc.' : customer.hairProfile,
+            style: TextStyle(color: AppColors.textSecondary, height: 1.45),
+          ),
+        ),
+        const SizedBox(height: 12),
+        PremiumSectionCard(
+          icon: Icons.sticky_note_2_outlined,
+          title: 'Ghi chú salon',
+          child: Text(
+            customer.note.isEmpty ? 'Chưa có ghi chú.' : customer.note,
+            style: TextStyle(color: AppColors.textSecondary, height: 1.45),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => _openCustomerEditor(context, ref, customer: customer),
+            icon: const Icon(Icons.edit_note_rounded),
+            label: const Text('Chỉnh sửa hồ sơ & ghi chú'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentsTab extends StatelessWidget {
+  const _PaymentsTab({required this.history});
+
+  final AsyncValue<List<InvoiceDraft>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InvoiceHistory(history: history);
   }
 }
 
@@ -719,16 +1258,17 @@ class _CustomerMetricStrip extends StatelessWidget {
 }
 
 class _InvoiceHistory extends StatelessWidget {
-  const _InvoiceHistory({required this.history});
+  const _InvoiceHistory({required this.history, this.limit});
 
   final AsyncValue<List<InvoiceDraft>> history;
+  final int? limit;
 
   @override
   Widget build(BuildContext context) {
     return history.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(24),
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
       error: (error, _) => PremiumInfoRow(
         icon: Icons.receipt_long_outlined,
@@ -744,7 +1284,7 @@ class _InvoiceHistory extends StatelessWidget {
           );
         }
 
-        final visible = invoices.take(3).toList(growable: false);
+        final visible = limit == null ? invoices : invoices.take(limit!).toList(growable: false);
         final totalPaid = invoices.fold<int>(0, (sum, invoice) => sum + invoice.totalAmount);
         return PremiumSectionCard(
           icon: Icons.receipt_long_outlined,
@@ -775,7 +1315,26 @@ class _InvoiceRow extends StatelessWidget {
     return PremiumInfoRow(
       icon: Icons.payments_outlined,
       label: paidAt == null ? 'Chưa thanh toán' : _dateTime(paidAt),
-      value: '${_currency(invoice.totalAmount)} • ${invoice.lines.length} dịch vụ • ${invoice.paymentMethod}',
+      value: '${_currency(invoice.totalAmount)} • ${invoice.lines.length} mục • ${invoice.paymentMethod}',
+    );
+  }
+}
+
+class _InlineMeta extends StatelessWidget {
+  const _InlineMeta({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: AppColors.textMuted),
+        const SizedBox(width: 5),
+        Text(text, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      ],
     );
   }
 }
@@ -795,7 +1354,7 @@ class _TierBadge extends StatelessWidget {
             ? AppColors.copper
             : AppColors.textMuted;
     return Container(
-      constraints: const BoxConstraints(maxWidth: 110),
+      constraints: const BoxConstraints(maxWidth: 120),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: tone.withValues(alpha: AppColors.isLight ? 0.09 : 0.13),
@@ -806,11 +1365,35 @@ class _TierBadge extends StatelessWidget {
         tier,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: tone,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-        ),
+        style: TextStyle(color: tone, fontSize: 10.5, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+class _MissingCustomerProfile extends StatelessWidget {
+  const _MissingCustomerProfile({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const PremiumEmptyState(
+            icon: Icons.person_off_outlined,
+            title: 'Không còn tìm thấy hồ sơ khách',
+            message: 'Hồ sơ có thể đã thay đổi. Quay lại danh sách để chọn lại khách.',
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+            label: const Text('Quay lại danh sách'),
+          ),
+        ],
       ),
     );
   }
@@ -957,12 +1540,281 @@ class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
   }
 }
 
+class _CustomerAppointmentDialog extends StatefulWidget {
+  const _CustomerAppointmentDialog({
+    required this.customer,
+    required this.services,
+    required this.employees,
+  });
+
+  final CustomerProfile customer;
+  final List<ServiceCatalogItem> services;
+  final List<Map<String, Object?>> employees;
+
+  @override
+  State<_CustomerAppointmentDialog> createState() => _CustomerAppointmentDialogState();
+}
+
+class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _timeController = TextEditingController(text: '10:00');
+  final _slotController = TextEditingController(text: 'Ghế 1');
+  final _noteController = TextEditingController();
+  final _durationController = TextEditingController(text: '90');
+  List<String> _serviceIds = const [];
+  String? _employeeId;
+  String _dayLabel = 'Hôm nay';
+
+  @override
+  void initState() {
+    super.initState();
+    _employeeId = widget.employees.isEmpty ? null : widget.employees.first['id']?.toString();
+  }
+
+  @override
+  void dispose() {
+    _timeController.dispose();
+    _slotController.dispose();
+    _noteController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+
+  List<ServiceCatalogItem> get _selectedServices {
+    final ids = _serviceIds.toSet();
+    return widget.services.where((service) => ids.contains(service.id)).toList(growable: false);
+  }
+
+  int get _selectedDuration => _selectedServices.fold<int>(0, (sum, service) => sum + service.durationMinutes);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const PremiumIconBadge(icon: Icons.calendar_month_outlined, size: 38),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Đặt lịch cho ${widget.customer.fullName}')),
+        ],
+      ),
+      content: SizedBox(
+        width: adaptiveDialogWidth(context, 620),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.featureSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_outline_rounded),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(widget.customer.fullName, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 3),
+                            Text(widget.customer.phone, style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Dịch vụ', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textMuted)),
+                const SizedBox(height: 7),
+                FormField<List<String>>(
+                  initialValue: _serviceIds,
+                  validator: (value) => value == null || value.isEmpty ? 'Chọn ít nhất một dịch vụ' : null,
+                  builder: (field) => Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.fieldShell,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: field.hasError ? AppColors.danger : AppColors.controlBorder),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Column(
+                      children: [
+                        for (final service in widget.services)
+                          CheckboxListTile(
+                            value: _serviceIds.contains(service.id),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(service.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Text('${service.durationLabel} • ${service.priceLabel}'),
+                            onChanged: (checked) {
+                              setState(() {
+                                if (checked == true) {
+                                  _serviceIds = {..._serviceIds, service.id}.toList(growable: false);
+                                } else {
+                                  _serviceIds = _serviceIds.where((id) => id != service.id).toList(growable: false);
+                                }
+                                final duration = _selectedDuration;
+                                _durationController.text = '${duration == 0 ? 90 : duration}';
+                                field.didChange(_serviceIds);
+                              });
+                            },
+                          ),
+                        if (field.hasError)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+                              child: Text(field.errorText!, style: TextStyle(color: AppColors.danger, fontSize: 11)),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: _employeeId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nhân viên phụ trách',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                  items: widget.employees
+                      .map(
+                        (employee) => DropdownMenuItem<String>(
+                          value: employee['id']?.toString(),
+                          child: Text(
+                            '${employee['name']} • ${employee['role']}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  validator: (value) => value == null || value.isEmpty ? 'Chọn nhân viên' : null,
+                  onChanged: (value) => setState(() => _employeeId = value),
+                ),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stacked = constraints.maxWidth < 500;
+                    final day = DropdownButtonFormField<String>(
+                      initialValue: _dayLabel,
+                      decoration: const InputDecoration(labelText: 'Ngày hẹn'),
+                      items: const ['Hôm nay', 'Ngày mai']
+                          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) setState(() => _dayLabel = value);
+                      },
+                    );
+                    final time = TextFormField(
+                      controller: _timeController,
+                      decoration: const InputDecoration(labelText: 'Giờ hẹn'),
+                      validator: (value) {
+                        final text = value?.trim() ?? '';
+                        if (!RegExp(r'^\d{2}:\d{2}$').hasMatch(text)) return 'Dùng định dạng HH:mm';
+                        return null;
+                      },
+                    );
+                    if (stacked) return Column(children: [day, const SizedBox(height: 10), time]);
+                    return Row(children: [Expanded(child: day), const SizedBox(width: 10), Expanded(child: time)]);
+                  },
+                ),
+                const SizedBox(height: 10),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stacked = constraints.maxWidth < 500;
+                    final duration = TextFormField(
+                      controller: _durationController,
+                      decoration: const InputDecoration(labelText: 'Thời lượng (phút)'),
+                      validator: (value) {
+                        final minutes = int.tryParse(value?.trim() ?? '');
+                        return minutes == null || minutes <= 0 ? 'Nhập số phút hợp lệ' : null;
+                      },
+                    );
+                    final slot = TextFormField(
+                      controller: _slotController,
+                      decoration: const InputDecoration(labelText: 'Khu vực / ghế'),
+                      validator: (value) => value == null || value.trim().isEmpty ? 'Nhập khu vực phục vụ' : null,
+                    );
+                    if (stacked) return Column(children: [duration, const SizedBox(height: 10), slot]);
+                    return Row(children: [Expanded(child: duration), const SizedBox(width: 10), Expanded(child: slot)]);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _noteController,
+                  decoration: const InputDecoration(labelText: 'Ghi chú', prefixIcon: Icon(Icons.notes_outlined)),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Hủy')),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.check_rounded),
+          label: const Text('Tạo lịch'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final employee = widget.employees.where((item) => item['id']?.toString() == _employeeId).firstOrNull;
+    final services = _selectedServices;
+    if (employee == null || services.isEmpty) return;
+
+    Navigator.of(context).pop(
+      AppointmentUpsertInput(
+        customerId: widget.customer.id,
+        serviceIds: services.map((service) => service.id).toList(growable: false),
+        employeeId: employee['id']!.toString(),
+        customerName: widget.customer.fullName,
+        customerPhone: widget.customer.phone,
+        serviceName: services.map((service) => service.name).join(' + '),
+        staffName: employee['name']!.toString(),
+        status: 'Chờ xác nhận',
+        durationMinutes: int.parse(_durationController.text.trim()),
+        slotLabel: _slotController.text.trim(),
+        note: _noteController.text.trim(),
+        dayLabel: _dayLabel,
+        timeLabel: _timeController.text.trim(),
+      ),
+    );
+  }
+}
+
+CustomerProfile? _findCustomer(List<CustomerProfile> items, String id) {
+  for (final customer in items) {
+    if (customer.id == id) return customer;
+  }
+  return null;
+}
+
+String _friendlyError(Object error) {
+  final raw = error.toString().trim();
+  const statePrefix = 'Bad state: ';
+  return raw.startsWith(statePrefix) ? raw.substring(statePrefix.length).trim() : raw;
+}
+
 final NumberFormat _currencyFormatter = NumberFormat.currency(
   locale: 'vi_VN',
   symbol: 'đ',
   decimalDigits: 0,
 );
-final DateFormat _dateTimeFormatter = DateFormat('dd/MM HH:mm');
+final DateFormat _dateTimeFormatter = DateFormat('dd/MM/yyyy HH:mm');
 
 String _currency(int value) => _currencyFormatter.format(value).replaceAll(',', '.');
 String _dateTime(DateTime value) => _dateTimeFormatter.format(value);

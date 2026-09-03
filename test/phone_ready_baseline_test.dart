@@ -108,10 +108,10 @@ void main() {
     );
     _expectPrefixedUuid(customer.id, 'customer');
 
-    final sameIdentityCustomer = await customers.saveCustomer(
+    final independentCustomer = await customers.saveCustomer(
       const CustomerUpsertInput(
-        fullName: 'Khách DB7',
-        phone: '0900000701',
+        fullName: 'Khách DB7 khác',
+        phone: '0900000799',
         email: '',
         tier: 'Member',
         favoriteService: '',
@@ -119,8 +119,8 @@ void main() {
         note: 'record độc lập',
       ),
     );
-    _expectPrefixedUuid(sameIdentityCustomer.id, 'customer');
-    expect(sameIdentityCustomer.id, isNot(customer.id));
+    _expectPrefixedUuid(independentCustomer.id, 'customer');
+    expect(independentCustomer.id, isNot(customer.id));
 
     final updatedCustomer = await customers.saveCustomer(
       const CustomerUpsertInput(

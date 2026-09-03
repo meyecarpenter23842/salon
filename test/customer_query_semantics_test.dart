@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/models/customer_upsert_input.dart';
 import 'package:salonmanager/core/repositories/sqlite_customers_repository.dart';
 
 void main() {
@@ -66,6 +67,31 @@ void main() {
     await expectLater(
       fixture.repository.fetchCustomersView(recentDays: 30, inactiveDays: 30),
       throwsArgumentError,
+    );
+  });
+
+  test('save blocks duplicate phone even when formatting is different', () async {
+    final fixture = await _createFixture();
+
+    await expectLater(
+      fixture.repository.saveCustomer(
+        const CustomerUpsertInput(
+          fullName: 'Khách Trùng Số',
+          phone: '0900 000 202',
+          email: '',
+          tier: 'Member',
+          favoriteService: '',
+          hairProfile: '',
+          note: '',
+        ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('Lan Recent'),
+        ),
+      ),
     );
   });
 }
