@@ -78,6 +78,22 @@ class SqliteCustomersRepository implements CustomersRepository {
     String? existingId,
   }) async {
     final database = await _database.database;
+    final normalizedPhone = _normalizePhone(input.phone);
+    if (normalizedPhone.isEmpty) {
+      throw StateError('Số điện thoại cần có ít nhất một chữ số hợp lệ.');
+    }
+
+    final phoneOwner = await _findPhoneOwner(
+      database,
+      normalizedPhone,
+      excludeId: existingId,
+    );
+    if (phoneOwner != null) {
+      throw StateError(
+        'Số điện thoại này đã thuộc về khách ${phoneOwner.fullName}.',
+      );
+    }
+
     final existingCustomer = existingId == null
         ? null
         : await _findById(database, existingId);
@@ -104,6 +120,22 @@ class SqliteCustomersRepository implements CustomersRepository {
     return customer;
   }
 
+  Future<CustomerProfile?> _findPhoneOwner(
+    Database database,
+    String normalizedPhone, {
+    String? excludeId,
+  }) async {
+    final rows = await database.query('customers');
+    for (final row in rows) {
+      final customer = CustomerMapper.fromDatabase(row);
+      if (customer.id == excludeId) continue;
+      if (_normalizePhone(customer.phone) == normalizedPhone) {
+        return customer;
+      }
+    }
+    return null;
+  }
+
   Future<CustomerProfile?> _findById(Database database, String id) async {
     final rows = await database.query(
       'customers',
@@ -118,4 +150,8 @@ class SqliteCustomersRepository implements CustomersRepository {
 
     return CustomerMapper.fromDatabase(rows.first);
   }
+}
+
+String _normalizePhone(String value) {
+  return value.replaceAll(RegExp(r'[^0-9]'), '');
 }
