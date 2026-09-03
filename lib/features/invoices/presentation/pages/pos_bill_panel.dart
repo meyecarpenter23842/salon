@@ -1,5 +1,39 @@
 part of 'invoices_pos_page.dart';
 
+Future<void> _splitInvoiceLineAction(
+  BuildContext context,
+  WidgetRef ref,
+  InvoiceDraftLine line,
+) async {
+  final actions = ref.read(invoiceLineActionsRepositoryProvider);
+  if (actions == null) return;
+
+  try {
+    await _queueCatalogMutation(() => actions.splitInvoiceLine(line.id));
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Đã tách 1 ${line.isProduct ? 'sản phẩm' : 'dịch vụ'} thành dòng riêng',
+        ),
+      ),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không tách được dòng: $error')),
+    );
+  }
+}
+
+String _lineDiscountSummary(InvoiceDraftLine line) {
+  if (line.subtotal > 0 && line.discountAmount >= line.subtotal) {
+    return 'Quà tặng · CK 100%';
+  }
+  return 'Giảm ${_currency(line.discountAmount)}';
+}
+
 class _InvoiceDraftPanel extends ConsumerWidget {
   const _InvoiceDraftPanel({required this.draft, required this.dense});
 
@@ -167,9 +201,11 @@ class _InvoiceLineRow extends ConsumerWidget {
                     if (line.discountAmount > 0) ...[
                       const SizedBox(width: 8),
                       Tooltip(
-                        message: 'Giảm dòng ${_currency(line.discountAmount)}',
+                        message: _lineDiscountSummary(line),
                         child: Icon(
-                          Icons.local_offer_outlined,
+                          line.discountAmount >= line.subtotal
+                              ? Icons.card_giftcard_rounded
+                              : Icons.local_offer_outlined,
                           size: 15,
                           color: AppColors.warning,
                         ),
@@ -216,7 +252,7 @@ class _InvoiceLineRow extends ConsumerWidget {
                           ),
                           if (line.discountAmount > 0)
                             Text(
-                              'Giảm ${_currency(line.discountAmount)}',
+                              _lineDiscountSummary(line),
                               style: TextStyle(
                                 fontSize: 9.5,
                                 color: AppColors.warning,
@@ -292,6 +328,9 @@ class _InvoiceLineMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final canSplit = line.quantity > 1 &&
+        ref.watch(invoiceLineActionsRepositoryProvider) != null;
+
     return PopupMenuButton<String>(
       enabled: !isLocked,
       tooltip: isLocked ? 'Hóa đơn đã khóa' : 'Thao tác dòng',
@@ -304,6 +343,8 @@ class _InvoiceLineMenu extends ConsumerWidget {
       onSelected: (value) {
         if (value == 'discount') {
           _openLineDiscountEditor(context, ref, line);
+        } else if (value == 'split') {
+          _splitInvoiceLineAction(context, ref, line);
         } else if (value == 'remove') {
           _removeInvoiceLine(context, ref, line);
         }
@@ -317,8 +358,19 @@ class _InvoiceLineMenu extends ConsumerWidget {
             title: Text(
               line.discountAmount > 0 ? 'Sửa giảm giá' : 'Giảm giá dòng',
             ),
+            subtitle: const Text('Chọn theo % hoặc số tiền'),
           ),
         ),
+        if (canSplit)
+          const PopupMenuItem(
+            value: 'split',
+            child: ListTile(
+              dense: true,
+              leading: Icon(Icons.call_split_rounded),
+              title: Text('Tách 1 thành dòng riêng'),
+              subtitle: Text('Dùng cho quà tặng hoặc CK riêng'),
+            ),
+          ),
         const PopupMenuItem(
           value: 'remove',
           child: ListTile(
