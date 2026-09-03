@@ -1,6 +1,17 @@
 part of 'invoices_pos_page.dart';
 
-class _CatalogPanel extends ConsumerWidget {
+Future<void> _catalogMutationQueue = Future<void>.value();
+
+Future<void> _queueCatalogMutation(Future<void> Function() operation) {
+  final next = _catalogMutationQueue.then((_) => operation());
+  _catalogMutationQueue = next.then<void>(
+    (_) {},
+    onError: (Object _, StackTrace _) {},
+  );
+  return next;
+}
+
+class _CatalogPanel extends ConsumerStatefulWidget {
   const _CatalogPanel({
     required this.draft,
     required this.servicesState,
@@ -14,7 +25,30 @@ class _CatalogPanel extends ConsumerWidget {
   final bool dense;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CatalogPanel> createState() => _CatalogPanelState();
+}
+
+class _CatalogPanelState extends ConsumerState<_CatalogPanel> {
+  late final TextEditingController _queryController;
+
+  @override
+  void initState() {
+    super.initState();
+    _queryController = TextEditingController(
+      text: ref.read(_invoiceCatalogQueryProvider),
+    );
+  }
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final draft = widget.draft;
+    final dense = widget.dense;
     final kind = ref.watch(_invoiceCatalogKindProvider);
     final query = ref.watch(_invoiceCatalogQueryProvider).trim().toLowerCase();
 
@@ -52,6 +86,7 @@ class _CatalogPanel extends ConsumerWidget {
               showSelectedIcon: false,
               onSelectionChanged: (value) {
                 ref.read(_invoiceCatalogKindProvider.notifier).state = value.first;
+                _queryController.clear();
                 ref.read(_invoiceCatalogQueryProvider.notifier).state = '';
               },
               style: ButtonStyle(
@@ -62,8 +97,7 @@ class _CatalogPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
-            key: ValueKey(kind),
-            initialValue: ref.read(_invoiceCatalogQueryProvider),
+            controller: _queryController,
             onChanged: (value) =>
                 ref.read(_invoiceCatalogQueryProvider.notifier).state = value,
             decoration: InputDecoration(
@@ -76,8 +110,10 @@ class _CatalogPanel extends ConsumerWidget {
                   ? null
                   : IconButton(
                       tooltip: 'Xóa tìm kiếm',
-                      onPressed: () =>
-                          ref.read(_invoiceCatalogQueryProvider.notifier).state = '',
+                      onPressed: () {
+                        _queryController.clear();
+                        ref.read(_invoiceCatalogQueryProvider.notifier).state = '';
+                      },
                       icon: const Icon(Icons.close_rounded, size: 17),
                     ),
             ),
@@ -87,12 +123,12 @@ class _CatalogPanel extends ConsumerWidget {
             child: kind == _PosCatalogKind.services
                 ? _ServiceCatalogList(
                     draft: draft,
-                    state: servicesState,
+                    state: widget.servicesState,
                     query: query,
                   )
                 : _ProductCatalogList(
                     draft: draft,
-                    state: productsState,
+                    state: widget.productsState,
                     query: query,
                   ),
           ),
@@ -151,7 +187,9 @@ class _ServiceCatalogList extends ConsumerWidget {
                   : 'Thêm ${service.name} vào bill',
               onTap: draft.isPaid
                   ? null
-                  : () => _addInvoiceService(context, ref, service),
+                  : () => _queueCatalogMutation(
+                        () => _addInvoiceService(context, ref, service),
+                      ),
             );
           },
         );
@@ -224,7 +262,9 @@ class _ProductCatalogList extends ConsumerWidget {
                   : 'Thêm ${product.name} vào bill',
               onTap: draft.isPaid
                   ? null
-                  : () => _addInvoiceProduct(context, ref, product),
+                  : () => _queueCatalogMutation(
+                        () => _addInvoiceProduct(context, ref, product),
+                      ),
             );
           },
         );

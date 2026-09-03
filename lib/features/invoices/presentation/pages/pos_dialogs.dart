@@ -180,6 +180,8 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
   }
 }
 
+enum _DiscountInputMode { amount, percent }
+
 class _InvoiceDiscountDialog extends StatefulWidget {
   const _InvoiceDiscountDialog({
     required this.currentDiscount,
@@ -196,6 +198,7 @@ class _InvoiceDiscountDialog extends StatefulWidget {
 class _InvoiceDiscountDialogState extends State<_InvoiceDiscountDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _controller;
+  _DiscountInputMode _mode = _DiscountInputMode.amount;
 
   @override
   void initState() {
@@ -211,6 +214,8 @@ class _InvoiceDiscountDialogState extends State<_InvoiceDiscountDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final previewDiscount = _discountFromInput();
+
     return AlertDialog(
       title: const Row(
         children: [
@@ -223,22 +228,53 @@ class _InvoiceDiscountDialogState extends State<_InvoiceDiscountDialog> {
         width: adaptiveDialogWidth(context, 420),
         child: Form(
           key: _formKey,
-          child: TextFormField(
-            controller: _controller,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Giảm giá (đ)',
-              helperText: 'Tối đa ${_currency(widget.maxDiscount)}',
-              prefixIcon: const Icon(Icons.sell_outlined),
-            ),
-            validator: (value) {
-              final amount = int.tryParse(value?.trim() ?? '');
-              return amount == null || amount < 0
-                  ? 'Nhập số tiền hợp lệ'
-                  : null;
-            },
-            onFieldSubmitted: (_) => _submit(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SegmentedButton<_DiscountInputMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: _DiscountInputMode.amount,
+                    icon: Icon(Icons.payments_outlined, size: 16),
+                    label: Text('Số tiền'),
+                  ),
+                  ButtonSegment(
+                    value: _DiscountInputMode.percent,
+                    icon: Icon(Icons.percent_rounded, size: 16),
+                    label: Text('Phần trăm'),
+                  ),
+                ],
+                selected: {_mode},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) =>
+                    _changeMode(selection.first),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _controller,
+                autofocus: true,
+                keyboardType: _mode == _DiscountInputMode.percent
+                    ? const TextInputType.numberWithOptions(decimal: true)
+                    : TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: _mode == _DiscountInputMode.percent
+                      ? 'Giảm giá (%)'
+                      : 'Giảm giá (đ)',
+                  helperText: _mode == _DiscountInputMode.percent
+                      ? 'Quy đổi ${_currency(previewDiscount)} · tối đa 100%'
+                      : 'Tối đa ${_currency(widget.maxDiscount)}',
+                  prefixIcon: Icon(
+                    _mode == _DiscountInputMode.percent
+                        ? Icons.percent_rounded
+                        : Icons.sell_outlined,
+                  ),
+                ),
+                validator: _validateInput,
+                onChanged: (_) => setState(() {}),
+                onFieldSubmitted: (_) => _submit(),
+              ),
+            ],
           ),
         ),
       ),
@@ -252,12 +288,84 @@ class _InvoiceDiscountDialogState extends State<_InvoiceDiscountDialog> {
     );
   }
 
+  String? _validateInput(String? value) {
+    if (_mode == _DiscountInputMode.percent) {
+      final percent = _parsePercent(value ?? '');
+      if (percent == null || percent < 0 || percent > 100) {
+        return 'Nhập phần trăm từ 0 đến 100';
+      }
+      return null;
+    }
+
+    final amount = _parseAmount(value ?? '');
+    if (amount == null || amount < 0) {
+      return 'Nhập số tiền hợp lệ';
+    }
+    return null;
+  }
+
+  void _changeMode(_DiscountInputMode nextMode) {
+    if (nextMode == _mode) return;
+    final currentDiscount = _discountFromInput();
+
+    setState(() {
+      _mode = nextMode;
+      if (_mode == _DiscountInputMode.percent) {
+        final percent = widget.maxDiscount <= 0
+            ? 0.0
+            : currentDiscount * 100 / widget.maxDiscount;
+        _controller.text = _formatPercent(percent);
+      } else {
+        _controller.text = currentDiscount.toString();
+      }
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    });
+  }
+
+  int _discountFromInput() {
+    if (_mode == _DiscountInputMode.percent) {
+      final percent = _parsePercent(_controller.text) ?? 0;
+      final normalized = percent < 0
+          ? 0.0
+          : percent > 100
+              ? 100.0
+              : percent;
+      return (widget.maxDiscount * normalized / 100).round();
+    }
+
+    final amount = _parseAmount(_controller.text) ?? 0;
+    if (amount < 0) return 0;
+    if (amount > widget.maxDiscount) return widget.maxDiscount;
+    return amount;
+  }
+
+  int? _parseAmount(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value.startsWith('-')) return null;
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return int.tryParse(digits);
+  }
+
+  double? _parsePercent(String raw) {
+    final value = raw.trim().replaceAll(',', '.');
+    if (value.isEmpty) return null;
+    return double.tryParse(value);
+  }
+
+  String _formatPercent(double value) {
+    final rounded = value.roundToDouble();
+    if ((value - rounded).abs() < 0.01) {
+      return rounded.toInt().toString();
+    }
+    return value.toStringAsFixed(1);
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    final amount = int.parse(_controller.text.trim());
-    Navigator.of(context).pop(
-      amount > widget.maxDiscount ? widget.maxDiscount : amount,
-    );
+    Navigator.of(context).pop(_discountFromInput());
   }
 }
 

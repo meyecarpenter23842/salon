@@ -6,9 +6,11 @@ import '../database/salon_database.dart';
 import '../models/appointment_entry.dart';
 import '../models/invoice_draft.dart';
 import '../models/invoice_draft_line.dart';
+import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
 
-class SqliteInvoicesRepository implements InvoicesRepository {
+class SqliteInvoicesRepository
+    implements InvoicesRepository, InvoiceLineActionsRepository {
   SqliteInvoicesRepository(this._database, [Object? _]);
 
   final SalonDatabase _database;
@@ -357,6 +359,62 @@ class SqliteInvoicesRepository implements InvoicesRepository {
           _subtotal(updatedLines),
         ),
         updatedAt: DateTime.now(),
+      ),
+      rewriteItems: true,
+    );
+  }
+
+  @override
+  Future<InvoiceDraft> splitInvoiceLine(String lineId) async {
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    if (draft.isPaid) {
+      throw StateError('Hóa đơn đã thanh toán nên không thể tách dòng.');
+    }
+
+    final index = draft.lines.indexWhere((line) => line.id == lineId);
+    if (index < 0) {
+      throw StateError('Invoice line $lineId not found');
+    }
+
+    final line = draft.lines[index];
+    if (line.quantity < 2) {
+      throw StateError('Dòng cần có số lượng từ 2 để tách.');
+    }
+
+    final splitDiscount = line.discountAmount ~/ line.quantity;
+    final remainingDiscount = line.discountAmount - splitDiscount;
+    final remainingQuantity = line.quantity - 1;
+    final now = DateTime.now();
+    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
+
+    updatedLines[index] = line.copyWith(
+      quantity: remainingQuantity,
+      discountAmount: remainingDiscount,
+      totalPrice: _lineTotal(
+        line.unitPrice * remainingQuantity,
+        remainingDiscount,
+      ),
+    );
+    updatedLines.insert(
+      index + 1,
+      line.copyWith(
+        id: '$lineId-split-${now.microsecondsSinceEpoch}',
+        quantity: 1,
+        discountAmount: splitDiscount,
+        totalPrice: _lineTotal(line.unitPrice, splitDiscount),
+      ),
+    );
+
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        lines: updatedLines,
+        discountAmount: _normalizeDiscount(
+          draft.discountAmount,
+          _subtotal(updatedLines),
+        ),
+        updatedAt: now,
       ),
       rewriteItems: true,
     );

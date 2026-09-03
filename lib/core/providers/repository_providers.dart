@@ -13,6 +13,7 @@ import '../models/service_catalog_item.dart';
 import '../models/service_formula_item.dart';
 import 'data_backend_provider.dart';
 import '../repositories/fake_repositories.dart';
+import '../repositories/invoice_line_actions_repository.dart';
 import '../repositories/repository_contracts.dart';
 import '../repositories/sqlite_appointments_repository.dart';
 import '../repositories/sqlite_customers_repository.dart';
@@ -132,6 +133,12 @@ final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
       return FakeInvoicesRepository(fakeDataSource);
   }
 });
+
+final invoiceLineActionsRepositoryProvider =
+    Provider<InvoiceLineActionsRepository?>((ref) {
+      final repository = ref.watch(invoicesRepositoryProvider);
+      return repository is InvoiceLineActionsRepository ? repository : null;
+    });
 
 final reportsRepositoryProvider = Provider<ReportsRepository>((ref) {
   final backend = ref.watch(appDataBackendProvider);
