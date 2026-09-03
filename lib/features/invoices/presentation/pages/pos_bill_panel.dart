@@ -1,5 +1,40 @@
 part of 'invoices_pos_page.dart';
 
+Future<void> _editInvoiceLineUnitPriceAction(
+  BuildContext context,
+  WidgetRef ref,
+  InvoiceDraftLine line,
+) async {
+  final actions = ref.read(invoiceLineActionsRepositoryProvider);
+  if (actions == null) return;
+
+  final unitPrice = await showAppDialog<int>(
+    context: context,
+    builder: (_) => _InvoiceLinePriceDialog(line: line),
+  );
+  if (unitPrice == null || !context.mounted) return;
+
+  try {
+    await _queueCatalogMutation(
+      () => actions.updateInvoiceLineUnitPrice(line.id, unitPrice),
+    );
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Đã đổi giá bán ${line.title} thành ${_currency(unitPrice)} trên bill này',
+        ),
+      ),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không sửa được giá bán: $error')),
+    );
+  }
+}
+
 Future<void> _splitInvoiceLineAction(
   BuildContext context,
   WidgetRef ref,
@@ -328,8 +363,9 @@ class _InvoiceLineMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canSplit = line.quantity > 1 &&
-        ref.watch(invoiceLineActionsRepositoryProvider) != null;
+    final actions = ref.watch(invoiceLineActionsRepositoryProvider);
+    final canEditPrice = actions != null;
+    final canSplit = line.quantity > 1 && actions != null;
 
     return PopupMenuButton<String>(
       enabled: !isLocked,
@@ -341,7 +377,9 @@ class _InvoiceLineMenu extends ConsumerWidget {
         color: AppColors.textMuted,
       ),
       onSelected: (value) {
-        if (value == 'discount') {
+        if (value == 'price') {
+          _editInvoiceLineUnitPriceAction(context, ref, line);
+        } else if (value == 'discount') {
           _openLineDiscountEditor(context, ref, line);
         } else if (value == 'split') {
           _splitInvoiceLineAction(context, ref, line);
@@ -350,6 +388,16 @@ class _InvoiceLineMenu extends ConsumerWidget {
         }
       },
       itemBuilder: (_) => [
+        if (canEditPrice)
+          const PopupMenuItem(
+            value: 'price',
+            child: ListTile(
+              dense: true,
+              leading: Icon(Icons.edit_outlined),
+              title: Text('Sửa giá bán'),
+              subtitle: Text('Chỉ áp dụng cho dòng trên bill này'),
+            ),
+          ),
         PopupMenuItem(
           value: 'discount',
           child: ListTile(
@@ -381,6 +429,105 @@ class _InvoiceLineMenu extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+class _InvoiceLinePriceDialog extends StatefulWidget {
+  const _InvoiceLinePriceDialog({required this.line});
+
+  final InvoiceDraftLine line;
+
+  @override
+  State<_InvoiceLinePriceDialog> createState() => _InvoiceLinePriceDialogState();
+}
+
+class _InvoiceLinePriceDialogState extends State<_InvoiceLinePriceDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.line.unitPrice.toString());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const PremiumIconBadge(icon: Icons.edit_outlined, size: 36),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Sửa giá bán'),
+                Text(
+                  widget.line.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: adaptiveDialogWidth(context, 420),
+        child: Form(
+          key: _formKey,
+          child: TextFormField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Giá bán trên bill (đ)',
+              helperText: 'Chỉ đổi dòng này; giá gốc trong catalog không thay đổi.',
+              prefixIcon: Icon(Icons.sell_outlined),
+            ),
+            validator: (value) {
+              final price = _parsePrice(value ?? '');
+              if (price == null || price <= 0) {
+                return 'Nhập giá bán lớn hơn 0';
+              }
+              return null;
+            },
+            onFieldSubmitted: (_) => _submit(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Lưu giá bán')),
+      ],
+    );
+  }
+
+  int? _parsePrice(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value.startsWith('-')) return null;
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return int.tryParse(digits);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(_parsePrice(_controller.text));
   }
 }
 
