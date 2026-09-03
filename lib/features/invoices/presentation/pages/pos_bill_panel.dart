@@ -40,7 +40,7 @@ class _InvoiceDraftPanel extends ConsumerWidget {
                   child: ListView.separated(
                     primary: false,
                     itemCount: draft.lines.length,
-                    separatorBuilder: (_, __) => const PremiumDivider(),
+                    separatorBuilder: (_, _) => const PremiumDivider(),
                     itemBuilder: (context, index) => _InvoiceLineRow(
                       line: draft.lines[index],
                       isLocked: draft.isPaid,

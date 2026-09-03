@@ -446,7 +446,7 @@ Future<void> _showInvoiceHistoryDialog(
               )
             : ListView.separated(
                 itemCount: history.length,
-                separatorBuilder: (_, __) => const PremiumDivider(),
+                separatorBuilder: (_, _) => const PremiumDivider(),
                 itemBuilder: (context, index) {
                   final invoice = history[index];
                   final paidAt = invoice.paidAt;

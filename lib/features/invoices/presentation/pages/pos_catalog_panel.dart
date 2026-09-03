@@ -135,7 +135,7 @@ class _ServiceCatalogList extends ConsumerWidget {
         return ListView.separated(
           primary: false,
           itemCount: visible.length,
-          separatorBuilder: (_, __) => const PremiumDivider(indent: 38),
+          separatorBuilder: (_, _) => const PremiumDivider(indent: 38),
           itemBuilder: (context, index) {
             final service = visible[index];
             final quantity = _serviceQuantityInDraft(draft, service.id);
@@ -202,7 +202,7 @@ class _ProductCatalogList extends ConsumerWidget {
         return ListView.separated(
           primary: false,
           itemCount: visible.length,
-          separatorBuilder: (_, __) => const PremiumDivider(indent: 38),
+          separatorBuilder: (_, _) => const PremiumDivider(indent: 38),
           itemBuilder: (context, index) {
             final product = visible[index];
             final quantity = _productQuantityInDraft(draft, product.id);

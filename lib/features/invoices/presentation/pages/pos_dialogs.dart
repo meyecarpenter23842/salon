@@ -97,7 +97,7 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
                     )
                   : ListView.separated(
                       itemCount: visible.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const PremiumDivider(indent: 48),
                       itemBuilder: (context, index) {
                         final customer = visible[index];
