@@ -16,15 +16,18 @@ import '../../../../shared/widgets/premium_workspace.dart';
 final appointmentStatusFilterProvider = StateProvider<String>((ref) => 'Tất cả');
 final appointmentDayFilterProvider = StateProvider<String>((ref) => 'Hôm nay');
 final appointmentSearchQueryProvider = StateProvider<String>((ref) => '');
-final appointmentBoardFilterProvider = StateProvider<String>((ref) => 'Lịch hẹn');
+final appointmentBoardFilterProvider = StateProvider<String>((ref) => 'Ngày');
 final selectedAppointmentIndexProvider = StateProvider<int>((ref) => 0);
+
+final appointmentEmployeesProvider = FutureProvider<List<Map<String, Object?>>>((ref) {
+  return ref.watch(employeesRepositoryProvider).fetchEmployeesView();
+});
 
 final filteredAppointmentsProvider = FutureProvider<List<AppointmentEntry>>((ref) async {
   final allItems = await ref.watch(appointmentsRepositoryProvider).fetchAppointmentsView();
   final status = ref.watch(appointmentStatusFilterProvider);
   final day = ref.watch(appointmentDayFilterProvider);
   final query = ref.watch(appointmentSearchQueryProvider).trim().toLowerCase();
-  final board = ref.watch(appointmentBoardFilterProvider);
 
   return allItems.where((item) {
     final matchesStatus = status == 'Tất cả' || item.status == status;
@@ -35,8 +38,7 @@ final filteredAppointmentsProvider = FutureProvider<List<AppointmentEntry>>((ref
       item.staffName,
       item.customerPhone,
     ].any((value) => value.toString().toLowerCase().contains(query));
-    final matchesBoard = board != 'Đang làm' || item.status == 'Đang làm';
-    return matchesStatus && matchesDay && matchesQuery && matchesBoard;
+    return matchesStatus && matchesDay && matchesQuery;
   }).toList();
 });
 
@@ -75,9 +77,15 @@ Future<void> _openAppointmentEditor(
   }
 
   if (!context.mounted) return;
-  ref.read(appointmentSearchQueryProvider.notifier).state = savedAppointment.customerName;
+  final viewMode = ref.read(appointmentBoardFilterProvider);
   ref.read(appointmentDayFilterProvider.notifier).state = savedAppointment.dateLabel;
-  ref.read(appointmentStatusFilterProvider.notifier).state = savedAppointment.status;
+  if (viewMode == 'Ngày') {
+    ref.read(appointmentSearchQueryProvider.notifier).state = '';
+    ref.read(appointmentStatusFilterProvider.notifier).state = 'Tất cả';
+  } else {
+    ref.read(appointmentSearchQueryProvider.notifier).state = savedAppointment.customerName;
+    ref.read(appointmentStatusFilterProvider.notifier).state = savedAppointment.status;
+  }
   ref.read(selectedAppointmentIndexProvider.notifier).state = 0;
   ref.invalidate(filteredAppointmentsProvider);
 
@@ -105,10 +113,12 @@ Future<void> _updateAppointmentStatus(
       .updateAppointmentStatus(appointment.id, nextStatus);
   if (!context.mounted) return;
 
-  ref.read(appointmentSearchQueryProvider.notifier).state = updated.customerName;
-  ref.read(appointmentDayFilterProvider.notifier).state = updated.dateLabel;
-  ref.read(appointmentStatusFilterProvider.notifier).state = updated.status;
-  ref.read(selectedAppointmentIndexProvider.notifier).state = 0;
+  if (ref.read(appointmentBoardFilterProvider) == 'Danh sách') {
+    ref.read(appointmentSearchQueryProvider.notifier).state = updated.customerName;
+    ref.read(appointmentDayFilterProvider.notifier).state = updated.dateLabel;
+    ref.read(appointmentStatusFilterProvider.notifier).state = updated.status;
+    ref.read(selectedAppointmentIndexProvider.notifier).state = 0;
+  }
   ref.invalidate(filteredAppointmentsProvider);
   ref.invalidate(appointmentsViewProvider);
   ref.invalidate(overviewSummaryProvider);
@@ -164,10 +174,12 @@ Future<void> _cancelAppointment(
       .updateAppointmentStatus(appointment.id, 'Đã hủy');
   if (!context.mounted) return;
 
-  ref.read(appointmentSearchQueryProvider.notifier).state = updated.customerName;
-  ref.read(appointmentDayFilterProvider.notifier).state = updated.dateLabel;
-  ref.read(appointmentStatusFilterProvider.notifier).state = updated.status;
-  ref.read(selectedAppointmentIndexProvider.notifier).state = 0;
+  if (ref.read(appointmentBoardFilterProvider) == 'Danh sách') {
+    ref.read(appointmentSearchQueryProvider.notifier).state = updated.customerName;
+    ref.read(appointmentDayFilterProvider.notifier).state = updated.dateLabel;
+    ref.read(appointmentStatusFilterProvider.notifier).state = updated.status;
+    ref.read(selectedAppointmentIndexProvider.notifier).state = 0;
+  }
   ref.invalidate(filteredAppointmentsProvider);
   ref.invalidate(appointmentsViewProvider);
   ref.invalidate(overviewSummaryProvider);
@@ -223,6 +235,7 @@ class _AppointmentsView extends ConsumerWidget {
     final status = ref.watch(appointmentStatusFilterProvider);
     final day = ref.watch(appointmentDayFilterProvider);
     final board = ref.watch(appointmentBoardFilterProvider);
+    final employees = ref.watch(appointmentEmployeesProvider);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -257,7 +270,26 @@ class _AppointmentsView extends ConsumerWidget {
             const SizedBox(height: 16),
             _AppointmentToolbar(status: status, day: day, board: board),
             const SizedBox(height: 16),
-            if (wide)
+            if (board == 'Ngày') ...[
+              SizedBox(
+                height: bodyHeight,
+                child: _AppointmentDayPanel(
+                  items: items,
+                  employees: employees,
+                  selectedIndex: effectiveIndex,
+                ),
+              ),
+              if (selected != null) ...[
+                const SizedBox(height: 16),
+                PremiumAnimatedDetail(
+                  transitionKey: ValueKey('day-${selected.id}'),
+                  child: _AppointmentDetailPanel(
+                    appointment: selected,
+                    compact: true,
+                  ),
+                ),
+              ],
+            ] else if (wide)
               SizedBox(
                 height: bodyHeight,
                 child: Row(
@@ -360,8 +392,10 @@ class _AppointmentToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const statuses = ['Tất cả', 'Đã đặt', 'Đang làm', 'Hoàn thành', 'Chờ xác nhận', 'Đã hủy'];
-    const days = ['Tất cả', 'Hôm nay', 'Ngày mai'];
+    const statuses = ['Tất cả', 'Chờ xác nhận', 'Đã đặt', 'Đã đến', 'Đang làm', 'Hoàn thành', 'Đã hủy'];
+    final days = board == 'Ngày'
+        ? const ['Hôm nay', 'Ngày mai']
+        : const ['Tất cả', 'Hôm nay', 'Ngày mai'];
 
     return PremiumSectionCard(
       icon: Icons.tune_rounded,
@@ -386,13 +420,17 @@ class _AppointmentToolbar extends ConsumerWidget {
               );
               final boardSelector = SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'Lịch hẹn', icon: Icon(Icons.view_agenda_outlined), label: Text('Tất cả lịch')),
-                  ButtonSegment(value: 'Đang làm', icon: Icon(Icons.bolt_outlined), label: Text('Đang làm')),
+                  ButtonSegment(value: 'Ngày', icon: Icon(Icons.calendar_view_day_outlined), label: Text('Ngày')),
+                  ButtonSegment(value: 'Danh sách', icon: Icon(Icons.view_agenda_outlined), label: Text('Danh sách')),
                 ],
                 selected: {board},
                 showSelectedIcon: false,
                 onSelectionChanged: (selection) {
-                  ref.read(appointmentBoardFilterProvider.notifier).state = selection.first;
+                  final nextMode = selection.first;
+                  ref.read(appointmentBoardFilterProvider.notifier).state = nextMode;
+                  if (nextMode == 'Ngày' && day == 'Tất cả') {
+                    ref.read(appointmentDayFilterProvider.notifier).state = 'Hôm nay';
+                  }
                   ref.read(selectedAppointmentIndexProvider.notifier).state = 0;
                 },
               );
@@ -444,6 +482,390 @@ class _AppointmentToolbar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _AppointmentDayPanel extends ConsumerWidget {
+  const _AppointmentDayPanel({
+    required this.items,
+    required this.employees,
+    required this.selectedIndex,
+  });
+
+  final List<AppointmentEntry> items;
+  final AsyncValue<List<Map<String, Object?>>> employees;
+  final int selectedIndex;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PremiumSectionCard(
+      key: const Key('appointments-day-board'),
+      icon: Icons.calendar_view_week_outlined,
+      title: 'Lịch theo giờ × nhân viên',
+      subtitle: items.isEmpty
+          ? 'Chưa có lịch phù hợp trong ngày đang chọn.'
+          : '${items.length} lịch • chọn một lịch để xem và xử lý chi tiết',
+      trailing: PremiumStatusPill(label: '${items.length} lịch', tone: AppColors.info),
+      child: Expanded(
+        child: employees.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => PremiumEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Không tải được nhân viên',
+            message: '$error',
+          ),
+          data: (staff) {
+            final visibleStaff = staff
+                .where((employee) => (employee['id']?.toString() ?? '').isNotEmpty)
+                .toList(growable: false);
+            if (visibleStaff.isEmpty) {
+              return const PremiumEmptyState(
+                icon: Icons.groups_outlined,
+                title: 'Chưa có nhân viên',
+                message: 'Thêm nhân viên trước khi phân lịch theo cột.',
+              );
+            }
+            if (items.isEmpty) {
+              return const PremiumEmptyState(
+                icon: Icons.event_available_outlined,
+                title: 'Ngày này đang trống',
+                message: 'Chưa có lịch phù hợp với bộ lọc hiện tại.',
+              );
+            }
+
+            return _AppointmentDayGrid(
+              items: items,
+              employees: visibleStaff,
+              selectedIndex: selectedIndex,
+              onSelect: (index) {
+                ref.read(selectedAppointmentIndexProvider.notifier).state = index;
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AppointmentDayGrid extends StatelessWidget {
+  const _AppointmentDayGrid({
+    required this.items,
+    required this.employees,
+    required this.selectedIndex,
+    required this.onSelect,
+  });
+
+  static const double _timeColumnWidth = 72;
+  static const double _employeeColumnWidth = 210;
+  static const double _headerHeight = 58;
+  static const double _rowHeight = 112;
+
+  final List<AppointmentEntry> items;
+  final List<Map<String, Object?>> employees;
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = _dayBoardSlots(items);
+    final totalWidth = _timeColumnWidth + employees.length * _employeeColumnWidth;
+
+    return SingleChildScrollView(
+      primary: false,
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: totalWidth,
+        child: Column(
+          children: [
+            SizedBox(
+              height: _headerHeight,
+              child: Row(
+                children: [
+                  Container(
+                    width: _timeColumnWidth,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.featureSurface,
+                      border: Border(right: BorderSide(color: AppColors.workspaceDivider)),
+                    ),
+                    child: Text(
+                      'Giờ',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  for (final employee in employees)
+                    _DayEmployeeHeader(
+                      employee: employee,
+                      width: _employeeColumnWidth,
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                primary: false,
+                itemCount: slots.length,
+                itemBuilder: (context, slotIndex) {
+                  final slot = slots[slotIndex];
+                  return SizedBox(
+                    height: _rowHeight,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          width: _timeColumnWidth,
+                          padding: const EdgeInsets.only(top: 10),
+                          alignment: Alignment.topCenter,
+                          decoration: BoxDecoration(
+                            color: AppColors.featureSurface,
+                            border: Border(
+                              top: BorderSide(color: AppColors.workspaceDivider),
+                              right: BorderSide(color: AppColors.workspaceDivider),
+                            ),
+                          ),
+                          child: Text(
+                            _minutesLabel(slot),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        for (final employee in employees)
+                          _DayScheduleCell(
+                            width: _employeeColumnWidth,
+                            appointments: _appointmentsForCell(
+                              items: items,
+                              employee: employee,
+                              slotMinutes: slot,
+                            ),
+                            selectedAppointmentId: items.isEmpty
+                                ? null
+                                : items[selectedIndex.clamp(0, items.length - 1)].id,
+                            onSelect: (appointment) {
+                              final index = items.indexWhere((item) => item.id == appointment.id);
+                              if (index >= 0) onSelect(index);
+                            },
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DayEmployeeHeader extends StatelessWidget {
+  const _DayEmployeeHeader({required this.employee, required this.width});
+
+  final Map<String, Object?> employee;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = employee['name']?.toString() ?? 'Nhân viên';
+    final initials = employee['initials']?.toString() ?? _initials(name);
+    final role = employee['role']?.toString() ?? '';
+
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.featureSurface,
+        border: Border(right: BorderSide(color: AppColors.workspaceDivider)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.iconSurface,
+            foregroundColor: AppColors.copper,
+            child: Text(initials, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                if (role.isNotEmpty)
+                  Text(role, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayScheduleCell extends StatelessWidget {
+  const _DayScheduleCell({
+    required this.width,
+    required this.appointments,
+    required this.selectedAppointmentId,
+    required this.onSelect,
+  });
+
+  final double width;
+  final List<AppointmentEntry> appointments;
+  final String? selectedAppointmentId;
+  final ValueChanged<AppointmentEntry> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final appointment = appointments.firstOrNull;
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: AppColors.workspaceDivider),
+          right: BorderSide(color: AppColors.workspaceDivider),
+        ),
+      ),
+      child: appointment == null
+          ? Center(
+              child: Text('Trống', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _DayAppointmentCard(
+                    appointment: appointment,
+                    selected: appointment.id == selectedAppointmentId,
+                    onTap: () => onSelect(appointment),
+                  ),
+                ),
+                if (appointments.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      '+${appointments.length - 1} lịch cùng mốc',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 9, color: AppColors.textMuted),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _DayAppointmentCard extends StatelessWidget {
+  const _DayAppointmentCard({
+    required this.appointment,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppointmentEntry appointment;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumInteractiveSurface(
+      key: Key('appointment-day-card-${appointment.id}'),
+      selected: selected,
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  appointment.timeRangeLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 5),
+              PremiumStatusPill(label: appointment.status, tone: _statusColor(appointment.status)),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            appointment.customerName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            appointment.servicesSummary,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<int> _dayBoardSlots(List<AppointmentEntry> items) {
+  if (items.isEmpty) return const [];
+
+  var earliest = 24 * 60;
+  var latest = 0;
+  for (final item in items) {
+    final start = item.startsAt.hour * 60 + item.startsAt.minute;
+    final end = item.endsAt.hour * 60 + item.endsAt.minute + (item.endsAt.day != item.startsAt.day ? 24 * 60 : 0);
+    if (start < earliest) earliest = start;
+    if (end > latest) latest = end;
+  }
+
+  final firstSlot = ((_floorHalfHour(earliest) - 30).clamp(0, 24 * 60 - 30)).toInt();
+  final lastSlot = ((_ceilHalfHour(latest) + 30).clamp(firstSlot + 30, 24 * 60)).toInt();
+  return [for (var minute = firstSlot; minute < lastSlot; minute += 30) minute];
+}
+
+List<AppointmentEntry> _appointmentsForCell({
+  required List<AppointmentEntry> items,
+  required Map<String, Object?> employee,
+  required int slotMinutes,
+}) {
+  final results = items.where((appointment) {
+    final startMinutes = appointment.startsAt.hour * 60 + appointment.startsAt.minute;
+    return _floorHalfHour(startMinutes) == slotMinutes && _matchesEmployee(appointment, employee);
+  }).toList(growable: false);
+  results.sort((a, b) {
+    if (a.status == 'Đã hủy' && b.status != 'Đã hủy') return 1;
+    if (a.status != 'Đã hủy' && b.status == 'Đã hủy') return -1;
+    return a.startsAt.compareTo(b.startsAt);
+  });
+  return results;
+}
+
+bool _matchesEmployee(AppointmentEntry appointment, Map<String, Object?> employee) {
+  final employeeId = employee['id']?.toString();
+  if (appointment.employeeId != null && appointment.employeeId == employeeId) {
+    return true;
+  }
+  final employeeName = employee['name']?.toString().trim().toLowerCase() ?? '';
+  return employeeName.isNotEmpty && appointment.staffName.trim().toLowerCase() == employeeName;
+}
+
+int _floorHalfHour(int minutes) => (minutes ~/ 30) * 30;
+int _ceilHalfHour(int minutes) => ((minutes + 29) ~/ 30) * 30;
+
+String _minutesLabel(int minutes) {
+  if (minutes >= 24 * 60) return '24:00';
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  return '${hours.toString().padLeft(2, '0')}:${rest.toString().padLeft(2, '0')}';
 }
 
 class _AppointmentsListPanel extends ConsumerWidget {
@@ -606,7 +1028,7 @@ class _AppointmentDetailPanel extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              Expanded(child: _MiniMetric(icon: Icons.schedule_rounded, label: 'Giờ', value: item.timeLabel)),
+              Expanded(child: _MiniMetric(icon: Icons.schedule_rounded, label: 'Giờ', value: item.timeRangeLabel)),
               Container(width: 1, height: 34, color: AppColors.workspaceDivider),
               Expanded(child: _MiniMetric(icon: Icons.timelapse_rounded, label: 'Thời lượng', value: item.durationLabel)),
               Container(width: 1, height: 34, color: AppColors.workspaceDivider),
@@ -810,7 +1232,7 @@ class _AppointmentEditorDialog extends StatefulWidget {
 }
 
 class _AppointmentEditorDialogState extends State<_AppointmentEditorDialog> {
-  static const _statusOptions = ['Chờ xác nhận', 'Đã đặt', 'Đang làm', 'Hoàn thành', 'Đã hủy'];
+  static const _statusOptions = ['Chờ xác nhận', 'Đã đặt', 'Đã đến', 'Đang làm', 'Hoàn thành', 'Đã hủy'];
   static const _dayOptions = ['Hôm nay', 'Ngày mai'];
 
   final _formKey = GlobalKey<FormState>();
@@ -1127,12 +1549,14 @@ class _AppointmentEditorDialogState extends State<_AppointmentEditorDialog> {
 
 Color _statusColor(String status) {
   switch (status) {
+    case 'Đã đến':
+      return AppColors.success;
     case 'Đang làm':
-      return AppColors.warning;
+      return AppColors.info;
     case 'Hoàn thành':
       return AppColors.success;
     case 'Đã hủy':
-      return AppColors.textMuted;
+      return AppColors.danger;
     case 'Chờ xác nhận':
       return AppColors.copper;
     default:
@@ -1145,6 +1569,8 @@ String? _nextStatus(String status) {
     case 'Chờ xác nhận':
       return 'Đã đặt';
     case 'Đã đặt':
+      return 'Đã đến';
+    case 'Đã đến':
       return 'Đang làm';
     case 'Đang làm':
       return 'Hoàn thành';
@@ -1162,6 +1588,8 @@ String? _statusActionLabel(String status) {
     case 'Chờ xác nhận':
       return 'Xác nhận lịch';
     case 'Đã đặt':
+      return 'Đánh dấu đã đến';
+    case 'Đã đến':
       return 'Bắt đầu dịch vụ';
     case 'Đang làm':
       return 'Đánh dấu hoàn thành';
@@ -1179,6 +1607,8 @@ IconData _statusActionIcon(String status) {
     case 'Chờ xác nhận':
       return Icons.verified_outlined;
     case 'Đã đặt':
+      return Icons.how_to_reg_outlined;
+    case 'Đã đến':
       return Icons.play_arrow_rounded;
     case 'Đang làm':
       return Icons.task_alt_rounded;
