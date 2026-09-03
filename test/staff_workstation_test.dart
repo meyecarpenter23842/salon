@@ -51,7 +51,8 @@ void main() {
     await pumpUi(tester);
 
     expect(container.read(desktopSectionProvider), DesktopSection.invoices);
-    expect(find.text('Thanh toán'), findsWidgets);
+    expect(find.byKey(const Key('billing-premium-workspace')), findsOneWidget);
+    expect(find.text('Tính tiền'), findsWidgets);
   });
 }
 

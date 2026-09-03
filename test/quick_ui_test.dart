@@ -16,7 +16,9 @@ import 'package:salonmanager/features/settings/presentation/pages/settings_page.
 void main() {
   testWidgets('Quick smoke test - all tabs load', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     SharedPreferences.setMockInitialValues({});
     await LocalSettingsStore.instance.initialize();
@@ -58,7 +60,9 @@ void main() {
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     SharedPreferences.setMockInitialValues({});
     await LocalSettingsStore.instance.initialize();
@@ -91,6 +95,10 @@ void main() {
       Size(1280, 720),
       Size(1024, 768),
     ];
+
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     final List<String> overflowErrors = [];
     final void Function(FlutterErrorDetails)? prevHandler = FlutterError.onError;
