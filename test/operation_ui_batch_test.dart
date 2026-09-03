@@ -47,14 +47,30 @@ void main() {
         ),
       );
       await tester.pump(const Duration(seconds: 2));
-      expect(find.byKey(const Key('appointments-premium-header')), findsOneWidget);
+      expect(
+        find.byKey(const Key('appointments-premium-header')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const Key('appointments-premium-workspace')),
         findsOneWidget,
       );
-      expect(find.byKey(const Key('appointments-day-board')), findsOneWidget);
+      expect(
+        find.byKey(const Key('appointments-ux-toolbar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('appointments-day-board')),
+        findsOneWidget,
+      );
       expect(find.text('Ngày'), findsWidgets);
       expect(find.text('Danh sách'), findsOneWidget);
+      if (size.width >= 1120) {
+        expect(
+          find.byKey(const Key('appointments-detail-sheet')),
+          findsOneWidget,
+        );
+      }
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(
@@ -74,8 +90,14 @@ void main() {
         ),
       );
       await tester.pump(const Duration(seconds: 2));
-      expect(find.byKey(const Key('billing-premium-header')), findsOneWidget);
-      expect(find.byKey(const Key('billing-premium-workspace')), findsOneWidget);
+      expect(
+        find.byKey(const Key('billing-premium-header')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('billing-premium-workspace')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     }
   });
@@ -104,8 +126,14 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 2));
 
-    expect(find.byKey(const Key('staff-premium-header')), findsOneWidget);
-    expect(find.byKey(const Key('staff-premium-workspace')), findsOneWidget);
+    expect(
+      find.byKey(const Key('staff-premium-header')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('staff-premium-workspace')),
+      findsOneWidget,
+    );
     expect(find.text('Bàn thao tác nhân viên'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
