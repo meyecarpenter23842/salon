@@ -52,6 +52,9 @@ void main() {
         find.byKey(const Key('appointments-premium-workspace')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('appointments-day-board')), findsOneWidget);
+      expect(find.text('Ngày'), findsWidgets);
+      expect(find.text('Danh sách'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(

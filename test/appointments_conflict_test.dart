@@ -267,6 +267,76 @@ void main() {
     expect(adjacent.id, isNotEmpty);
   });
 
+  test('sua gio vao lich trung cung nhan vien bi chan', () async {
+    final fixture = await _createFixture();
+
+    await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        timeLabel: '09:00',
+        durationMinutes: 60,
+      ),
+    );
+    final later = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        timeLabel: '11:00',
+        durationMinutes: 60,
+      ),
+    );
+
+    expect(
+      () => fixture.appointmentsRepository.saveAppointment(
+        fixture.buildInput(
+          employeeId: fixture.employeeAId,
+          timeLabel: '09:30',
+          durationMinutes: 60,
+        ),
+        existingId: later.id,
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    final rows = await fixture.appointmentsRepository.fetchAppointmentsView();
+    final persisted = rows.singleWhere((item) => item.id == later.id);
+    expect(persisted.timeLabel, '11:00');
+  });
+
+  test('doi nhan vien vao lich trung bi chan', () async {
+    final fixture = await _createFixture();
+
+    await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeAId,
+        timeLabel: '09:00',
+        durationMinutes: 60,
+      ),
+    );
+    final otherStaff = await fixture.appointmentsRepository.saveAppointment(
+      fixture.buildInput(
+        employeeId: fixture.employeeBId,
+        timeLabel: '09:30',
+        durationMinutes: 60,
+      ),
+    );
+
+    expect(
+      () => fixture.appointmentsRepository.saveAppointment(
+        fixture.buildInput(
+          employeeId: fixture.employeeAId,
+          timeLabel: '09:30',
+          durationMinutes: 60,
+        ),
+        existingId: otherStaff.id,
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    final rows = await fixture.appointmentsRepository.fetchAppointmentsView();
+    final persisted = rows.singleWhere((item) => item.id == otherStaff.id);
+    expect(persisted.employeeId, fixture.employeeBId);
+  });
+
   test('rollback appointment neu insert appointment_services that bai', () async {
     final fixture = await _createFixture();
     final database = await SalonDatabase.instance.database;

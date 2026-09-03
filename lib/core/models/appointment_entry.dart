@@ -44,6 +44,10 @@ class AppointmentEntry {
 
   String get timeLabel => _timeFormatter.format(startsAt);
 
+  DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
+
+  String get timeRangeLabel => '$timeLabel–${_timeFormatter.format(endsAt)}';
+
   String get durationLabel => '$durationMinutes phút';
 
   String get servicesSummary {
