@@ -365,6 +365,52 @@ class SqliteInvoicesRepository
   }
 
   @override
+  Future<InvoiceDraft> updateInvoiceLineUnitPrice(
+    String lineId,
+    int unitPrice,
+  ) async {
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    if (draft.isPaid) {
+      throw StateError('Hóa đơn đã thanh toán nên không thể sửa giá bán.');
+    }
+    if (unitPrice <= 0) {
+      throw StateError('Giá bán phải lớn hơn 0.');
+    }
+
+    final index = draft.lines.indexWhere((line) => line.id == lineId);
+    if (index < 0) {
+      throw StateError('Invoice line $lineId not found');
+    }
+
+    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
+    final line = updatedLines[index];
+    final subtotal = unitPrice * line.quantity;
+    final normalizedLineDiscount = _normalizeDiscount(
+      line.discountAmount,
+      subtotal,
+    );
+    updatedLines[index] = line.copyWith(
+      unitPrice: unitPrice,
+      discountAmount: normalizedLineDiscount,
+      totalPrice: _lineTotal(subtotal, normalizedLineDiscount),
+    );
+
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        lines: updatedLines,
+        discountAmount: _normalizeDiscount(
+          draft.discountAmount,
+          _subtotal(updatedLines),
+        ),
+        updatedAt: DateTime.now(),
+      ),
+      rewriteItems: true,
+    );
+  }
+
+  @override
   Future<InvoiceDraft> splitInvoiceLine(String lineId) async {
     final database = await _database.database;
     final draft = await _loadDraft(database);
