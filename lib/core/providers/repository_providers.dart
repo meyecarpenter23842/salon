@@ -137,7 +137,9 @@ final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
 final invoiceLineActionsRepositoryProvider =
     Provider<InvoiceLineActionsRepository?>((ref) {
       final repository = ref.watch(invoicesRepositoryProvider);
-      return repository is InvoiceLineActionsRepository ? repository : null;
+      return repository is InvoiceLineActionsRepository
+          ? repository as InvoiceLineActionsRepository
+          : null;
     });
 
 final reportsRepositoryProvider = Provider<ReportsRepository>((ref) {
