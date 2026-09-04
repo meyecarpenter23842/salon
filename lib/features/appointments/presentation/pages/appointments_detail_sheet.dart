@@ -88,6 +88,40 @@ class _AppointmentDetailSheet extends ConsumerWidget {
                     icon: Icons.phone_outlined,
                     text: appointment.customerPhone,
                   ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const Key('appointment-open-customer'),
+                        onPressed: () =>
+                            openCustomerProfileFromAppointment(ref, appointment),
+                        icon: const Icon(Icons.person_outline_rounded, size: 16),
+                        label: const Text('Hồ sơ khách'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('appointment-open-employee'),
+                        onPressed: () => openEmployeeProfileFromAppointment(
+                          context,
+                          ref,
+                          appointment,
+                        ),
+                        icon: const Icon(Icons.badge_outlined, size: 16),
+                        label: const Text('Nhân viên'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('appointment-open-service'),
+                        onPressed: () => openServiceFromAppointment(
+                          context,
+                          ref,
+                          appointment,
+                        ),
+                        icon: const Icon(Icons.content_cut_rounded, size: 16),
+                        label: const Text('Dịch vụ'),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 14),
                   _DetailInfoTile(
                     icon: Icons.calendar_today_outlined,
@@ -158,6 +192,7 @@ class _AppointmentDetailSheet extends ConsumerWidget {
                       if (appointment.status != 'Chờ xác nhận' &&
                           appointment.status != 'Đã hủy')
                         TextButton.icon(
+                          key: const Key('appointment-open-checkout'),
                           onPressed: () => _sendAppointmentToInvoice(
                             context,
                             ref,

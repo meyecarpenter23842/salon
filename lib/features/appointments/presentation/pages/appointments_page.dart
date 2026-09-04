@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/navigation/desktop_navigation.dart';
+import '../../../../app/navigation/flow_navigation.dart';
 import '../../../../core/models/appointment_entry.dart';
 import '../../../../core/models/appointment_upsert_input.dart';
 import '../../../../core/models/customer_profile.dart';
@@ -314,12 +315,6 @@ class _AppointmentsView extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // AppMotionSwitcher keeps the outgoing page alive while it slides/fades.
-        // During that transition Flutter may temporarily squeeze it to a tiny
-        // rectangle. Rendering the full desktop workspace in that transient
-        // size creates false overflow errors and a visual flash, so collapse
-        // only the outgoing/transient layout. Real supported desktop widths
-        // remain well above these bounds.
         if (constraints.maxWidth < 600 || constraints.maxHeight < 320) {
           return const SizedBox.expand(
             key: Key('appointments-premium-workspace'),
