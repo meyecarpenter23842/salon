@@ -8,6 +8,7 @@ import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primitives.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
+import '../widgets/service_performance_panel.dart';
 
 final serviceSearchQueryProvider = StateProvider<String>((ref) => '');
 final serviceCategoryFilterProvider = StateProvider<String>((ref) => 'Tất cả');
@@ -303,8 +304,6 @@ class _Workspace extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The desktop shell consumes a meaningful part of window width.
-        // Stack before either master or detail becomes too narrow to be useful.
         if (constraints.maxWidth < 1040) {
           return ListView(
             primary: false,
@@ -498,7 +497,9 @@ class _ServiceDetail extends ConsumerWidget {
               child: Column(
                 children: [
                   _MetricStrip(item: item),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
+                  ServicePerformancePanel(serviceId: item.id),
+                  const SizedBox(height: 12),
                   PremiumInfoRow(
                     icon: Icons.payments_outlined,
                     label: 'Giá dịch vụ',
