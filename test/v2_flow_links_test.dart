@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:salonmanager/app/navigation/desktop_navigation.dart';
+import 'package:salonmanager/app/navigation/flow_navigation.dart';
 import 'package:salonmanager/core/providers/data_backend_provider.dart';
 import 'package:salonmanager/core/providers/repository_providers.dart';
 import 'package:salonmanager/core/theme/app_theme.dart';
@@ -13,6 +14,52 @@ import 'package:salonmanager/features/employees/presentation/pages/employees_pag
 import 'package:salonmanager/features/services/presentation/pages/services_page.dart';
 
 void main() {
+  test('employee deeplink keeps target id when names overlap', () {
+    final employees = <Map<String, Object?>>[
+      {
+        'id': 'emp-001',
+        'name': 'An',
+        'role': 'Stylist chính',
+        'specialty': 'Color',
+        'phone': '0901000001',
+        'status': 'Đang làm việc',
+      },
+      {
+        'id': 'emp-002',
+        'name': 'An',
+        'role': 'Barber',
+        'specialty': 'Cắt nam',
+        'phone': '0901000002',
+        'status': 'Đang làm việc',
+      },
+      {
+        'id': 'emp-003',
+        'name': 'An Nguyễn',
+        'role': 'Chăm sóc tóc',
+        'specialty': 'Phục hồi',
+        'phone': '0901000003',
+        'status': 'Sắp có lịch',
+      },
+    ];
+
+    expect(
+      employeeSearchResultIndexForId(
+        employees,
+        employeeId: 'emp-002',
+        query: 'An',
+      ),
+      1,
+    );
+    expect(
+      employeeSearchResultIndexForId(
+        employees,
+        employeeId: 'emp-003',
+        query: 'An',
+      ),
+      2,
+    );
+  });
+
   testWidgets('appointment detail links keep the selected entity context', (
     tester,
   ) async {
@@ -42,6 +89,14 @@ void main() {
     );
     expect(targetIndex, greaterThanOrEqualTo(0));
     final appointment = appointments[targetIndex];
+    final employees =
+        await container.read(employeesRepositoryProvider).fetchEmployeesView();
+    final expectedEmployeeIndex = employeeSearchResultIndexForId(
+      employees,
+      employeeId: appointment.employeeId!,
+      query: appointment.staffName,
+    );
+    expect(expectedEmployeeIndex, greaterThanOrEqualTo(0));
     container.read(selectedAppointmentIndexProvider.notifier).state = targetIndex;
 
     await tester.pumpWidget(
@@ -74,6 +129,10 @@ void main() {
     expect(container.read(desktopSectionProvider), DesktopSection.employees);
     expect(container.read(employeeRoleFilterProvider), 'Tất cả');
     expect(container.read(employeeSearchQueryProvider), appointment.staffName);
+    expect(
+      container.read(selectedEmployeeIndexProvider),
+      expectedEmployeeIndex,
+    );
 
     await tester.tap(find.byKey(const Key('appointment-open-service')));
     await tester.pumpAndSettle();
