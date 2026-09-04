@@ -13,8 +13,8 @@ final productDetailRepositoryProvider = Provider<ProductDetailRepository?>((ref)
       : null;
 });
 
-final productDetailProvider =
-    FutureProvider.family<Map<String, Object?>?, String>((ref, productId) async {
+final productDetailProvider = FutureProvider.autoDispose
+    .family<Map<String, Object?>?, String>((ref, productId) async {
   final repository = ref.watch(productDetailRepositoryProvider);
   if (repository == null) return null;
   return repository.fetchProductDetail(productId);
