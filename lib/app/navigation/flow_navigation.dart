@@ -21,6 +21,36 @@ void openCustomerProfileFromAppointment(
   openCustomerProfile(ref, appointment.customerId);
 }
 
+int employeeSearchResultIndexForId(
+  List<Map<String, Object?>> employees, {
+  required String employeeId,
+  required String query,
+  String role = 'Tất cả',
+}) {
+  final normalizedQuery = query.trim().toLowerCase();
+  var resultIndex = 0;
+
+  for (final item in employees) {
+    final matchesRole = role == 'Tất cả' || item['role'] == role;
+    final matchesQuery = normalizedQuery.isEmpty ||
+        [
+          item['name'],
+          item['role'],
+          item['specialty'],
+          item['phone'],
+          item['status'],
+        ].any(
+          (value) => value.toString().toLowerCase().contains(normalizedQuery),
+        );
+    if (!matchesRole || !matchesQuery) continue;
+
+    if (item['id']?.toString() == employeeId) return resultIndex;
+    resultIndex += 1;
+  }
+
+  return -1;
+}
+
 Future<void> openEmployeeProfileFromAppointment(
   BuildContext context,
   WidgetRef ref,
@@ -53,10 +83,22 @@ Future<void> openEmployeeProfileFromAppointment(
     return;
   }
 
+  final employeeName = employee['name']?.toString() ?? '';
+  final selectedIndex = employeeSearchResultIndexForId(
+    employees,
+    employeeId: employeeId,
+    query: employeeName,
+  );
+  if (selectedIndex < 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Không thể mở đúng hồ sơ nhân viên này.')),
+    );
+    return;
+  }
+
   ref.read(employeeRoleFilterProvider.notifier).state = 'Tất cả';
-  ref.read(employeeSearchQueryProvider.notifier).state =
-      employee['name']?.toString() ?? '';
-  ref.read(selectedEmployeeIndexProvider.notifier).state = 0;
+  ref.read(employeeSearchQueryProvider.notifier).state = employeeName;
+  ref.read(selectedEmployeeIndexProvider.notifier).state = selectedIndex;
   ref.invalidate(filteredEmployeesProvider);
   ref.invalidate(employeeProfileProvider(employeeId));
   ref.read(desktopSectionProvider.notifier).state = DesktopSection.employees;
