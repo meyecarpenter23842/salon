@@ -8,6 +8,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
+import '../widgets/product_performance_panel.dart';
 
 final salesProductQueryProvider = StateProvider<String>((ref) => '');
 final salesProductTypeProvider = StateProvider<String?>((ref) => null);
@@ -421,7 +422,9 @@ class _ProductDetail extends ConsumerWidget {
               child: Column(
                 children: [
                   _ProductMetricStrip(item: item),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
+                  ProductPerformancePanel(productId: item.id),
+                  const SizedBox(height: 12),
                   PremiumInfoRow(icon: Icons.sell_outlined, label: 'Giá bán', value: item.salePriceLabel),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
