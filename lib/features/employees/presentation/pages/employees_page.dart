@@ -6,14 +6,17 @@ import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/repositories/employee_profile_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/compact_management.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 
 final employeeSearchQueryProvider = StateProvider<String>((ref) => '');
 final employeeRoleFilterProvider = StateProvider<String>((ref) => 'Tất cả');
+final employeeStatusFilterProvider = StateProvider<String>((ref) => 'Tất cả');
 final selectedEmployeeIndexProvider = StateProvider<int>((ref) => 0);
 
-final employeeProfileRepositoryProvider =
-    Provider<EmployeeProfileRepository?>((ref) {
+final employeeProfileRepositoryProvider = Provider<EmployeeProfileRepository?>((
+  ref,
+) {
   final repository = ref.watch(employeesRepositoryProvider);
   return repository is EmployeeProfileRepository
       ? repository as EmployeeProfileRepository
@@ -21,31 +24,41 @@ final employeeProfileRepositoryProvider =
 });
 
 final employeeProfileProvider =
-    FutureProvider.family<Map<String, Object?>?, String>((ref, employeeId) async {
-  final repository = ref.watch(employeeProfileRepositoryProvider);
-  if (repository == null) return null;
-  return repository.fetchEmployeeProfile(employeeId);
-});
+    FutureProvider.family<Map<String, Object?>?, String>((
+      ref,
+      employeeId,
+    ) async {
+      final repository = ref.watch(employeeProfileRepositoryProvider);
+      if (repository == null) return null;
+      return repository.fetchEmployeeProfile(employeeId);
+    });
 
-final filteredEmployeesProvider =
-    FutureProvider<List<Map<String, Object?>>>((ref) async {
-  final employees =
-      await ref.watch(employeesRepositoryProvider).fetchEmployeesView();
+final filteredEmployeesProvider = FutureProvider<List<Map<String, Object?>>>((
+  ref,
+) async {
+  final employees = await ref
+      .watch(employeesRepositoryProvider)
+      .fetchEmployeesView();
   final query = ref.watch(employeeSearchQueryProvider).trim().toLowerCase();
   final role = ref.watch(employeeRoleFilterProvider);
+  final status = ref.watch(employeeStatusFilterProvider);
 
-  return employees.where((item) {
-    final matchesRole = role == 'Tất cả' || item['role'] == role;
-    final matchesQuery = query.isEmpty ||
-        [
-          item['name'],
-          item['role'],
-          item['specialty'],
-          item['phone'],
-          item['status'],
-        ].any((value) => value.toString().toLowerCase().contains(query));
-    return matchesRole && matchesQuery;
-  }).toList(growable: false);
+  return employees
+      .where((item) {
+        final matchesRole = role == 'Tất cả' || item['role'] == role;
+        final matchesStatus = status == 'Tất cả' || item['status'] == status;
+        final matchesQuery =
+            query.isEmpty ||
+            [
+              item['name'],
+              item['role'],
+              item['specialty'],
+              item['phone'],
+              item['status'],
+            ].any((value) => value.toString().toLowerCase().contains(query));
+        return matchesRole && matchesStatus && matchesQuery;
+      })
+      .toList(growable: false);
 });
 
 Future<void> _openEmployeeEditor(
@@ -83,9 +96,9 @@ Future<void> _openEmployeeEditor(
     );
   } catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Không lưu được nhân sự: $error')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Không lưu được nhân sự: $error')));
   }
 }
 
@@ -155,47 +168,42 @@ class _EmployeesView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = ref.watch(selectedEmployeeIndexProvider);
-    final effectiveIndex = items.isEmpty ? 0 : selectedIndex.clamp(0, items.length - 1);
+    final effectiveIndex = items.isEmpty
+        ? 0
+        : selectedIndex.clamp(0, items.length - 1);
     final selected = items.isEmpty ? null : items[effectiveIndex];
-    final active = items.where((item) => item['status'] == 'Đang làm việc').length;
-    final upcoming = items.where((item) => item['status'] == 'Sắp có lịch').length;
-    final resting = items.where((item) => item['status'] == 'Tạm nghỉ').length;
+    final allEmployees = ref.watch(employeesViewProvider).valueOrNull ?? items;
+    final active = allEmployees
+        .where((item) => item['status'] == 'Đang làm việc')
+        .length;
+    final upcoming = allEmployees
+        .where((item) => item['status'] == 'Sắp có lịch')
+        .length;
+    final resting = allEmployees
+        .where((item) => item['status'] == 'Tạm nghỉ')
+        .length;
 
     return KeyedSubtree(
       key: const Key('employees-premium-workspace'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PremiumSectionCard(
+          CompactManagementHeader(
             key: const Key('employees-premium-header'),
-            child: PremiumPageHeader(
-              icon: Icons.badge_outlined,
-              eyebrow: 'Đội ngũ salon',
-              title: 'Hồ sơ nhân viên',
-              subtitle:
-                  'Một nơi để xem ca làm, lịch hẹn, dịch vụ đã làm, doanh thu và hoa hồng thực tế của từng người.',
-              trailing: [
-                PremiumStatusPill(
-                  label: '${items.length} hồ sơ',
-                  tone: AppColors.copper,
-                ),
-                FilledButton.icon(
-                  onPressed: () => _openEmployeeEditor(context, ref),
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: const Text('Thêm nhân sự'),
-                ),
-              ],
-            ),
+            title: 'Nhân viên',
+            subtitle:
+                'Đội ngũ, ca làm, lịch hẹn và hiệu suất trong một workspace.',
+            actionLabel: 'Thêm nhân sự',
+            actionIcon: Icons.person_add_alt_1_outlined,
+            onAction: () => _openEmployeeEditor(context, ref),
           ),
           const SizedBox(height: 12),
-          _EmployeeStats(
-            total: items.length,
+          _EmployeesToolbar(
+            total: allEmployees.length,
             active: active,
             upcoming: upcoming,
             resting: resting,
           ),
-          const SizedBox(height: 12),
-          const _EmployeesToolbar(),
           const SizedBox(height: 12),
           Expanded(
             child: _EmployeeWorkspace(
@@ -210,8 +218,8 @@ class _EmployeesView extends ConsumerWidget {
   }
 }
 
-class _EmployeeStats extends StatelessWidget {
-  const _EmployeeStats({
+class _EmployeesToolbar extends ConsumerWidget {
+  const _EmployeesToolbar({
     required this.total,
     required this.active,
     required this.upcoming,
@@ -222,56 +230,6 @@ class _EmployeeStats extends StatelessWidget {
   final int active;
   final int upcoming;
   final int resting;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      PremiumStatCard(
-        icon: Icons.groups_2_outlined,
-        label: 'Tổng nhân sự',
-        value: '$total',
-      ),
-      PremiumStatCard(
-        icon: Icons.check_circle_outline_rounded,
-        label: 'Đang làm việc',
-        value: '$active',
-        tone: AppColors.success,
-      ),
-      PremiumStatCard(
-        icon: Icons.event_available_outlined,
-        label: 'Sắp có lịch',
-        value: '$upcoming',
-        tone: AppColors.warning,
-      ),
-      PremiumStatCard(
-        icon: Icons.pause_circle_outline_rounded,
-        label: 'Tạm nghỉ',
-        value: '$resting',
-        tone: AppColors.textMuted,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
-            ? 4
-            : constraints.maxWidth >= 560
-                ? 2
-                : 1;
-        const gap = 10.0;
-        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [for (final card in cards) SizedBox(width: width, child: card)],
-        );
-      },
-    );
-  }
-}
-
-class _EmployeesToolbar extends ConsumerWidget {
-  const _EmployeesToolbar();
 
   static const roles = [
     'Tất cả',
@@ -284,55 +242,85 @@ class _EmployeesToolbar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedRole = ref.watch(employeeRoleFilterProvider);
+    final selectedStatus = ref.watch(employeeStatusFilterProvider);
     final query = ref.watch(employeeSearchQueryProvider);
+    final statuses = [
+      ('Tất cả', total),
+      ('Đang làm việc', active),
+      ('Sắp có lịch', upcoming),
+      ('Tạm nghỉ', resting),
+    ];
 
-    return PremiumSectionCard(
-      padding: const EdgeInsets.all(10),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final search = TextFormField(
-            key: ValueKey('employee-search-$query'),
-            initialValue: query,
-            onChanged: (value) {
-              ref.read(employeeSearchQueryProvider.notifier).state = value;
-              ref.read(selectedEmployeeIndexProvider.notifier).state = 0;
-            },
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
-              hintText: 'Tìm tên, vai trò, chuyên môn, số điện thoại',
-            ),
-          );
-          final role = DropdownButtonFormField<String>(
-            initialValue: roles.contains(selectedRole) ? selectedRole : roles.first,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.tune_rounded),
-              labelText: 'Vai trò',
-            ),
-            items: roles
-                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-                .toList(growable: false),
-            onChanged: (value) {
-              if (value == null) return;
-              ref.read(employeeRoleFilterProvider.notifier).state = value;
-              ref.read(selectedEmployeeIndexProvider.notifier).state = 0;
-            },
-          );
-
-          if (constraints.maxWidth < 680) {
-            return Column(
-              children: [search, const SizedBox(height: 8), role],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(flex: 3, child: search),
-              const SizedBox(width: 10),
-              SizedBox(width: 220, child: role),
-            ],
-          );
-        },
+    final search = TextFormField(
+      key: ValueKey('employee-search-$query'),
+      initialValue: query,
+      onChanged: (value) {
+        ref.read(employeeSearchQueryProvider.notifier).state = value;
+        ref.read(selectedEmployeeIndexProvider.notifier).state = 0;
+      },
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.search_rounded),
+        hintText: 'Tìm tên, vai trò, chuyên môn, số điện thoại',
       ),
+    );
+
+    final role = DropdownButtonFormField<String>(
+      initialValue: roles.contains(selectedRole) ? selectedRole : roles.first,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.tune_rounded),
+        labelText: 'Vai trò',
+      ),
+      items: roles
+          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+          .toList(growable: false),
+      onChanged: (value) {
+        if (value == null) return;
+        ref.read(employeeRoleFilterProvider.notifier).state = value;
+        ref.read(selectedEmployeeIndexProvider.notifier).state = 0;
+      },
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (constraints.maxWidth >= 760)
+              Row(
+                children: [
+                  Expanded(child: search),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 220, child: role),
+                ],
+              )
+            else ...[
+              search,
+              const SizedBox(height: 8),
+              role,
+            ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final status in statuses)
+                  FilterChip(
+                    label: Text('${status.$1} ${status.$2}'),
+                    selected: selectedStatus == status.$1,
+                    showCheckmark: false,
+                    onSelected: (_) {
+                      ref.read(employeeStatusFilterProvider.notifier).state =
+                          status.$1;
+                      ref.read(selectedEmployeeIndexProvider.notifier).state =
+                          0;
+                    },
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -354,7 +342,9 @@ class _EmployeeWorkspace extends StatelessWidget {
       builder: (context, constraints) {
         final list = _EmployeeList(items: items, selectedIndex: selectedIndex);
         final detail = PremiumAnimatedDetail(
-          transitionKey: ValueKey(selected?['id']?.toString() ?? 'employee-empty'),
+          transitionKey: ValueKey(
+            selected?['id']?.toString() ?? 'employee-empty',
+          ),
           child: _EmployeeDetail(employee: selected),
         );
 
@@ -411,7 +401,8 @@ class _EmployeeList extends ConsumerWidget {
                 return PremiumInteractiveSurface(
                   selected: index == selectedIndex,
                   onTap: () {
-                    ref.read(selectedEmployeeIndexProvider.notifier).state = index;
+                    ref.read(selectedEmployeeIndexProvider.notifier).state =
+                        index;
                   },
                   child: Row(
                     children: [
@@ -429,7 +420,9 @@ class _EmployeeList extends ConsumerWidget {
                               employee['name']?.toString() ?? '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w800),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -650,7 +643,8 @@ class _EmployeeOverviewTab extends StatelessWidget {
         PremiumInfoRow(
           icon: Icons.event_available_outlined,
           label: 'Lịch tiếp theo',
-          value: profile['nextAppointmentLabel']?.toString() ??
+          value:
+              profile['nextAppointmentLabel']?.toString() ??
               'Chưa có lịch sắp tới',
         ),
         const PremiumDivider(indent: 42),
@@ -763,7 +757,10 @@ class _ProfileMetrics extends StatelessWidget {
                       metric.$1,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 9.5,
+                      ),
                     ),
                   ],
                 ),
@@ -877,7 +874,10 @@ class _AppointmentProfileRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          PremiumStatusPill(label: status, tone: _appointmentStatusTone(status)),
+          PremiumStatusPill(
+            label: status,
+            tone: _appointmentStatusTone(status),
+          ),
         ],
       ),
     );
@@ -899,7 +899,10 @@ class _EmployeePerformanceTab extends StatelessWidget {
       children: [
         _ProfileMetrics(profile: profile),
         const SizedBox(height: 14),
-        _SectionLabel(title: 'Dịch vụ nổi bật tháng này', count: topServices.length),
+        _SectionLabel(
+          title: 'Dịch vụ nổi bật tháng này',
+          count: topServices.length,
+        ),
         const SizedBox(height: 8),
         if (topServices.isEmpty)
           const _InlineEmpty(
@@ -969,7 +972,10 @@ class _TopServiceRow extends StatelessWidget {
           ),
           Text(
             row['revenueLabel']?.toString() ?? '0đ',
-            style: TextStyle(color: AppColors.copper, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: AppColors.copper,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -1019,7 +1025,10 @@ class _EmployeeHistoryTab extends StatelessWidget {
                     ),
                     Text(
                       row['timeLabel']?.toString() ?? '',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 9.5,
+                      ),
                     ),
                   ],
                 ),
@@ -1039,7 +1048,10 @@ class _EmployeeHistoryTab extends StatelessWidget {
                       '${row['title']} ×${_intValue(row['quantity'])}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 10.5,
+                      ),
                     ),
                   ],
                 ),
@@ -1047,7 +1059,10 @@ class _EmployeeHistoryTab extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 row['revenueLabel']?.toString() ?? '0đ',
-                style: TextStyle(color: AppColors.copper, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: AppColors.copper,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),
@@ -1068,7 +1083,10 @@ class _SectionLabel extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
         ),
         PremiumStatusPill(label: '$count', tone: AppColors.copper),
       ],
@@ -1094,7 +1112,9 @@ class _InlineEmpty extends StatelessWidget {
         children: [
           Icon(icon, color: AppColors.textMuted),
           const SizedBox(width: 10),
-          Expanded(child: Text(text, style: TextStyle(color: AppColors.textMuted))),
+          Expanded(
+            child: Text(text, style: TextStyle(color: AppColors.textMuted)),
+          ),
         ],
       ),
     );
@@ -1143,16 +1163,19 @@ Map<String, Object?> _fallbackProfile(Map<String, Object?> employee) {
     'topServices': const <Map<String, Object?>>[],
     'todayAppointmentCount': 0,
     'monthRevenueValue': 0,
-    'monthRevenue': employee['monthlyRevenue']?.toString().trim().isNotEmpty == true
+    'monthRevenue':
+        employee['monthlyRevenue']?.toString().trim().isNotEmpty == true
         ? employee['monthlyRevenue']
         : '0đ',
     'monthServiceCount': _intValue(employee['servicesDone']),
     'monthCustomerCount': 0,
     'estimatedCommission': employee['commission']?.toString() ?? 'KPI cố định',
-    'nextAppointmentLabel': employee['todaySchedule']?.toString().trim().isNotEmpty == true
+    'nextAppointmentLabel':
+        employee['todaySchedule']?.toString().trim().isNotEmpty == true
         ? employee['todaySchedule']
         : 'Chưa có lịch sắp tới',
-    'dataNote': 'Backend demo chưa có dữ liệu giao dịch thật cho hồ sơ nhân viên.',
+    'dataNote':
+        'Backend demo chưa có dữ liệu giao dịch thật cho hồ sơ nhân viên.',
   };
 }
 
@@ -1172,11 +1195,7 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
     'Chăm sóc tóc',
     'Lễ tân',
   ];
-  static const _statusOptions = [
-    'Đang làm việc',
-    'Sắp có lịch',
-    'Tạm nghỉ',
-  ];
+  static const _statusOptions = ['Đang làm việc', 'Sắp có lịch', 'Tạm nghỉ'];
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
@@ -1193,8 +1212,12 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
   void initState() {
     super.initState();
     final employee = widget.employee;
-    _nameController = TextEditingController(text: employee?['name']?.toString() ?? '');
-    _phoneController = TextEditingController(text: employee?['phone']?.toString() ?? '');
+    _nameController = TextEditingController(
+      text: employee?['name']?.toString() ?? '',
+    );
+    _phoneController = TextEditingController(
+      text: employee?['phone']?.toString() ?? '',
+    );
     _shiftController = TextEditingController(
       text: employee?['shift']?.toString() ?? '09:00 - 18:00',
     );
@@ -1207,7 +1230,9 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
     _ratingController = TextEditingController(
       text: employee?['rating']?.toString() ?? '',
     );
-    _noteController = TextEditingController(text: employee?['note']?.toString() ?? '');
+    _noteController = TextEditingController(
+      text: employee?['note']?.toString() ?? '',
+    );
     _role = _roleOptions.contains(employee?['role'])
         ? employee!['role'].toString()
         : _roleOptions.first;
@@ -1258,7 +1283,12 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                         isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Vai trò'),
                         items: _roleOptions
-                            .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: item,
+                                child: Text(item),
+                              ),
+                            )
                             .toList(growable: false),
                         onChanged: (value) {
                           if (value != null) setState(() => _role = value);
@@ -1270,9 +1300,16 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                       child: DropdownButtonFormField<String>(
                         initialValue: _status,
                         isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Trạng thái'),
+                        decoration: const InputDecoration(
+                          labelText: 'Trạng thái',
+                        ),
                         items: _statusOptions
-                            .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: item,
+                                child: Text(item),
+                              ),
+                            )
                             .toList(growable: false),
                         onChanged: (value) {
                           if (value != null) setState(() => _status = value);
@@ -1287,7 +1324,9 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                     Expanded(
                       child: TextFormField(
                         controller: _phoneController,
-                        decoration: const InputDecoration(labelText: 'Số điện thoại'),
+                        decoration: const InputDecoration(
+                          labelText: 'Số điện thoại',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1310,14 +1349,18 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                     Expanded(
                       child: TextFormField(
                         controller: _commissionController,
-                        decoration: const InputDecoration(labelText: 'Hoa hồng / KPI'),
+                        decoration: const InputDecoration(
+                          labelText: 'Hoa hồng / KPI',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextFormField(
                         controller: _ratingController,
-                        decoration: const InputDecoration(labelText: 'Đánh giá'),
+                        decoration: const InputDecoration(
+                          labelText: 'Đánh giá',
+                        ),
                       ),
                     ),
                   ],
@@ -1325,7 +1368,9 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _noteController,
-                  decoration: const InputDecoration(labelText: 'Ghi chú vận hành'),
+                  decoration: const InputDecoration(
+                    labelText: 'Ghi chú vận hành',
+                  ),
                   maxLines: 3,
                 ),
                 const SizedBox(height: 10),
@@ -1333,7 +1378,10 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Lịch hôm nay, dịch vụ tháng và doanh thu được hệ thống tự tính từ dữ liệu thật.',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 10.5,
+                    ),
                   ),
                 ),
               ],

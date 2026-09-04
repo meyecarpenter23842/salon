@@ -11,6 +11,7 @@ import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/compact_management.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 
 final customerSearchQueryProvider = StateProvider<String>((ref) => '');
@@ -22,18 +23,25 @@ final selectedCustomerIndexProvider = StateProvider<int>((ref) => 0);
 final customerProfileDetailIdProvider = StateProvider<String?>((ref) => null);
 final customerProfileTabProvider = StateProvider<int>((ref) => 0);
 
-final customerServiceOptionsProvider = FutureProvider<List<String>>((ref) async {
-  final services = await ref.watch(servicesRepositoryProvider).fetchServicesView();
-  final names = services
-      .map((service) => service.name.trim())
-      .where((name) => name.isNotEmpty)
-      .toSet()
-      .toList()
-    ..sort();
+final customerServiceOptionsProvider = FutureProvider<List<String>>((
+  ref,
+) async {
+  final services = await ref
+      .watch(servicesRepositoryProvider)
+      .fetchServicesView();
+  final names =
+      services
+          .map((service) => service.name.trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
   return names;
 });
 
-final filteredCustomersProvider = FutureProvider<List<CustomerProfile>>((ref) async {
+final filteredCustomersProvider = FutureProvider<List<CustomerProfile>>((
+  ref,
+) async {
   ref.watch(customersRefreshProvider);
   final query = ref.watch(customerSearchQueryProvider);
   final tier = ref.watch(customerTierFilterProvider);
@@ -41,7 +49,9 @@ final filteredCustomersProvider = FutureProvider<List<CustomerProfile>>((ref) as
   final inactiveDays = ref.watch(customerInactiveDaysFilterProvider);
   final service = ref.watch(customerServiceFilterProvider);
 
-  final customers = await ref.watch(customersRepositoryProvider).fetchCustomersView(
+  final customers = await ref
+      .watch(customersRepositoryProvider)
+      .fetchCustomersView(
         query: query.isEmpty ? null : query,
         tier: tier,
         recentDays: recentDays,
@@ -51,7 +61,9 @@ final filteredCustomersProvider = FutureProvider<List<CustomerProfile>>((ref) as
   if (service == null || service.isEmpty) return customers;
   final expected = service.toLowerCase();
   return customers
-      .where((customer) => customer.favoriteService.toLowerCase().contains(expected))
+      .where(
+        (customer) => customer.favoriteService.toLowerCase().contains(expected),
+      )
       .toList(growable: false);
 });
 
@@ -89,9 +101,9 @@ Future<CustomerProfile?> _openCustomerEditor(
     return saved;
   } catch (error) {
     if (!context.mounted) return null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_friendlyError(error))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_friendlyError(error))));
     return null;
   }
 }
@@ -116,15 +128,23 @@ Future<void> _openCustomerAppointment(
   WidgetRef ref,
   CustomerProfile customer,
 ) async {
-  final services = await ref.read(servicesRepositoryProvider).fetchServicesView();
-  final employees = await ref.read(employeesRepositoryProvider).fetchEmployeesView();
+  final services = await ref
+      .read(servicesRepositoryProvider)
+      .fetchServicesView();
+  final employees = await ref
+      .read(employeesRepositoryProvider)
+      .fetchEmployeesView();
   if (!context.mounted) return;
 
-  final availableServices = services.where((service) => service.isActive).toList(growable: false);
+  final availableServices = services
+      .where((service) => service.isActive)
+      .toList(growable: false);
   if (availableServices.isEmpty || employees.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Cần có ít nhất một dịch vụ và một nhân viên trước khi tạo lịch.'),
+        content: Text(
+          'Cần có ít nhất một dịch vụ và một nhân viên trước khi tạo lịch.',
+        ),
       ),
     );
     return;
@@ -141,27 +161,32 @@ Future<void> _openCustomerAppointment(
   if (input == null || !context.mounted) return;
 
   try {
-    final saved = await ref.read(appointmentsRepositoryProvider).saveAppointment(input);
+    final saved = await ref
+        .read(appointmentsRepositoryProvider)
+        .saveAppointment(input);
     if (!context.mounted) return;
 
     ref.invalidate(appointmentsViewProvider);
     ref.invalidate(overviewSummaryProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Đã tạo lịch ${saved.timeLabel} cho ${customer.fullName}'),
+        content: Text(
+          'Đã tạo lịch ${saved.timeLabel} cho ${customer.fullName}',
+        ),
         action: SnackBarAction(
           label: 'Xem lịch',
           onPressed: () {
-            ref.read(desktopSectionProvider.notifier).state = DesktopSection.appointments;
+            ref.read(desktopSectionProvider.notifier).state =
+                DesktopSection.appointments;
           },
         ),
       ),
     );
   } catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_friendlyError(error))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_friendlyError(error))));
   }
 }
 
@@ -178,12 +203,15 @@ class CustomersPage extends ConsumerWidget {
           final customer = _findCustomer(items, detailId);
           if (customer == null) {
             return _MissingCustomerProfile(
-              onBack: () => ref.read(customerProfileDetailIdProvider.notifier).state = null,
+              onBack: () =>
+                  ref.read(customerProfileDetailIdProvider.notifier).state =
+                      null,
             );
           }
           return _CustomerFullProfile(customer: customer);
         },
-        loading: () => const PremiumLoadingState(label: 'Đang mở hồ sơ khách hàng…'),
+        loading: () =>
+            const PremiumLoadingState(label: 'Đang mở hồ sơ khách hàng…'),
         error: (error, _) => PremiumErrorState(
           title: 'Không mở được hồ sơ khách hàng',
           message: '$error',
@@ -213,79 +241,52 @@ class _CustomersView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = ref.watch(selectedCustomerIndexProvider);
-    final effectiveIndex = items.isEmpty ? 0 : selectedIndex.clamp(0, items.length - 1);
+    final effectiveIndex = items.isEmpty
+        ? 0
+        : selectedIndex.clamp(0, items.length - 1);
     final selected = items.isEmpty ? null : items[effectiveIndex];
     final totalState = ref.watch(customersViewProvider);
     final total = totalState.valueOrNull?.length ?? items.length;
     final repeat = items.where((item) => item.visitCount >= 5).length;
     final vip = items.where((item) => item.tier.contains('VIP')).length;
 
-    return LayoutBuilder(
-      builder: (context, viewport) {
-        final shortViewport = viewport.maxHeight < 760;
-        final content = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            PremiumSectionCard(
-              key: const Key('customers-premium-header'),
-              child: PremiumPageHeader(
-                icon: Icons.groups_2_outlined,
-                eyebrow: 'Quan hệ khách hàng',
-                title: 'Khách hàng',
-                subtitle: 'Tìm khách nhanh, xem hồ sơ và tiếp tục đặt lịch hoặc tính tiền ngay từ một nơi.',
-                trailing: [
-                  PremiumStatusPill(label: '$total hồ sơ', tone: AppColors.copper),
-                  FilledButton.icon(
-                    onPressed: () => _openCustomerEditor(context, ref),
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    label: const Text('Thêm khách'),
-                  ),
-                ],
-              ),
+    return KeyedSubtree(
+      key: const Key('customers-premium-workspace'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CompactManagementHeader(
+            key: const Key('customers-premium-header'),
+            title: 'Khách hàng',
+            subtitle:
+                'Tìm khách, xem hồ sơ và tiếp tục đặt lịch hoặc tính tiền.',
+            actionLabel: 'Thêm khách',
+            actionIcon: Icons.person_add_alt_1_outlined,
+            onAction: () => _openCustomerEditor(context, ref),
+          ),
+          const SizedBox(height: 12),
+          _CustomerToolbar(
+            total: total,
+            repeat: repeat,
+            vip: vip,
+            visible: items.length,
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _CustomerWorkspace(
+              items: items,
+              selectedIndex: effectiveIndex,
+              selected: selected,
             ),
-            const SizedBox(height: 14),
-            _CustomerStats(total: total, repeat: repeat, vip: vip, visible: items.length),
-            const SizedBox(height: 14),
-            const _CustomerToolbar(),
-            const SizedBox(height: 14),
-            if (shortViewport)
-              SizedBox(
-                height: 780,
-                child: _CustomerWorkspace(
-                  items: items,
-                  selectedIndex: effectiveIndex,
-                  selected: selected,
-                ),
-              )
-            else
-              Expanded(
-                child: _CustomerWorkspace(
-                  items: items,
-                  selectedIndex: effectiveIndex,
-                  selected: selected,
-                ),
-              ),
-          ],
-        );
-
-        if (shortViewport) {
-          return ListView(
-            key: const Key('customers-premium-workspace'),
-            primary: false,
-            children: [content],
-          );
-        }
-        return KeyedSubtree(
-          key: const Key('customers-premium-workspace'),
-          child: content,
-        );
-      },
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _CustomerStats extends StatelessWidget {
-  const _CustomerStats({
+class _CustomerToolbar extends ConsumerWidget {
+  const _CustomerToolbar({
     required this.total,
     required this.repeat,
     required this.vip,
@@ -297,65 +298,20 @@ class _CustomerStats extends StatelessWidget {
   final int vip;
   final int visible;
 
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      PremiumStatCard(icon: Icons.groups_2_outlined, label: 'Tổng khách', value: '$total'),
-      PremiumStatCard(
-        icon: Icons.refresh_rounded,
-        label: 'Khách quay lại',
-        value: '$repeat',
-        tone: AppColors.success,
-      ),
-      PremiumStatCard(
-        icon: Icons.workspace_premium_outlined,
-        label: 'Khách VIP',
-        value: '$vip',
-        tone: AppColors.warning,
-      ),
-      PremiumStatCard(
-        icon: Icons.filter_alt_outlined,
-        label: 'Đang hiển thị',
-        value: '$visible',
-        tone: AppColors.info,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1120
-            ? 4
-            : constraints.maxWidth >= 620
-                ? 2
-                : 1;
-        const gap = 12.0;
-        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [for (final card in cards) SizedBox(width: width, child: card)],
-        );
-      },
-    );
-  }
-}
-
-class _CustomerToolbar extends ConsumerWidget {
-  const _CustomerToolbar();
-
   static const tiers = [
     (label: 'Tất cả hạng', value: null),
     (label: 'VIP Gold', value: 'VIP Gold'),
     (label: 'VIP Silver', value: 'VIP Silver'),
     (label: 'Member', value: 'Member'),
   ];
+
   static const activityFilters = [
-    (label: 'Tất cả khách', recentDays: null, inactiveDays: null),
-    (label: 'Gần đây · 7 ngày', recentDays: 7, inactiveDays: null),
-    (label: 'Gần đây · 30 ngày', recentDays: 30, inactiveDays: null),
-    (label: 'Gần đây · 90 ngày', recentDays: 90, inactiveDays: null),
-    (label: 'Không hoạt động · 30+ ngày', recentDays: null, inactiveDays: 30),
-    (label: 'Không hoạt động · 90+ ngày', recentDays: null, inactiveDays: 90),
+    (label: 'Tất cả', recentDays: null, inactiveDays: null),
+    (label: '7 ngày', recentDays: 7, inactiveDays: null),
+    (label: '30 ngày', recentDays: 30, inactiveDays: null),
+    (label: '90 ngày', recentDays: 90, inactiveDays: null),
+    (label: 'Ngưng 30+', recentDays: null, inactiveDays: 30),
+    (label: 'Ngưng 90+', recentDays: null, inactiveDays: 90),
   ];
 
   @override
@@ -366,88 +322,137 @@ class _CustomerToolbar extends ConsumerWidget {
     final currentService = ref.watch(customerServiceFilterProvider);
     final services = ref.watch(customerServiceOptionsProvider);
 
-    return PremiumSectionCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextFormField(
-            initialValue: ref.watch(customerSearchQueryProvider),
-            onChanged: (value) {
-              ref.read(customerSearchQueryProvider.notifier).state = value;
-              ref.read(selectedCustomerIndexProvider.notifier).state = 0;
-            },
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
-              hintText: 'Tìm tên, số điện thoại, hạng thành viên hoặc dịch vụ yêu thích',
+    final search = TextFormField(
+      initialValue: ref.watch(customerSearchQueryProvider),
+      onChanged: (value) {
+        ref.read(customerSearchQueryProvider.notifier).state = value;
+        ref.read(selectedCustomerIndexProvider.notifier).state = 0;
+      },
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.search_rounded),
+        hintText: 'Tìm tên, số điện thoại, hạng hoặc dịch vụ',
+      ),
+    );
+
+    final tierPicker = DropdownButtonFormField<String?>(
+      initialValue: currentTier,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.workspace_premium_outlined),
+        labelText: 'Hạng',
+      ),
+      items: tiers
+          .map(
+            (option) => DropdownMenuItem<String?>(
+              value: option.value,
+              child: Text(option.label),
             ),
+          )
+          .toList(growable: false),
+      onChanged: (value) {
+        ref.read(customerTierFilterProvider.notifier).state = value;
+        ref.read(selectedCustomerIndexProvider.notifier).state = 0;
+      },
+    );
+
+    final servicePicker = services.when(
+      data: (items) => DropdownButtonFormField<String?>(
+        initialValue: currentService,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          prefixIcon: Icon(Icons.content_cut_rounded),
+          labelText: 'Dịch vụ',
+        ),
+        items: [
+          const DropdownMenuItem<String?>(
+            value: null,
+            child: Text('Tất cả dịch vụ'),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final option in tiers)
-                FilterChip(
-                  label: Text(option.label),
-                  selected: currentTier == option.value,
-                  showCheckmark: false,
-                  onSelected: (_) {
-                    ref.read(customerTierFilterProvider.notifier).state = option.value;
-                    ref.read(selectedCustomerIndexProvider.notifier).state = 0;
-                  },
-                ),
-              for (final option in activityFilters)
-                FilterChip(
-                  label: Text(option.label),
-                  selected: currentRecentDays == option.recentDays &&
-                      currentInactiveDays == option.inactiveDays,
-                  showCheckmark: false,
-                  onSelected: (_) {
-                    ref.read(customerRecentDaysFilterProvider.notifier).state = option.recentDays;
-                    ref.read(customerInactiveDaysFilterProvider.notifier).state = option.inactiveDays;
-                    ref.read(selectedCustomerIndexProvider.notifier).state = 0;
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          services.when(
-            data: (items) => ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 340),
-              child: DropdownButtonFormField<String?>(
-                initialValue: currentService,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.content_cut_rounded),
-                  labelText: 'Dịch vụ yêu thích',
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Tất cả dịch vụ'),
-                  ),
-                  ...items.map(
-                    (name) => DropdownMenuItem<String?>(value: name, child: Text(name)),
-                  ),
-                ],
-                onChanged: (value) {
-                  ref.read(customerServiceFilterProvider.notifier).state = value;
-                  ref.read(selectedCustomerIndexProvider.notifier).state = 0;
-                },
-              ),
-            ),
-            loading: () => const SizedBox(
-              height: 46,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-            error: (_, _) => const SizedBox.shrink(),
+          ...items.map(
+            (name) => DropdownMenuItem<String?>(value: name, child: Text(name)),
           ),
         ],
+        onChanged: (value) {
+          ref.read(customerServiceFilterProvider.notifier).state = value;
+          ref.read(selectedCustomerIndexProvider.notifier).state = 0;
+        },
       ),
+      loading: () => const SizedBox(
+        height: 48,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final controls = constraints.maxWidth >= 980
+            ? Row(
+                children: [
+                  Expanded(child: search),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 180, child: tierPicker),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 230, child: servicePicker),
+                ],
+              )
+            : Column(
+                children: [
+                  search,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: tierPicker),
+                      const SizedBox(width: 8),
+                      Expanded(child: servicePicker),
+                    ],
+                  ),
+                ],
+              );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            controls,
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                CompactManagementSummary(
+                  items: [
+                    '$total khách',
+                    '$repeat quay lại',
+                    '$vip VIP',
+                    '$visible hiển thị',
+                  ],
+                ),
+                for (final option in activityFilters)
+                  FilterChip(
+                    label: Text(option.label),
+                    selected:
+                        currentRecentDays == option.recentDays &&
+                        currentInactiveDays == option.inactiveDays,
+                    showCheckmark: false,
+                    onSelected: (_) {
+                      ref
+                              .read(customerRecentDaysFilterProvider.notifier)
+                              .state =
+                          option.recentDays;
+                      ref
+                              .read(customerInactiveDaysFilterProvider.notifier)
+                              .state =
+                          option.inactiveDays;
+                      ref.read(selectedCustomerIndexProvider.notifier).state =
+                          0;
+                    },
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -465,6 +470,7 @@ class _CustomerWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final list = _CustomerList(items: items, selectedIndex: selectedIndex);
     final detail = PremiumAnimatedDetail(
       transitionKey: ValueKey(selected?.id ?? 'customer-empty'),
       child: _CustomerDetail(customer: selected),
@@ -476,11 +482,8 @@ class _CustomerWorkspace extends StatelessWidget {
           return ListView(
             primary: false,
             children: [
-              SizedBox(
-                height: 330,
-                child: _CustomerList(items: items, selectedIndex: selectedIndex),
-              ),
-              const SizedBox(height: 12),
+              SizedBox(height: 320, child: list),
+              const SizedBox(height: 10),
               SizedBox(height: 500, child: detail),
             ],
           );
@@ -489,12 +492,9 @@ class _CustomerWorkspace extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              flex: 11,
-              child: _CustomerList(items: items, selectedIndex: selectedIndex),
-            ),
-            const SizedBox(width: 12),
-            Expanded(flex: 9, child: detail),
+            SizedBox(width: constraints.maxWidth * 0.34, child: list),
+            const SizedBox(width: 10),
+            Expanded(child: detail),
           ],
         );
       },
@@ -533,7 +533,8 @@ class _CustomerList extends ConsumerWidget {
                 return PremiumInteractiveSurface(
                   selected: isSelected,
                   onTap: () {
-                    ref.read(selectedCustomerIndexProvider.notifier).state = index;
+                    ref.read(selectedCustomerIndexProvider.notifier).state =
+                        index;
                   },
                   child: Row(
                     children: [
@@ -553,7 +554,9 @@ class _CustomerList extends ConsumerWidget {
                               customer.fullName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w800),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Wrap(
@@ -564,12 +567,18 @@ class _CustomerList extends ConsumerWidget {
                                 _TierBadge(tier: customer.tier),
                                 Text(
                                   customer.phone,
-                                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11.5,
+                                  ),
                                 ),
                                 if (customer.favoriteService.isNotEmpty)
                                   Text(
                                     customer.favoriteService,
-                                    style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                                    style: TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11.5,
+                                    ),
                                   ),
                               ],
                             ),
@@ -586,12 +595,17 @@ class _CustomerList extends ConsumerWidget {
                               customer.spentLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w800),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               '${customer.visitCount} lượt',
-                              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
@@ -653,7 +667,10 @@ class _CustomerDetail extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 4),
-                      Text(current.phone, style: TextStyle(color: AppColors.textMuted)),
+                      Text(
+                        current.phone,
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
                       const SizedBox(height: 6),
                       _TierBadge(tier: current.tier),
                     ],
@@ -674,7 +691,9 @@ class _CustomerDetail extends ConsumerWidget {
                   PremiumInfoRow(
                     icon: Icons.content_cut_rounded,
                     label: 'Dịch vụ yêu thích',
-                    value: current.favoriteService.isEmpty ? 'Chưa ghi nhận' : current.favoriteService,
+                    value: current.favoriteService.isEmpty
+                        ? 'Chưa ghi nhận'
+                        : current.favoriteService,
                   ),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
@@ -686,13 +705,17 @@ class _CustomerDetail extends ConsumerWidget {
                   PremiumInfoRow(
                     icon: Icons.auto_awesome_outlined,
                     label: 'Hồ sơ tóc',
-                    value: current.hairProfile.isEmpty ? 'Chưa có hồ sơ tóc' : current.hairProfile,
+                    value: current.hairProfile.isEmpty
+                        ? 'Chưa có hồ sơ tóc'
+                        : current.hairProfile,
                   ),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
                     icon: Icons.sticky_note_2_outlined,
                     label: 'Ghi chú salon',
-                    value: current.note.isEmpty ? 'Chưa có ghi chú' : current.note,
+                    value: current.note.isEmpty
+                        ? 'Chưa có ghi chú'
+                        : current.note,
                   ),
                   const SizedBox(height: 14),
                   _InvoiceHistory(history: history, limit: 3),
@@ -710,7 +733,8 @@ class _CustomerDetail extends ConsumerWidget {
                   key: const Key('customer-open-full-profile'),
                   onPressed: () {
                     ref.read(customerProfileTabProvider.notifier).state = 0;
-                    ref.read(customerProfileDetailIdProvider.notifier).state = current.id;
+                    ref.read(customerProfileDetailIdProvider.notifier).state =
+                        current.id;
                   },
                   icon: const Icon(Icons.contact_page_outlined),
                   label: const Text('Xem hồ sơ đầy đủ'),
@@ -720,7 +744,8 @@ class _CustomerDetail extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _openCustomerBilling(context, ref, current),
+                        onPressed: () =>
+                            _openCustomerBilling(context, ref, current),
                         icon: const Icon(Icons.point_of_sale_outlined),
                         label: const Text('Tính tiền'),
                       ),
@@ -728,7 +753,11 @@ class _CustomerDetail extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _openCustomerEditor(context, ref, customer: current),
+                        onPressed: () => _openCustomerEditor(
+                          context,
+                          ref,
+                          customer: current,
+                        ),
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('Sửa'),
                       ),
@@ -765,7 +794,9 @@ class _CustomerFullProfile extends ConsumerWidget {
             children: [
               TextButton.icon(
                 key: const Key('customer-profile-back'),
-                onPressed: () => ref.read(customerProfileDetailIdProvider.notifier).state = null,
+                onPressed: () =>
+                    ref.read(customerProfileDetailIdProvider.notifier).state =
+                        null,
                 icon: const Icon(Icons.arrow_back_rounded),
                 label: const Text('Quay lại danh sách khách'),
               ),
@@ -781,7 +812,9 @@ class _CustomerFullProfile extends ConsumerWidget {
                             ? Icons.workspace_premium_outlined
                             : Icons.person_outline_rounded,
                         size: 72,
-                        tone: customer.tier.contains('VIP') ? AppColors.warning : AppColors.copper,
+                        tone: customer.tier.contains('VIP')
+                            ? AppColors.warning
+                            : AppColors.copper,
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -795,9 +828,10 @@ class _CustomerFullProfile extends ConsumerWidget {
                               children: [
                                 Text(
                                   customer.fullName,
-                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w800),
                                 ),
                                 _TierBadge(tier: customer.tier),
                               ],
@@ -807,9 +841,15 @@ class _CustomerFullProfile extends ConsumerWidget {
                               spacing: 16,
                               runSpacing: 6,
                               children: [
-                                _InlineMeta(icon: Icons.phone_outlined, text: customer.phone),
+                                _InlineMeta(
+                                  icon: Icons.phone_outlined,
+                                  text: customer.phone,
+                                ),
                                 if ((customer.email ?? '').trim().isNotEmpty)
-                                  _InlineMeta(icon: Icons.mail_outline_rounded, text: customer.email!),
+                                  _InlineMeta(
+                                    icon: Icons.mail_outline_rounded,
+                                    text: customer.email!,
+                                  ),
                                 _InlineMeta(
                                   icon: Icons.history_rounded,
                                   text: 'Gần nhất: ${customer.lastVisitLabel}',
@@ -829,19 +869,25 @@ class _CustomerFullProfile extends ConsumerWidget {
                     children: [
                       FilledButton.icon(
                         key: const Key('customer-profile-book'),
-                        onPressed: () => _openCustomerAppointment(context, ref, customer),
+                        onPressed: () =>
+                            _openCustomerAppointment(context, ref, customer),
                         icon: const Icon(Icons.calendar_month_outlined),
                         label: const Text('Đặt lịch'),
                       ),
                       OutlinedButton.icon(
                         key: const Key('customer-profile-billing'),
-                        onPressed: () => _openCustomerBilling(context, ref, customer),
+                        onPressed: () =>
+                            _openCustomerBilling(context, ref, customer),
                         icon: const Icon(Icons.point_of_sale_outlined),
                         label: const Text('Tính tiền'),
                       ),
                       OutlinedButton.icon(
                         key: const Key('customer-profile-edit'),
-                        onPressed: () => _openCustomerEditor(context, ref, customer: customer),
+                        onPressed: () => _openCustomerEditor(
+                          context,
+                          ref,
+                          customer: customer,
+                        ),
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('Sửa hồ sơ'),
                       ),
@@ -877,7 +923,8 @@ class _CustomerFullProfile extends ConsumerWidget {
             children: [
               _CustomerProfileTabs(
                 selected: selectedTab,
-                onSelected: (value) => ref.read(customerProfileTabProvider.notifier).state = value,
+                onSelected: (value) =>
+                    ref.read(customerProfileTabProvider.notifier).state = value,
               ),
               const SizedBox(height: 14),
               AnimatedSwitcher(
@@ -888,7 +935,10 @@ class _CustomerFullProfile extends ConsumerWidget {
                     1 => _ServiceHistoryTab(history: history),
                     2 => _NotesTab(customer: customer),
                     3 => _PaymentsTab(history: history),
-                    _ => _CustomerOverviewTab(customer: customer, history: history),
+                    _ => _CustomerOverviewTab(
+                      customer: customer,
+                      history: history,
+                    ),
                   },
                 ),
               ),
@@ -939,14 +989,16 @@ class _CustomerProfileMetrics extends StatelessWidget {
         final columns = constraints.maxWidth >= 980
             ? 4
             : constraints.maxWidth >= 560
-                ? 2
-                : 1;
+            ? 2
+            : 1;
         const gap = 10.0;
         final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
         return Wrap(
           spacing: gap,
           runSpacing: gap,
-          children: [for (final card in cards) SizedBox(width: width, child: card)],
+          children: [
+            for (final card in cards) SizedBox(width: width, child: card),
+          ],
         );
       },
     );
@@ -954,7 +1006,10 @@ class _CustomerProfileMetrics extends StatelessWidget {
 }
 
 class _CustomerProfileTabs extends StatelessWidget {
-  const _CustomerProfileTabs({required this.selected, required this.onSelected});
+  const _CustomerProfileTabs({
+    required this.selected,
+    required this.onSelected,
+  });
 
   final int selected;
   final ValueChanged<int> onSelected;
@@ -1007,19 +1062,25 @@ class _CustomerOverviewTab extends StatelessWidget {
                   PremiumInfoRow(
                     icon: Icons.content_cut_rounded,
                     label: 'Dịch vụ yêu thích',
-                    value: customer.favoriteService.isEmpty ? 'Chưa ghi nhận' : customer.favoriteService,
+                    value: customer.favoriteService.isEmpty
+                        ? 'Chưa ghi nhận'
+                        : customer.favoriteService,
                   ),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
                     icon: Icons.auto_fix_high_outlined,
                     label: 'Hồ sơ tóc',
-                    value: customer.hairProfile.isEmpty ? 'Chưa có hồ sơ tóc' : customer.hairProfile,
+                    value: customer.hairProfile.isEmpty
+                        ? 'Chưa có hồ sơ tóc'
+                        : customer.hairProfile,
                   ),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
                     icon: Icons.sticky_note_2_outlined,
                     label: 'Ghi chú salon',
-                    value: customer.note.isEmpty ? 'Chưa có ghi chú' : customer.note,
+                    value: customer.note.isEmpty
+                        ? 'Chưa có ghi chú'
+                        : customer.note,
                   ),
                 ],
               ),
@@ -1038,7 +1099,9 @@ class _CustomerOverviewTab extends StatelessWidget {
                   PremiumInfoRow(
                     icon: Icons.mail_outline_rounded,
                     label: 'Email',
-                    value: (customer.email ?? '').trim().isEmpty ? 'Chưa có email' : customer.email!,
+                    value: (customer.email ?? '').trim().isEmpty
+                        ? 'Chưa có email'
+                        : customer.email!,
                   ),
                   const PremiumDivider(indent: 42),
                   PremiumInfoRow(
@@ -1051,7 +1114,9 @@ class _CustomerOverviewTab extends StatelessWidget {
             );
 
             if (constraints.maxWidth < 820) {
-              return Column(children: [details, const SizedBox(height: 12), contact]);
+              return Column(
+                children: [details, const SizedBox(height: 12), contact],
+              );
             }
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1103,7 +1168,8 @@ class _ServiceHistoryTab extends StatelessWidget {
           children: [
             for (var index = 0; index < serviceInvoices.length; index++) ...[
               _ServiceHistoryRow(invoice: serviceInvoices[index]),
-              if (index < serviceInvoices.length - 1) const PremiumDivider(indent: 48),
+              if (index < serviceInvoices.length - 1)
+                const PremiumDivider(indent: 48),
             ],
           ],
         );
@@ -1119,23 +1185,38 @@ class _ServiceHistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final services = invoice.lines.where((line) => line.isService).toList(growable: false);
+    final services = invoice.lines
+        .where((line) => line.isService)
+        .toList(growable: false);
     final paidAt = invoice.paidAt ?? invoice.updatedAt;
-    final serviceTotal = services.fold<int>(0, (sum, line) => sum + line.totalPrice);
+    final serviceTotal = services.fold<int>(
+      0,
+      (sum, line) => sum + line.totalPrice,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PremiumIconBadge(icon: Icons.content_cut_rounded, size: 38, tone: AppColors.copper),
+          PremiumIconBadge(
+            icon: Icons.content_cut_rounded,
+            size: 38,
+            tone: AppColors.copper,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  services.map((line) => line.quantity > 1 ? '${line.quantity} × ${line.title}' : line.title).join(' • '),
+                  services
+                      .map(
+                        (line) => line.quantity > 1
+                            ? '${line.quantity} × ${line.title}'
+                            : line.title,
+                      )
+                      .join(' • '),
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),
@@ -1147,7 +1228,10 @@ class _ServiceHistoryRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(_currency(serviceTotal), style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(
+            _currency(serviceTotal),
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -1168,7 +1252,9 @@ class _NotesTab extends ConsumerWidget {
           icon: Icons.auto_awesome_outlined,
           title: 'Hồ sơ tóc',
           child: Text(
-            customer.hairProfile.isEmpty ? 'Chưa có hồ sơ tóc.' : customer.hairProfile,
+            customer.hairProfile.isEmpty
+                ? 'Chưa có hồ sơ tóc.'
+                : customer.hairProfile,
             style: TextStyle(color: AppColors.textSecondary, height: 1.45),
           ),
         ),
@@ -1185,7 +1271,8 @@ class _NotesTab extends ConsumerWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: () => _openCustomerEditor(context, ref, customer: customer),
+            onPressed: () =>
+                _openCustomerEditor(context, ref, customer: customer),
             icon: const Icon(Icons.edit_note_rounded),
             label: const Text('Chỉnh sửa hồ sơ & ghi chú'),
           ),
@@ -1249,7 +1336,11 @@ class _CustomerMetricStrip extends StatelessWidget {
               ),
             ),
             if (index < metrics.length - 1)
-              Container(width: 1, height: 32, color: AppColors.workspaceDivider),
+              Container(
+                width: 1,
+                height: 32,
+                color: AppColors.workspaceDivider,
+              ),
           ],
         ],
       ),
@@ -1284,8 +1375,13 @@ class _InvoiceHistory extends StatelessWidget {
           );
         }
 
-        final visible = limit == null ? invoices : invoices.take(limit!).toList(growable: false);
-        final totalPaid = invoices.fold<int>(0, (sum, invoice) => sum + invoice.totalAmount);
+        final visible = limit == null
+            ? invoices
+            : invoices.take(limit!).toList(growable: false);
+        final totalPaid = invoices.fold<int>(
+          0,
+          (sum, invoice) => sum + invoice.totalAmount,
+        );
         return PremiumSectionCard(
           icon: Icons.receipt_long_outlined,
           title: 'Lịch sử thanh toán',
@@ -1294,7 +1390,8 @@ class _InvoiceHistory extends StatelessWidget {
             children: [
               for (var index = 0; index < visible.length; index++) ...[
                 _InvoiceRow(invoice: visible[index]),
-                if (index < visible.length - 1) const PremiumDivider(indent: 42),
+                if (index < visible.length - 1)
+                  const PremiumDivider(indent: 42),
               ],
             ],
           ),
@@ -1315,7 +1412,8 @@ class _InvoiceRow extends StatelessWidget {
     return PremiumInfoRow(
       icon: Icons.payments_outlined,
       label: paidAt == null ? 'Chưa thanh toán' : _dateTime(paidAt),
-      value: '${_currency(invoice.totalAmount)} • ${invoice.lines.length} mục • ${invoice.paymentMethod}',
+      value:
+          '${_currency(invoice.totalAmount)} • ${invoice.lines.length} mục • ${invoice.paymentMethod}',
     );
   }
 }
@@ -1333,7 +1431,10 @@ class _InlineMeta extends StatelessWidget {
       children: [
         Icon(icon, size: 15, color: AppColors.textMuted),
         const SizedBox(width: 5),
-        Text(text, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        Text(
+          text,
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
       ],
     );
   }
@@ -1351,8 +1452,8 @@ class _TierBadge extends StatelessWidget {
     final tone = gold
         ? AppColors.warning
         : vip
-            ? AppColors.copper
-            : AppColors.textMuted;
+        ? AppColors.copper
+        : AppColors.textMuted;
     return Container(
       constraints: const BoxConstraints(maxWidth: 120),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -1365,7 +1466,11 @@ class _TierBadge extends StatelessWidget {
         tier,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: tone, fontSize: 10.5, fontWeight: FontWeight.w800),
+        style: TextStyle(
+          color: tone,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1385,7 +1490,8 @@ class _MissingCustomerProfile extends StatelessWidget {
           const PremiumEmptyState(
             icon: Icons.person_off_outlined,
             title: 'Không còn tìm thấy hồ sơ khách',
-            message: 'Hồ sơ có thể đã thay đổi. Quay lại danh sách để chọn lại khách.',
+            message:
+                'Hồ sơ có thể đã thay đổi. Quay lại danh sách để chọn lại khách.',
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -1426,8 +1532,12 @@ class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
     _fullNameController = TextEditingController(text: customer?.fullName ?? '');
     _phoneController = TextEditingController(text: customer?.phone ?? '');
     _emailController = TextEditingController(text: customer?.email ?? '');
-    _favoriteServiceController = TextEditingController(text: customer?.favoriteService ?? '');
-    _hairProfileController = TextEditingController(text: customer?.hairProfile ?? '');
+    _favoriteServiceController = TextEditingController(
+      text: customer?.favoriteService ?? '',
+    );
+    _hairProfileController = TextEditingController(
+      text: customer?.hairProfile ?? '',
+    );
     _noteController = TextEditingController(text: customer?.note ?? '');
     _tier = customer?.tier ?? 'Member';
   }
@@ -1480,9 +1590,14 @@ class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _tier,
-                  decoration: const InputDecoration(labelText: 'Hạng thành viên'),
+                  decoration: const InputDecoration(
+                    labelText: 'Hạng thành viên',
+                  ),
                   items: const ['Member', 'VIP Silver', 'VIP Gold']
-                      .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                      .map(
+                        (item) =>
+                            DropdownMenuItem(value: item, child: Text(item)),
+                      )
                       .toList(),
                   onChanged: (value) {
                     if (value != null) setState(() => _tier = value);
@@ -1491,7 +1606,9 @@ class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _favoriteServiceController,
-                  decoration: const InputDecoration(labelText: 'Dịch vụ yêu thích'),
+                  decoration: const InputDecoration(
+                    labelText: 'Dịch vụ yêu thích',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1552,10 +1669,12 @@ class _CustomerAppointmentDialog extends StatefulWidget {
   final List<Map<String, Object?>> employees;
 
   @override
-  State<_CustomerAppointmentDialog> createState() => _CustomerAppointmentDialogState();
+  State<_CustomerAppointmentDialog> createState() =>
+      _CustomerAppointmentDialogState();
 }
 
-class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> {
+class _CustomerAppointmentDialogState
+    extends State<_CustomerAppointmentDialog> {
   final _formKey = GlobalKey<FormState>();
   final _timeController = TextEditingController(text: '10:00');
   final _slotController = TextEditingController(text: 'Ghế 1');
@@ -1568,7 +1687,9 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
   @override
   void initState() {
     super.initState();
-    _employeeId = widget.employees.isEmpty ? null : widget.employees.first['id']?.toString();
+    _employeeId = widget.employees.isEmpty
+        ? null
+        : widget.employees.first['id']?.toString();
   }
 
   @override
@@ -1582,10 +1703,15 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
 
   List<ServiceCatalogItem> get _selectedServices {
     final ids = _serviceIds.toSet();
-    return widget.services.where((service) => ids.contains(service.id)).toList(growable: false);
+    return widget.services
+        .where((service) => ids.contains(service.id))
+        .toList(growable: false);
   }
 
-  int get _selectedDuration => _selectedServices.fold<int>(0, (sum, service) => sum + service.durationMinutes);
+  int get _selectedDuration => _selectedServices.fold<int>(
+    0,
+    (sum, service) => sum + service.durationMinutes,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1621,9 +1747,20 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(widget.customer.fullName, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            Text(
+                              widget.customer.fullName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                             const SizedBox(height: 3),
-                            Text(widget.customer.phone, style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+                            Text(
+                              widget.customer.phone,
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11.5,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1631,18 +1768,32 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text('Dịch vụ', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textMuted)),
+                Text(
+                  'Dịch vụ',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: AppColors.textMuted),
+                ),
                 const SizedBox(height: 7),
                 FormField<List<String>>(
                   initialValue: _serviceIds,
-                  validator: (value) => value == null || value.isEmpty ? 'Chọn ít nhất một dịch vụ' : null,
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Chọn ít nhất một dịch vụ'
+                      : null,
                   builder: (field) => Container(
                     decoration: BoxDecoration(
                       color: AppColors.fieldShell,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: field.hasError ? AppColors.danger : AppColors.controlBorder),
+                      border: Border.all(
+                        color: field.hasError
+                            ? AppColors.danger
+                            : AppColors.controlBorder,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     child: Column(
                       children: [
                         for (final service in widget.services)
@@ -1651,17 +1802,30 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                             controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(service.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text('${service.durationLabel} • ${service.priceLabel}'),
+                            title: Text(
+                              service.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${service.durationLabel} • ${service.priceLabel}',
+                            ),
                             onChanged: (checked) {
                               setState(() {
                                 if (checked == true) {
-                                  _serviceIds = {..._serviceIds, service.id}.toList(growable: false);
+                                  _serviceIds = {
+                                    ..._serviceIds,
+                                    service.id,
+                                  }.toList(growable: false);
                                 } else {
-                                  _serviceIds = _serviceIds.where((id) => id != service.id).toList(growable: false);
+                                  _serviceIds = _serviceIds
+                                      .where((id) => id != service.id)
+                                      .toList(growable: false);
                                 }
                                 final duration = _selectedDuration;
-                                _durationController.text = '${duration == 0 ? 90 : duration}';
+                                _durationController.text =
+                                    '${duration == 0 ? 90 : duration}';
                                 field.didChange(_serviceIds);
                               });
                             },
@@ -1671,7 +1835,13 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                             alignment: Alignment.centerLeft,
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-                              child: Text(field.errorText!, style: TextStyle(color: AppColors.danger, fontSize: 11)),
+                              child: Text(
+                                field.errorText!,
+                                style: TextStyle(
+                                  color: AppColors.danger,
+                                  fontSize: 11,
+                                ),
+                              ),
                             ),
                           ),
                       ],
@@ -1697,7 +1867,8 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                         ),
                       )
                       .toList(),
-                  validator: (value) => value == null || value.isEmpty ? 'Chọn nhân viên' : null,
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Chọn nhân viên' : null,
                   onChanged: (value) => setState(() => _employeeId = value),
                 ),
                 const SizedBox(height: 12),
@@ -1708,10 +1879,17 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                       initialValue: _dayLabel,
                       decoration: const InputDecoration(labelText: 'Ngày hẹn'),
                       items: const ['Hôm nay', 'Ngày mai']
-                          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(item),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) {
-                        if (value != null) setState(() => _dayLabel = value);
+                        if (value != null) {
+                          setState(() => _dayLabel = value);
+                        }
                       },
                     );
                     final time = TextFormField(
@@ -1719,12 +1897,24 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                       decoration: const InputDecoration(labelText: 'Giờ hẹn'),
                       validator: (value) {
                         final text = value?.trim() ?? '';
-                        if (!RegExp(r'^\d{2}:\d{2}$').hasMatch(text)) return 'Dùng định dạng HH:mm';
+                        if (!RegExp(r'^\d{2}:\d{2}$').hasMatch(text)) {
+                          return 'Dùng định dạng HH:mm';
+                        }
                         return null;
                       },
                     );
-                    if (stacked) return Column(children: [day, const SizedBox(height: 10), time]);
-                    return Row(children: [Expanded(child: day), const SizedBox(width: 10), Expanded(child: time)]);
+                    if (stacked) {
+                      return Column(
+                        children: [day, const SizedBox(height: 10), time],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: day),
+                        const SizedBox(width: 10),
+                        Expanded(child: time),
+                      ],
+                    );
                   },
                 ),
                 const SizedBox(height: 10),
@@ -1733,25 +1923,47 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
                     final stacked = constraints.maxWidth < 500;
                     final duration = TextFormField(
                       controller: _durationController,
-                      decoration: const InputDecoration(labelText: 'Thời lượng (phút)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Thời lượng (phút)',
+                      ),
                       validator: (value) {
                         final minutes = int.tryParse(value?.trim() ?? '');
-                        return minutes == null || minutes <= 0 ? 'Nhập số phút hợp lệ' : null;
+                        return minutes == null || minutes <= 0
+                            ? 'Nhập số phút hợp lệ'
+                            : null;
                       },
                     );
                     final slot = TextFormField(
                       controller: _slotController,
-                      decoration: const InputDecoration(labelText: 'Khu vực / ghế'),
-                      validator: (value) => value == null || value.trim().isEmpty ? 'Nhập khu vực phục vụ' : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Khu vực / ghế',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Nhập khu vực phục vụ'
+                          : null,
                     );
-                    if (stacked) return Column(children: [duration, const SizedBox(height: 10), slot]);
-                    return Row(children: [Expanded(child: duration), const SizedBox(width: 10), Expanded(child: slot)]);
+                    if (stacked) {
+                      return Column(
+                        children: [duration, const SizedBox(height: 10), slot],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: duration),
+                        const SizedBox(width: 10),
+                        Expanded(child: slot),
+                      ],
+                    );
                   },
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: _noteController,
-                  decoration: const InputDecoration(labelText: 'Ghi chú', prefixIcon: Icon(Icons.notes_outlined)),
+                  decoration: const InputDecoration(
+                    labelText: 'Ghi chú',
+                    prefixIcon: Icon(Icons.notes_outlined),
+                  ),
                   maxLines: 3,
                 ),
               ],
@@ -1760,7 +1972,10 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Hủy')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
         FilledButton.icon(
           onPressed: _submit,
           icon: const Icon(Icons.check_rounded),
@@ -1772,14 +1987,18 @@ class _CustomerAppointmentDialogState extends State<_CustomerAppointmentDialog> 
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    final employee = widget.employees.where((item) => item['id']?.toString() == _employeeId).firstOrNull;
+    final employee = widget.employees
+        .where((item) => item['id']?.toString() == _employeeId)
+        .firstOrNull;
     final services = _selectedServices;
     if (employee == null || services.isEmpty) return;
 
     Navigator.of(context).pop(
       AppointmentUpsertInput(
         customerId: widget.customer.id,
-        serviceIds: services.map((service) => service.id).toList(growable: false),
+        serviceIds: services
+            .map((service) => service.id)
+            .toList(growable: false),
         employeeId: employee['id']!.toString(),
         customerName: widget.customer.fullName,
         customerPhone: widget.customer.phone,
@@ -1806,7 +2025,9 @@ CustomerProfile? _findCustomer(List<CustomerProfile> items, String id) {
 String _friendlyError(Object error) {
   final raw = error.toString().trim();
   const statePrefix = 'Bad state: ';
-  return raw.startsWith(statePrefix) ? raw.substring(statePrefix.length).trim() : raw;
+  return raw.startsWith(statePrefix)
+      ? raw.substring(statePrefix.length).trim()
+      : raw;
 }
 
 final NumberFormat _currencyFormatter = NumberFormat.currency(
@@ -1816,5 +2037,6 @@ final NumberFormat _currencyFormatter = NumberFormat.currency(
 );
 final DateFormat _dateTimeFormatter = DateFormat('dd/MM/yyyy HH:mm');
 
-String _currency(int value) => _currencyFormatter.format(value).replaceAll(',', '.');
+String _currency(int value) =>
+    _currencyFormatter.format(value).replaceAll(',', '.');
 String _dateTime(DateTime value) => _dateTimeFormatter.format(value);
