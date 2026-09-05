@@ -1,0 +1,160 @@
+name: Temp UI refine validation 2
+
+on:
+  push:
+    branches:
+      - 'refactor/v2-8-compact-detail-popups'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-generated-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Decode base UI patch
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, pathlib
+          src = pathlib.Path('tool/.ui_refine_patch.py.gz.b64').read_text().strip()
+          pathlib.Path('/tmp/apply_ui_refine.py').write_bytes(gzip.decompress(base64.b64decode(src)))
+          PY
+
+      - name: Apply approved compact detail layout
+        run: python3 /tmp/apply_ui_refine.py
+
+      - name: Remove superseded detail widgets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def remove_until(text, start_marker, next_marker):
+              start = text.index(start_marker)
+              end = text.index(next_marker, start + len(start_marker))
+              return text[:start] + text[end:]
+
+          customer_path = Path('lib/features/customers/presentation/pages/customers_page.dart')
+          customer = customer_path.read_text()
+          customer = remove_until(
+              customer,
+              'class _CustomerMetricStrip extends StatelessWidget {',
+              'class _InvoiceHistory extends StatelessWidget {',
+          )
+          customer_path.write_text(customer)
+
+          employee_path = Path('lib/features/employees/presentation/pages/employees_page.dart')
+          employee = employee_path.read_text()
+          for start_marker, next_marker in [
+              ('class _EmployeeOverviewTab extends StatelessWidget {', 'class _ProfileMetrics extends StatelessWidget {'),
+              ('class _ProfileMetrics extends StatelessWidget {', 'class _EmployeeScheduleTab extends StatelessWidget {'),
+              ('class _EmployeeScheduleTab extends StatelessWidget {', 'class _AppointmentProfileRow extends StatelessWidget {'),
+              ('class _EmployeePerformanceTab extends StatelessWidget {', 'class _TopServiceRow extends StatelessWidget {'),
+              ('class _TopServiceRow extends StatelessWidget {', 'class _EmployeeHistoryTab extends StatelessWidget {'),
+              ('class _EmployeeHistoryTab extends StatelessWidget {', 'class _SectionLabel extends StatelessWidget {'),
+              ('class _SectionLabel extends StatelessWidget {', 'class _InlineEmpty extends StatelessWidget {'),
+              ('class _InlineEmpty extends StatelessWidget {', 'Color _statusTone(String status) {'),
+          ]:
+              employee = remove_until(employee, start_marker, next_marker)
+          employee_path.write_text(employee)
+          PY
+
+      - name: Apply responsive desktop hardening
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          employee_path = Path('lib/features/employees/presentation/pages/employees_page.dart')
+          employee = employee_path.read_text()
+          employee = employee.replace(
+              'if (constraints.maxWidth < 900) {\n          return Column(',
+              'if (constraints.maxWidth < 760) {\n          return Column(',
+              1,
+          )
+          employee = employee.replace(
+              "IconButton.outlined(\n                  tooltip: 'Sửa hồ sơ',",
+              "IconButton.outlined(\n                  key: const Key('employee-profile-edit-action'),\n                  tooltip: 'Sửa hồ sơ',",
+              1,
+          )
+          employee_path.write_text(employee)
+
+          sales_path = Path('lib/features/sales/presentation/pages/sales_page.dart')
+          sales = sales_path.read_text()
+          sales = sales.replace(
+              'Expanded(flex: 13, child: list),\n            const SizedBox(width: 10),\n            Expanded(flex: 7, child: detail),',
+              'Expanded(flex: 11, child: list),\n            const SizedBox(width: 10),\n            Expanded(flex: 9, child: detail),',
+              1,
+          )
+          sales_path.write_text(sales)
+
+          test_path = Path('test/employee_profile_layout_test.dart')
+          test = test_path.read_text()
+          test = test.replace(
+              "      expect(find.byKey(const Key('employee-profile-tabs')), findsOneWidget);\n      expect(\n        find.byKey(const Key('employee-profile-overview')),\n        findsOneWidget,\n      );",
+              "      expect(find.byKey(const Key('employee-profile-card')), findsOneWidget);\n      expect(\n        find.byKey(const Key('employee-profile-edit-action')),\n        findsOneWidget,\n      );",
+          )
+          test = test.replace(
+              "    await tester.tap(find.text('Sửa hồ sơ').first);",
+              "    await tester.tap(\n      find.byKey(const Key('employee-profile-edit-action')),\n    );",
+          )
+          test_path.write_text(test)
+          PY
+
+      - name: Apply height-adaptive employee cards
+        run: python3 tool/.ui_refine_height_fix.py
+
+      - name: Format affected files
+        run: |
+          dart format \
+            lib/features/customers/presentation/pages/customers_page.dart \
+            lib/features/services/presentation/pages/services_page.dart \
+            lib/features/services/presentation/widgets/service_performance_panel.dart \
+            lib/features/sales/presentation/pages/sales_page.dart \
+            lib/features/sales/presentation/widgets/product_performance_panel.dart \
+            lib/features/employees/presentation/pages/employees_page.dart \
+            test/employee_profile_layout_test.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Save generated files
+        if: always()
+        run: |
+          mkdir -p /tmp/ui-refine-artifact/lib/features/customers/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/lib/features/services/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/lib/features/services/presentation/widgets
+          mkdir -p /tmp/ui-refine-artifact/lib/features/sales/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/lib/features/sales/presentation/widgets
+          mkdir -p /tmp/ui-refine-artifact/lib/features/employees/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/test
+          cp lib/features/customers/presentation/pages/customers_page.dart /tmp/ui-refine-artifact/lib/features/customers/presentation/pages/
+          cp lib/features/services/presentation/pages/services_page.dart /tmp/ui-refine-artifact/lib/features/services/presentation/pages/
+          cp lib/features/services/presentation/widgets/service_performance_panel.dart /tmp/ui-refine-artifact/lib/features/services/presentation/widgets/
+          cp lib/features/sales/presentation/pages/sales_page.dart /tmp/ui-refine-artifact/lib/features/sales/presentation/pages/
+          cp lib/features/sales/presentation/widgets/product_performance_panel.dart /tmp/ui-refine-artifact/lib/features/sales/presentation/widgets/
+          cp lib/features/employees/presentation/pages/employees_page.dart /tmp/ui-refine-artifact/lib/features/employees/presentation/pages/
+          cp test/employee_profile_layout_test.dart /tmp/ui-refine-artifact/test/
+          git diff -- . ':!.github/workflows/_temp-ui-refine.yml' ':!.github/workflows/_temp-ui-refine2.yml' ':!tool/.ui_refine_patch.py.gz.b64' ':!tool/.ui_refine_height_fix.py' > /tmp/ui-refine-artifact/generated.patch
+
+      - name: Upload generated files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-detail-generated-2
+          path: /tmp/ui-refine-artifact
+          if-no-files-found: error
