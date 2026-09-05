@@ -24,7 +24,17 @@ class StaffWorkstationPage extends ConsumerStatefulWidget {
 }
 
 class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
+  final TextEditingController _searchController = TextEditingController();
+
   bool _isProcessing = false;
+  String _searchQuery = '';
+  _StaffFilter _selectedFilter = _StaffFilter.all;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,20 +62,27 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: Column(
             children: [
               _StaffHeader(
+                searchController: _searchController,
+                searchQuery: _searchQuery,
                 isProcessing: _isProcessing,
                 standalone: widget.standalone,
                 draftLabel: draftLabel,
                 hasActiveDraft: hasActiveDraft,
+                onSearchChanged: (value) {
+                  setState(() => _searchQuery = value);
+                },
+                onClearSearch: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
                 onClose: _closeWindow,
                 onOpenBilling: _openBillingDesk,
-                onOpenUpsell: _openUpsellDesk,
-                onExportReceipt: _openReceiptDesk,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               Expanded(
                 child: servicesState.when(
                   data: (services) => productsState.when(
@@ -83,6 +100,11 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
                             )
                             .toList(growable: false),
                         isProcessing: _isProcessing,
+                        searchQuery: _searchQuery,
+                        selectedFilter: _selectedFilter,
+                        onFilterSelected: (filter) {
+                          setState(() => _selectedFilter = filter);
+                        },
                         onReceive: (appointment) =>
                             _updateStatus(appointment, 'Đã đặt'),
                         onStartService: (appointment) =>
@@ -216,38 +238,6 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
     }
     ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
     _closeWindow();
-  }
-
-  void _openUpsellDesk() {
-    final messenger = ScaffoldMessenger.of(context);
-    if (widget.standalone) {
-      _openStandaloneBilling();
-    } else {
-      ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
-      _closeWindow();
-    }
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Mở bill hiện tại để thêm dịch vụ phát sinh hoặc sản phẩm bán kèm.',
-        ),
-      ),
-    );
-  }
-
-  void _openReceiptDesk() {
-    final messenger = ScaffoldMessenger.of(context);
-    if (widget.standalone) {
-      _openStandaloneBilling();
-    } else {
-      ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
-      _closeWindow();
-    }
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Mở bàn tính tiền để xuất phiếu cho khách.'),
-      ),
-    );
   }
 
   Future<void> _addServiceForAppointment(
@@ -418,76 +408,179 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
 
 class _StaffHeader extends StatelessWidget {
   const _StaffHeader({
+    required this.searchController,
+    required this.searchQuery,
     required this.isProcessing,
     required this.standalone,
     required this.draftLabel,
     required this.hasActiveDraft,
+    required this.onSearchChanged,
+    required this.onClearSearch,
     required this.onClose,
     required this.onOpenBilling,
-    required this.onOpenUpsell,
-    required this.onExportReceipt,
   });
 
+  final TextEditingController searchController;
+  final String searchQuery;
   final bool isProcessing;
   final bool standalone;
   final String draftLabel;
   final bool hasActiveDraft;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onClearSearch;
   final VoidCallback onClose;
   final VoidCallback onOpenBilling;
-  final VoidCallback onOpenUpsell;
-  final VoidCallback onExportReceipt;
 
   @override
   Widget build(BuildContext context) {
-    return PremiumSectionCard(
-      key: const Key('staff-premium-header'),
-      child: PremiumPageHeader(
-        icon: Icons.badge_outlined,
-        eyebrow: 'Không gian thao tác',
-        title: 'Bàn thao tác nhân viên',
-        subtitle:
-            'Xử lý lịch hôm nay, dịch vụ phát sinh và tính tiền mà không rời luồng phục vụ.',
-        trailing: [
-          PremiumStatusPill(
-            label: draftLabel,
-            tone: hasActiveDraft ? AppColors.warning : AppColors.success,
-          ),
-          FilledButton.icon(
-            key: const Key('staff-open-billing'),
-            onPressed: isProcessing ? null : onOpenBilling,
-            icon: const Icon(Icons.point_of_sale_outlined),
-            label: Text(hasActiveDraft ? 'Mở bill' : 'Tính tiền'),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Thao tác khác',
-            onSelected: (value) {
-              if (value == 'receipt') onExportReceipt();
-              if (value == 'upsell') onOpenUpsell();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'receipt',
-                child: ListTile(
-                  leading: Icon(Icons.receipt_long_outlined),
-                  title: Text('Xuất phiếu'),
-                ),
+    final todayLabel = DateFormat('dd/MM/yyyy').format(DateTime.now());
+
+    return Container(
+      key: const Key('staff-compact-header'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.controlBorder),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 980;
+
+          final title = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PremiumIconBadge(
+                icon: Icons.badge_outlined,
+                size: 38,
+                tone: AppColors.copper,
               ),
-              PopupMenuItem(
-                value: 'upsell',
-                child: ListTile(
-                  leading: Icon(Icons.add_shopping_cart_outlined),
-                  title: Text('Bán thêm'),
-                ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bàn thao tác nhân viên',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Hôm nay · $todayLabel',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ],
-            icon: const Icon(Icons.more_horiz_rounded),
-          ),
-          IconButton(
-            onPressed: isProcessing ? null : onClose,
-            tooltip: standalone ? 'Đóng cửa sổ Staff' : 'Đóng bàn nhân viên',
-            icon: const Icon(Icons.close_rounded),
-          ),
-        ],
+          );
+
+          final search = SizedBox(
+            key: const Key('staff-search-wrap'),
+            width: wide ? 350 : double.infinity,
+            child: TextField(
+              key: const Key('staff-search'),
+              controller: searchController,
+              onChanged: onSearchChanged,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Tìm tên hoặc SĐT',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: searchQuery.trim().isEmpty
+                    ? null
+                    : IconButton(
+                        key: const Key('staff-clear-search'),
+                        onPressed: onClearSearch,
+                        tooltip: 'Xóa tìm kiếm',
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                isDense: true,
+              ),
+            ),
+          );
+
+          final bill = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: PremiumStatusPill(
+                  label: draftLabel,
+                  tone: hasActiveDraft ? AppColors.warning : AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: const Key('staff-open-billing'),
+                onPressed: isProcessing ? null : onOpenBilling,
+                icon: const Icon(Icons.point_of_sale_outlined, size: 18),
+                label: Text(hasActiveDraft ? 'Mở bill' : 'Tính tiền'),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: isProcessing ? null : onClose,
+                tooltip:
+                    standalone ? 'Đóng cửa sổ Staff' : 'Đóng bàn nhân viên',
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          );
+
+          if (!wide) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: title),
+                    IconButton(
+                      onPressed: isProcessing ? null : onClose,
+                      tooltip: standalone
+                          ? 'Đóng cửa sổ Staff'
+                          : 'Đóng bàn nhân viên',
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                search,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: PremiumStatusPill(
+                        label: draftLabel,
+                        tone: hasActiveDraft
+                            ? AppColors.warning
+                            : AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      key: const Key('staff-open-billing-compact'),
+                      onPressed: isProcessing ? null : onOpenBilling,
+                      icon: const Icon(Icons.point_of_sale_outlined, size: 18),
+                      label: Text(hasActiveDraft ? 'Mở bill' : 'Tính tiền'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              title,
+              const SizedBox(width: 24),
+              Expanded(child: Center(child: search)),
+              const SizedBox(width: 20),
+              Flexible(child: bill),
+            ],
+          );
+        },
       ),
     );
   }
@@ -499,6 +592,9 @@ class _StaffBody extends StatelessWidget {
     required this.services,
     required this.products,
     required this.isProcessing,
+    required this.searchQuery,
+    required this.selectedFilter,
+    required this.onFilterSelected,
     required this.onReceive,
     required this.onStartService,
     required this.onComplete,
@@ -513,6 +609,9 @@ class _StaffBody extends StatelessWidget {
   final List<ServiceCatalogItem> services;
   final List<RetailProductItem> products;
   final bool isProcessing;
+  final String searchQuery;
+  final _StaffFilter selectedFilter;
+  final ValueChanged<_StaffFilter> onFilterSelected;
   final ValueChanged<AppointmentEntry> onReceive;
   final ValueChanged<AppointmentEntry> onStartService;
   final ValueChanged<AppointmentEntry> onComplete;
@@ -530,154 +629,183 @@ class _StaffBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final waiting = appointments
-        .where(
-          (item) =>
-              _staffOperationalState(item) ==
-              _StaffOperationalState.waitingConfirmation,
-        )
-        .length;
-    final active = appointments
-        .where(
-          (item) =>
-              _staffOperationalState(item) == _StaffOperationalState.active,
-        )
-        .length;
-    final completed = appointments
-        .where(
-          (item) =>
-              _staffOperationalState(item) ==
-                  _StaffOperationalState.awaitingPayment ||
-              _staffOperationalState(item) == _StaffOperationalState.paid,
-        )
-        .length;
+    final filtered = appointments.where((appointment) {
+      if (!_staffMatchesFilter(appointment, selectedFilter)) return false;
+      return _staffMatchesSearch(appointment, searchQuery);
+    }).toList(growable: false);
 
-    return ListView(
-      primary: false,
-      key: const Key('staff-premium-workspace'),
+    return Column(
+      key: const Key('staff-operation-workspace'),
       children: [
-        _StaffStats(
-          total: appointments.length,
-          waiting: waiting,
-          active: active,
-          completed: completed,
+        _StaffFilterBar(
+          appointments: appointments,
+          selectedFilter: selectedFilter,
+          onSelected: onFilterSelected,
         ),
-        const SizedBox(height: 16),
-        PremiumSectionCard(
-          icon: Icons.view_timeline_outlined,
-          title: 'Khách hôm nay',
-          subtitle: appointments.isEmpty
-              ? 'Chưa có lịch để thao tác'
-              : '${appointments.length} lượt cần theo dõi',
-          trailing: isProcessing
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : null,
-          child: appointments.isEmpty
-              ? const PremiumEmptyState(
-                  icon: Icons.event_available_outlined,
-                  title: 'Hôm nay chưa có lịch',
-                  message: 'Lịch mới sẽ xuất hiện ở đây để nhân viên xử lý.',
-                )
-              : Column(
-                  children: [
-                    for (
-                      var index = 0;
-                      index < appointments.length;
-                      index++
-                    ) ...[
-                      _StaffAppointmentCard(
-                        appointment: appointments[index],
-                        services: services,
-                        products: products,
-                        isProcessing: isProcessing,
-                        onReceive: onReceive,
-                        onStartService: onStartService,
-                        onComplete: onComplete,
-                        onUndoComplete: onUndoComplete,
-                        onCancel: onCancel,
-                        onCheckout: onCheckout,
-                        onAddService: onAddService,
-                        onAddProduct: onAddProduct,
+        const SizedBox(height: 10),
+        Expanded(
+          child: Container(
+            key: const Key('staff-premium-workspace'),
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.controlBorder),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 13, 16, 11),
+                  child: Row(
+                    children: [
+                      const PremiumIconBadge(
+                        icon: Icons.view_timeline_outlined,
+                        size: 34,
                       ),
-                      if (index < appointments.length - 1)
-                        const SizedBox(height: 10),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Khách hôm nay',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              _staffListSummary(
+                                total: appointments.length,
+                                visible: filtered.length,
+                                query: searchQuery,
+                                filter: selectedFilter,
+                              ),
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isProcessing)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                     ],
-                  ],
+                  ),
                 ),
+                const PremiumDivider(),
+                Expanded(
+                  child: appointments.isEmpty
+                      ? const PremiumEmptyState(
+                          icon: Icons.event_available_outlined,
+                          title: 'Hôm nay chưa có lịch',
+                          message:
+                              'Lịch mới sẽ xuất hiện ở đây để nhân viên xử lý.',
+                        )
+                      : filtered.isEmpty
+                          ? PremiumEmptyState(
+                              icon: Icons.search_off_rounded,
+                              title: 'Không có khách phù hợp',
+                              message: searchQuery.trim().isNotEmpty
+                                  ? 'Thử tên, số điện thoại khác hoặc đổi bộ lọc.'
+                                  : 'Đổi bộ lọc để xem các lịch hôm nay.',
+                            )
+                          : ListView.separated(
+                              primary: false,
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final appointment = filtered[index];
+                                return _StaffAppointmentRow(
+                                  appointment: appointment,
+                                  services: services,
+                                  products: products,
+                                  isProcessing: isProcessing,
+                                  onReceive: onReceive,
+                                  onStartService: onStartService,
+                                  onComplete: onComplete,
+                                  onUndoComplete: onUndoComplete,
+                                  onCancel: onCancel,
+                                  onCheckout: onCheckout,
+                                  onAddService: onAddService,
+                                  onAddProduct: onAddProduct,
+                                );
+                              },
+                            ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _StaffStats extends StatelessWidget {
-  const _StaffStats({
-    required this.total,
-    required this.waiting,
-    required this.active,
-    required this.completed,
+class _StaffFilterBar extends StatelessWidget {
+  const _StaffFilterBar({
+    required this.appointments,
+    required this.selectedFilter,
+    required this.onSelected,
   });
 
-  final int total;
-  final int waiting;
-  final int active;
-  final int completed;
+  final List<AppointmentEntry> appointments;
+  final _StaffFilter selectedFilter;
+  final ValueChanged<_StaffFilter> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final cards = [
-      PremiumStatCard(
-        icon: Icons.people_alt_outlined,
-        label: 'Lượt hôm nay',
-        value: '$total',
+    return Container(
+      key: const Key('staff-filter-bar'),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.controlBorder),
       ),
-      PremiumStatCard(
-        icon: Icons.notifications_active_outlined,
-        label: 'Chờ xác nhận',
-        value: '$waiting',
-        tone: AppColors.copper,
+      child: Row(
+        children: [
+          Icon(Icons.filter_alt_outlined, size: 18, color: AppColors.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final filter in _StaffFilter.values) ...[
+                    ChoiceChip(
+                      key: Key('staff-filter-${filter.name}'),
+                      label: Text(
+                        '${_staffFilterLabel(filter)} ${_staffFilterCount(appointments, filter)}',
+                      ),
+                      selected: filter == selectedFilter,
+                      onSelected: (_) => onSelected(filter),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    if (filter != _StaffFilter.values.last)
+                      const SizedBox(width: 7),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-      PremiumStatCard(
-        icon: Icons.content_cut_rounded,
-        label: 'Đang phục vụ',
-        value: '$active',
-        tone: AppColors.warning,
-      ),
-      PremiumStatCard(
-        icon: Icons.task_alt_outlined,
-        label: 'Hoàn thành',
-        value: '$completed',
-        tone: AppColors.success,
-      ),
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1080
-            ? 4
-            : constraints.maxWidth >= 600
-                ? 2
-                : 1;
-        const gap = 12.0;
-        final width =
-            (constraints.maxWidth - (columns - 1) * gap) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final card in cards) SizedBox(width: width, child: card),
-          ],
-        );
-      },
     );
   }
 }
 
-class _StaffAppointmentCard extends StatelessWidget {
-  const _StaffAppointmentCard({
+class _StaffAppointmentRow extends StatelessWidget {
+  const _StaffAppointmentRow({
     required this.appointment,
     required this.services,
     required this.products,
@@ -713,261 +841,408 @@ class _StaffAppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paid = appointment.isPaid;
-    final canReceive = !paid && appointment.status == 'Chờ xác nhận';
-    final canStart = !paid &&
-        (appointment.status == 'Chờ xác nhận' ||
-            appointment.status == 'Đã đặt');
-    final canComplete = !paid &&
-        (appointment.status == 'Đang làm' || appointment.status == 'Đã đặt');
-    final canUndoComplete = !paid && appointment.status == 'Hoàn thành';
-    final canCancel = !paid && appointment.status != 'Đã hủy';
-    final canCheckout = !paid &&
-        appointment.status != 'Chờ xác nhận' &&
-        appointment.status != 'Đã hủy';
-    final displayStatus = _staffOperationalLabel(appointment);
+    final state = _staffOperationalState(appointment);
     final tone = _staffOperationalTone(appointment);
+    final timing = _staffTimingLabel(appointment, DateTime.now());
 
     return Container(
       key: Key('staff-appointment-${appointment.id}'),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.featureSurface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(13),
         border: Border.all(
           color: tone.withValues(
-            alpha: appointment.status == 'Đang làm' ? 0.36 : 0.16,
+            alpha: state == _StaffOperationalState.active ? 0.34 : 0.14,
           ),
         ),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 820;
-          final identity = Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: AppColors.iconSurface,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      appointment.timeLabel,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      appointment.slotLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            appointment.customerName,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontSize: 16),
-                          ),
-                        ),
-                        PremiumStatusPill(label: displayStatus, tone: tone),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      appointment.servicesSummary,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.badge_outlined,
-                          size: 14,
-                          color: AppColors.textMuted,
-                        ),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            '${appointment.staffName} • ${appointment.durationLabel}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-
-          final primaryActions = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (canReceive)
-                OutlinedButton.icon(
-                  onPressed: isProcessing ? null : () => onReceive(appointment),
-                  icon: const Icon(Icons.how_to_reg_outlined),
-                  label: const Text('Xác nhận lịch'),
-                ),
-              if (canStart)
-                OutlinedButton.icon(
-                  onPressed: isProcessing
-                      ? null
-                      : () => onStartService(appointment),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Bắt đầu dịch vụ'),
-                ),
-              if (canComplete)
-                OutlinedButton.icon(
-                  onPressed:
-                      isProcessing ? null : () => onComplete(appointment),
-                  icon: const Icon(Icons.task_alt_outlined),
-                  label: const Text('Hoàn thành'),
-                ),
-              if (canUndoComplete)
-                OutlinedButton.icon(
-                  onPressed: isProcessing
-                      ? null
-                      : () => onUndoComplete(appointment),
-                  icon: const Icon(Icons.undo_outlined),
-                  label: const Text('Hoàn tác'),
-                ),
-              if (paid)
-                OutlinedButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.verified_outlined),
-                  label: const Text('Đã thu'),
-                )
-              else
-                FilledButton.icon(
-                  key: Key('staff-checkout-${appointment.id}'),
-                  onPressed: isProcessing || !canCheckout
-                      ? null
-                      : () => onCheckout(appointment),
-                  icon: const Icon(Icons.payments_outlined),
-                  label: const Text('Tính tiền'),
-                ),
-              if (!paid)
-                PopupMenuButton<String>(
-                  key: Key('staff-actions-${appointment.id}'),
-                  enabled: !isProcessing,
-                  tooltip: 'Thêm vào bill / thao tác khác',
-                  onSelected: (value) async {
-                    if (value == 'service') {
-                      final service =
-                          await _openStaffServicePicker(context, services);
-                      if (service != null) {
-                        await onAddService(appointment, service);
-                      }
-                    } else if (value == 'product') {
-                      final product =
-                          await _openStaffProductPicker(context, products);
-                      if (product != null) {
-                        await onAddProduct(appointment, product);
-                      }
-                    } else if (value == 'cancel' && canCancel) {
-                      onCancel(appointment);
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'service',
-                      child: ListTile(
-                        leading: Icon(Icons.add_business_outlined),
-                        title: Text('Thêm phát sinh vào bill'),
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'product',
-                      child: ListTile(
-                        leading: Icon(Icons.shopping_bag_outlined),
-                        title: Text('Thêm sản phẩm vào bill'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'cancel',
-                      enabled: canCancel,
-                      child: const ListTile(
-                        leading: Icon(Icons.event_busy_outlined),
-                        title: Text('Hủy lịch'),
-                      ),
-                    ),
-                  ],
-                  child: Container(
-                    height: 38,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.panel,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.controlBorder),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.more_horiz_rounded, size: 18),
-                        SizedBox(width: 5),
-                        Text('Khác'),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          );
+          final compact = constraints.maxWidth < 1080;
 
           if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [identity, const SizedBox(height: 12), primaryActions],
-            );
+            return _buildCompact(context, timing);
           }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(flex: 5, child: identity),
-              const SizedBox(width: 16),
-              Flexible(
-                flex: 4,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: primaryActions,
-                ),
-              ),
-            ],
-          );
+          return _buildWide(context, timing);
         },
       ),
+    );
+  }
+
+  Widget _buildWide(BuildContext context, String timing) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 64,
+          child: _TimeCell(appointment: appointment),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 3,
+          child: _CustomerCell(appointment: appointment),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          flex: 4,
+          child: _ServiceCell(appointment: appointment, timing: timing),
+        ),
+        const SizedBox(width: 14),
+        SizedBox(
+          width: 130,
+          child: _MetaCell(
+            icon: Icons.badge_outlined,
+            label: appointment.staffName,
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 92,
+          child: _MetaCell(
+            icon: Icons.schedule_outlined,
+            label: appointment.durationLabel,
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 118,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: PremiumStatusPill(
+              label: _staffOperationalLabel(appointment),
+              tone: _staffOperationalTone(appointment),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 150,
+          child: _buildPrimaryAction(),
+        ),
+        const SizedBox(width: 6),
+        _buildSecondaryMenu(context),
+      ],
+    );
+  }
+
+  Widget _buildCompact(BuildContext context, String timing) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 58, child: _TimeCell(appointment: appointment)),
+            const SizedBox(width: 10),
+            Expanded(child: _CustomerCell(appointment: appointment)),
+            const SizedBox(width: 8),
+            PremiumStatusPill(
+              label: _staffOperationalLabel(appointment),
+              tone: _staffOperationalTone(appointment),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _ServiceCell(appointment: appointment, timing: timing),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 5,
+                children: [
+                  _MetaCell(
+                    icon: Icons.badge_outlined,
+                    label: appointment.staffName,
+                  ),
+                  _MetaCell(
+                    icon: Icons.schedule_outlined,
+                    label: appointment.durationLabel,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(width: 145, child: _buildPrimaryAction()),
+            const SizedBox(width: 5),
+            _buildSecondaryMenu(context),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPrimaryAction() {
+    final state = _staffOperationalState(appointment);
+
+    switch (state) {
+      case _StaffOperationalState.waitingConfirmation:
+        return FilledButton.icon(
+          key: Key('staff-primary-${appointment.id}'),
+          onPressed: isProcessing ? null : () => onReceive(appointment),
+          icon: const Icon(Icons.how_to_reg_outlined, size: 17),
+          label: const Text('Xác nhận lịch'),
+        );
+      case _StaffOperationalState.booked:
+        return FilledButton.icon(
+          key: Key('staff-primary-${appointment.id}'),
+          onPressed: isProcessing ? null : () => onStartService(appointment),
+          icon: const Icon(Icons.play_arrow_rounded, size: 18),
+          label: const Text('Bắt đầu'),
+        );
+      case _StaffOperationalState.active:
+        return FilledButton.icon(
+          key: Key('staff-primary-${appointment.id}'),
+          onPressed: isProcessing ? null : () => onComplete(appointment),
+          icon: const Icon(Icons.task_alt_outlined, size: 17),
+          label: const Text('Hoàn thành'),
+        );
+      case _StaffOperationalState.awaitingPayment:
+        return FilledButton.icon(
+          key: Key('staff-checkout-${appointment.id}'),
+          onPressed: isProcessing ? null : () => onCheckout(appointment),
+          icon: const Icon(Icons.payments_outlined, size: 17),
+          label: const Text('Tính tiền'),
+        );
+      case _StaffOperationalState.paid:
+        return OutlinedButton.icon(
+          key: Key('staff-primary-${appointment.id}'),
+          onPressed: null,
+          icon: const Icon(Icons.verified_outlined, size: 17),
+          label: const Text('Đã thu'),
+        );
+      case _StaffOperationalState.canceled:
+        return OutlinedButton.icon(
+          key: Key('staff-primary-${appointment.id}'),
+          onPressed: null,
+          icon: const Icon(Icons.event_busy_outlined, size: 17),
+          label: const Text('Đã hủy'),
+        );
+      case _StaffOperationalState.other:
+        return OutlinedButton(
+          key: Key('staff-primary-${appointment.id}'),
+          onPressed: null,
+          child: Text(_staffOperationalLabel(appointment)),
+        );
+    }
+  }
+
+  Widget _buildSecondaryMenu(BuildContext context) {
+    if (appointment.isPaid) {
+      return const SizedBox(width: 40);
+    }
+
+    final canUndo = _staffOperationalState(appointment) ==
+        _StaffOperationalState.awaitingPayment;
+    final canCancel = appointment.status != 'Đã hủy';
+
+    return PopupMenuButton<String>(
+      key: Key('staff-actions-${appointment.id}'),
+      enabled: !isProcessing,
+      tooltip: 'Thao tác khác',
+      onSelected: (value) async {
+        if (value == 'service') {
+          final service = await _openStaffServicePicker(context, services);
+          if (service != null) {
+            await onAddService(appointment, service);
+          }
+        } else if (value == 'product') {
+          final product = await _openStaffProductPicker(context, products);
+          if (product != null) {
+            await onAddProduct(appointment, product);
+          }
+        } else if (value == 'undo' && canUndo) {
+          onUndoComplete(appointment);
+        } else if (value == 'cancel' && canCancel) {
+          onCancel(appointment);
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'service',
+          child: ListTile(
+            leading: Icon(Icons.add_business_outlined),
+            title: Text('Thêm phát sinh vào bill'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'product',
+          child: ListTile(
+            leading: Icon(Icons.shopping_bag_outlined),
+            title: Text('Thêm sản phẩm vào bill'),
+          ),
+        ),
+        if (canUndo)
+          const PopupMenuItem(
+            value: 'undo',
+            child: ListTile(
+              leading: Icon(Icons.undo_outlined),
+              title: Text('Hoàn tác hoàn thành'),
+            ),
+          ),
+        PopupMenuItem(
+          value: 'cancel',
+          enabled: canCancel,
+          child: const ListTile(
+            leading: Icon(Icons.event_busy_outlined),
+            title: Text('Hủy lịch'),
+          ),
+        ),
+      ],
+      icon: const Icon(Icons.more_horiz_rounded),
+    );
+  }
+}
+
+class _TimeCell extends StatelessWidget {
+  const _TimeCell({required this.appointment});
+
+  final AppointmentEntry appointment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          appointment.timeLabel,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 15,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          appointment.slotLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 10,
+            color: AppColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomerCell extends StatelessWidget {
+  const _CustomerCell({required this.appointment});
+
+  final AppointmentEntry appointment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          appointment.customerName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          appointment.customerPhone,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceCell extends StatelessWidget {
+  const _ServiceCell({
+    required this.appointment,
+    required this.timing,
+  });
+
+  final AppointmentEntry appointment;
+  final String timing;
+
+  @override
+  Widget build(BuildContext context) {
+    final timingTone = _staffTimingTone(appointment, DateTime.now());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          appointment.servicesSummary,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          children: [
+            Icon(
+              Icons.schedule_outlined,
+              size: 13,
+              color: timingTone,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                timing,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: timingTone,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MetaCell extends StatelessWidget {
+  const _MetaCell({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.textMuted),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -991,8 +1266,7 @@ Future<RetailProductItem?> _openStaffProductPicker(
             : ListView.separated(
                 shrinkWrap: true,
                 itemCount: products.length,
-                separatorBuilder: (context, index) =>
-                    const PremiumDivider(indent: 44),
+                separatorBuilder: (_, _) => const PremiumDivider(indent: 44),
                 itemBuilder: (context, index) {
                   final product = products[index];
                   return ListTile(
@@ -1048,8 +1322,7 @@ Future<ServiceCatalogItem?> _openStaffServicePicker(
             : ListView.separated(
                 shrinkWrap: true,
                 itemCount: services.length,
-                separatorBuilder: (context, index) =>
-                    const PremiumDivider(indent: 44),
+                separatorBuilder: (_, _) => const PremiumDivider(indent: 44),
                 itemBuilder: (context, index) {
                   final service = services[index];
                   return ListTile(
@@ -1111,6 +1384,15 @@ enum _StaffOperationalState {
   other,
 }
 
+enum _StaffFilter {
+  all,
+  waitingConfirmation,
+  booked,
+  active,
+  awaitingPayment,
+  paid,
+}
+
 _StaffOperationalState _staffOperationalState(AppointmentEntry appointment) {
   if (appointment.isPaid) return _StaffOperationalState.paid;
   if (appointment.status == 'Hoàn thành') {
@@ -1160,6 +1442,130 @@ Color _staffOperationalTone(AppointmentEntry appointment) {
     case _StaffOperationalState.other:
       return AppColors.copper;
   }
+}
+
+String _staffFilterLabel(_StaffFilter filter) {
+  switch (filter) {
+    case _StaffFilter.all:
+      return 'Tất cả';
+    case _StaffFilter.waitingConfirmation:
+      return 'Chờ xác nhận';
+    case _StaffFilter.booked:
+      return 'Đã đặt';
+    case _StaffFilter.active:
+      return 'Đang làm';
+    case _StaffFilter.awaitingPayment:
+      return 'Chờ thu';
+    case _StaffFilter.paid:
+      return 'Đã thu';
+  }
+}
+
+bool _staffMatchesFilter(
+  AppointmentEntry appointment,
+  _StaffFilter filter,
+) {
+  if (filter == _StaffFilter.all) return true;
+  final state = _staffOperationalState(appointment);
+  switch (filter) {
+    case _StaffFilter.all:
+      return true;
+    case _StaffFilter.waitingConfirmation:
+      return state == _StaffOperationalState.waitingConfirmation;
+    case _StaffFilter.booked:
+      return state == _StaffOperationalState.booked;
+    case _StaffFilter.active:
+      return state == _StaffOperationalState.active;
+    case _StaffFilter.awaitingPayment:
+      return state == _StaffOperationalState.awaitingPayment;
+    case _StaffFilter.paid:
+      return state == _StaffOperationalState.paid;
+  }
+}
+
+int _staffFilterCount(
+  List<AppointmentEntry> appointments,
+  _StaffFilter filter,
+) {
+  if (filter == _StaffFilter.all) return appointments.length;
+  return appointments
+      .where((appointment) => _staffMatchesFilter(appointment, filter))
+      .length;
+}
+
+bool _staffMatchesSearch(
+  AppointmentEntry appointment,
+  String query,
+) {
+  final normalized = query.trim().toLowerCase();
+  if (normalized.isEmpty) return true;
+  return appointment.customerName.toLowerCase().contains(normalized) ||
+      appointment.customerPhone.toLowerCase().contains(normalized);
+}
+
+String _staffListSummary({
+  required int total,
+  required int visible,
+  required String query,
+  required _StaffFilter filter,
+}) {
+  if (total == 0) return 'Chưa có lịch để thao tác';
+  if (query.trim().isEmpty && filter == _StaffFilter.all) {
+    return '$total lượt hôm nay · ưu tiên khách cần xử lý trước';
+  }
+  return '$visible / $total lượt phù hợp';
+}
+
+String _staffTimingLabel(
+  AppointmentEntry appointment,
+  DateTime now,
+) {
+  final state = _staffOperationalState(appointment);
+  if (state == _StaffOperationalState.paid) return 'Đã hoàn tất thanh toán';
+  if (state == _StaffOperationalState.canceled) return 'Lịch đã hủy';
+  if (state == _StaffOperationalState.awaitingPayment) {
+    return 'Đã xong dịch vụ · chờ thu';
+  }
+
+  final start = appointment.startsAt;
+  final end = start.add(Duration(minutes: appointment.durationMinutes));
+
+  if (now.isBefore(start)) {
+    final minutes = start.difference(now).inMinutes;
+    if (minutes <= 30) return 'Sắp tới · còn ${minutes < 1 ? 1 : minutes} phút';
+    return 'Sắp tới · ${appointment.timeLabel}';
+  }
+
+  if (now.isBefore(end)) {
+    if (state == _StaffOperationalState.active) return 'Đang trong khung phục vụ';
+    return 'Đã tới giờ';
+  }
+
+  final overdue = now.difference(end).inMinutes;
+  if (state == _StaffOperationalState.active) {
+    return 'Đang làm · quá giờ $overdue phút';
+  }
+  if (state == _StaffOperationalState.waitingConfirmation ||
+      state == _StaffOperationalState.booked) {
+    return 'Quá giờ $overdue phút';
+  }
+  return 'Đã qua khung giờ';
+}
+
+Color _staffTimingTone(
+  AppointmentEntry appointment,
+  DateTime now,
+) {
+  final state = _staffOperationalState(appointment);
+  if (state == _StaffOperationalState.paid) return AppColors.success;
+  if (state == _StaffOperationalState.canceled) return AppColors.textMuted;
+  if (state == _StaffOperationalState.awaitingPayment) return AppColors.warning;
+
+  final start = appointment.startsAt;
+  final end = start.add(Duration(minutes: appointment.durationMinutes));
+  if (now.isBefore(start)) return AppColors.info;
+  if (now.isBefore(end)) return AppColors.success;
+  return AppColors.warning;
 }
 
 int _compareStaffAppointments(AppointmentEntry a, AppointmentEntry b) {

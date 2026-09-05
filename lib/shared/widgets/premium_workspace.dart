@@ -655,44 +655,38 @@ class PremiumStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact =
-            constraints.hasBoundedWidth && constraints.maxWidth < 180;
-        final labelWidget = Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: tone,
-            fontWeight: FontWeight.w800,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: AppColors.isLight ? 0.10 : 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: tone,
+              shape: BoxShape.circle,
+            ),
           ),
-        );
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: tone.withValues(alpha: AppColors.isLight ? 0.10 : 0.14),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: tone.withValues(alpha: 0.30)),
-          ),
-          child: Row(
-            mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: tone,
-                  shape: BoxShape.circle,
-                ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: tone,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(width: 6),
-              if (compact) Expanded(child: labelWidget) else labelWidget,
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
