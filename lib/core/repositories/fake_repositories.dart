@@ -1317,7 +1317,7 @@ class FakeSettingsRepository implements SettingsRepository {
     return {
       ...defaults,
       'salonName': local['salonName'] ?? defaults['salonName'],
-      'currency': local['currency'] ?? defaults['currency'],
+      'currency': 'VND',
       'appointmentReminder':
           local['appointmentReminder'] ?? defaults['appointmentReminder'],
       'offlineUpdatePath':
@@ -1330,9 +1330,8 @@ class FakeSettingsRepository implements SettingsRepository {
       'bankName': local['bankName'] ?? defaults['bankName'],
       'accountNumber': local['accountNumber'] ?? defaults['accountNumber'],
       'accountHolder': local['accountHolder'] ?? defaults['accountHolder'],
-      'uploadedQrPayload':
-          local['uploadedQrPayload'] ?? defaults['uploadedQrPayload'],
-      'qrMode': local['qrMode'] ?? defaults['qrMode'],
+      'uploadedQrPayload': '',
+      'qrMode': PaymentConfig.qrModeGenerated,
       'transferContentTemplate':
           local['transferContentTemplate'] ??
           defaults['transferContentTemplate'],
@@ -1361,14 +1360,106 @@ class FakeSettingsRepository implements SettingsRepository {
   }
 
   @override
+  Future<Map<String, Object?>> saveSalonProfileSettings({
+    required String salonName,
+    required String appointmentReminder,
+  }) async {
+    final current = await fetchLocalSettings();
+    await _savePreserving(
+      current,
+      salonName: salonName.trim(),
+      currency: 'VND',
+      appointmentReminder: appointmentReminder,
+    );
+    return fetchLocalSettings();
+  }
+
+  @override
+  Future<Map<String, Object?>> saveDeviceUpdateSettings({
+    required String offlineUpdatePath,
+    required String autoCheckOfflineUpdate,
+    required String licenseKey,
+  }) async {
+    final current = await fetchLocalSettings();
+    await _savePreserving(
+      current,
+      offlineUpdatePath: offlineUpdatePath.trim(),
+      autoCheckOfflineUpdate: autoCheckOfflineUpdate,
+      licenseKey: licenseKey.trim(),
+    );
+    return fetchLocalSettings();
+  }
+
+  @override
+  Future<Map<String, Object?>> savePaymentSettings({
+    required String bankName,
+    required String accountNumber,
+    required String accountHolder,
+    required String transferContentTemplate,
+  }) async {
+    final current = await fetchLocalSettings();
+    await _savePreserving(
+      current,
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.trim(),
+      accountHolder: accountHolder.trim(),
+      uploadedQrPayload: '',
+      qrMode: PaymentConfig.qrModeGenerated,
+      transferContentTemplate: transferContentTemplate.trim().isEmpty
+          ? PaymentConfig.defaultTransferTemplate
+          : transferContentTemplate.trim(),
+    );
+    return fetchLocalSettings();
+  }
+
+  Future<void> _savePreserving(
+    Map<String, Object?> current, {
+    String? salonName,
+    String? currency,
+    String? appointmentReminder,
+    String? offlineUpdatePath,
+    String? autoCheckOfflineUpdate,
+    String? licenseKey,
+    String? bankName,
+    String? accountNumber,
+    String? accountHolder,
+    String? uploadedQrPayload,
+    String? qrMode,
+    String? transferContentTemplate,
+  }) {
+    return _localSettingsStore.saveLocalSettings(
+      salonName: salonName ?? current['salonName']?.toString() ?? '',
+      currency: currency ?? 'VND',
+      appointmentReminder:
+          appointmentReminder ?? current['appointmentReminder']?.toString() ?? 'Bật',
+      offlineUpdatePath:
+          offlineUpdatePath ?? current['offlineUpdatePath']?.toString() ?? '',
+      autoCheckOfflineUpdate: autoCheckOfflineUpdate ??
+          current['autoCheckOfflineUpdate']?.toString() ??
+          'Tắt',
+      licenseKey: licenseKey ?? current['licenseKey']?.toString() ?? '',
+      bankName: bankName ?? current['bankName']?.toString() ?? '',
+      accountNumber:
+          accountNumber ?? current['accountNumber']?.toString() ?? '',
+      accountHolder:
+          accountHolder ?? current['accountHolder']?.toString() ?? '',
+      uploadedQrPayload: uploadedQrPayload ?? '',
+      qrMode: qrMode ?? PaymentConfig.qrModeGenerated,
+      transferContentTemplate: transferContentTemplate ??
+          current['transferContentTemplate']?.toString() ??
+          PaymentConfig.defaultTransferTemplate,
+    );
+  }
+
+  @override
   Future<PaymentConfig> fetchPaymentConfig() async {
     final settings = await fetchLocalSettings();
     return PaymentConfig(
       bankName: settings['bankName']?.toString() ?? '',
       accountNumber: settings['accountNumber']?.toString() ?? '',
       accountHolder: settings['accountHolder']?.toString() ?? '',
-      uploadedQrPayload: settings['uploadedQrPayload']?.toString() ?? '',
-      qrMode: settings['qrMode']?.toString() ?? PaymentConfig.qrModeBoth,
+      uploadedQrPayload: '',
+      qrMode: PaymentConfig.qrModeGenerated,
       transferContentTemplate:
           settings['transferContentTemplate']?.toString() ??
           PaymentConfig.defaultTransferTemplate,

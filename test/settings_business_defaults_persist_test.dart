@@ -7,7 +7,7 @@ import 'package:salonmanager/core/repositories/sqlite_settings_repository.dart';
 import 'package:salonmanager/core/settings/local_settings_store.dart';
 
 void main() {
-  test('saving business settings persists every owned field in SQLite', () async {
+  test('saving business settings persists every supported owned field in SQLite', () async {
     SharedPreferences.setMockInitialValues({'device_id': 'persist-device'});
     await LocalSettingsStore.instance.initialize();
     addTearDown(SalonDatabase.instance.close);
@@ -38,7 +38,12 @@ void main() {
       'app_settings',
       columns: const ['key'],
       where: "key LIKE 'business.%'",
+      orderBy: 'key ASC',
     );
-    expect(rows, hasLength(9));
+    expect(rows, hasLength(8));
+    expect(
+      rows.map((row) => row['key']),
+      isNot(contains('business.payment.uploaded_qr_payload')),
+    );
   });
 }

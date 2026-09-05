@@ -195,7 +195,7 @@ class _ReceiptSettingsDialogState extends State<_ReceiptSettingsDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Chỉnh bên trái, xem đúng PDF sẽ in ở bên phải.',
+                          'Nội dung phiếu đi theo backup; máy in, khổ giấy, số bản và đường dẫn logo chỉ lưu trên máy này.',
                           style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
                         ),
                       ],
