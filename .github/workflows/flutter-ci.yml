@@ -74,7 +74,7 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release
 
-      - name: Launch release executable
+      - name: Launch main and Staff window release
         shell: pwsh
         run: |
           $releaseDir = Join-Path $PWD 'build\windows\x64\runner\Release'
@@ -87,12 +87,38 @@ jobs:
           New-Item -ItemType Directory -Force -Path $smokeAppData | Out-Null
           $env:APPDATA = $smokeAppData
 
-          $process = Start-Process -FilePath $exe -WorkingDirectory $releaseDir -PassThru
-          Start-Sleep -Seconds 10
+          $mainProcess = $null
+          $staffProcess = $null
+          try {
+            $mainProcess = Start-Process -FilePath $exe -WorkingDirectory $releaseDir -PassThru
+            Start-Sleep -Seconds 6
+            if ($mainProcess.HasExited) {
+              throw "salonmanager.exe main window exited during startup smoke with code $($mainProcess.ExitCode)"
+            }
 
-          if ($process.HasExited) {
-            throw "salonmanager.exe exited during startup smoke with code $($process.ExitCode)"
+            $staffProcess = Start-Process -FilePath $exe -ArgumentList '--staff-window' -WorkingDirectory $releaseDir -PassThru
+            Start-Sleep -Seconds 10
+            if ($staffProcess.HasExited) {
+              throw "salonmanager.exe --staff-window exited during startup smoke with code $($staffProcess.ExitCode)"
+            }
+            if ($mainProcess.HasExited) {
+              throw 'Main window exited while Staff window was open.'
+            }
+
+            Stop-Process -Id $staffProcess.Id -Force
+            $staffProcess.WaitForExit()
+            Start-Sleep -Seconds 2
+            if ($mainProcess.HasExited) {
+              throw 'Closing Staff window also closed the main app.'
+            }
+
+            Write-Host 'Windows dual-process Staff window smoke passed.'
           }
-
-          Stop-Process -Id $process.Id -Force
-          Write-Host 'Windows release startup smoke passed.'
+          finally {
+            if ($staffProcess -and -not $staffProcess.HasExited) {
+              Stop-Process -Id $staffProcess.Id -Force
+            }
+            if ($mainProcess -and -not $mainProcess.HasExited) {
+              Stop-Process -Id $mainProcess.Id -Force
+            }
+          }

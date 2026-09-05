@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_controller.dart';
+import '../features/overview/presentation/pages/staff_window_workspace.dart';
 import 'desktop_shell_page.dart';
-import '../features/overview/presentation/pages/staff_workstation_page.dart';
 
 class SalonManagerApp extends ConsumerWidget {
   const SalonManagerApp({super.key});
@@ -41,13 +41,14 @@ class StaffWindowApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       title: 'Bàn Nhân Viên',
       theme: AppTheme.build(template),
+      navigatorObservers: [staffWindowRouteObserver],
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(
           context,
         ).copyWith(textScaler: const TextScaler.linear(1.0)),
         child: child!,
       ),
-      home: const StaffWorkstationPage(standalone: true),
+      home: const StaffWindowWorkspace(),
     );
   }
 }
