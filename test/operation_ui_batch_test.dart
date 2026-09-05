@@ -119,7 +119,7 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 2));
 
-    expect(find.byKey(const Key('staff-premium-header')), findsOneWidget);
+    expect(find.byKey(const Key('staff-compact-header')), findsOneWidget);
     expect(find.byKey(const Key('staff-premium-workspace')), findsOneWidget);
     expect(find.text('Bàn thao tác nhân viên'), findsOneWidget);
     expect(tester.takeException(), isNull);
