@@ -15,11 +15,7 @@ void main() {
   testWidgets('operations batch renders premium appointments and billing', (
     WidgetTester tester,
   ) async {
-    const sizes = [
-      Size(1724, 908),
-      Size(1366, 768),
-      Size(1024, 768),
-    ];
+    const sizes = [Size(1724, 908), Size(1366, 768), Size(1024, 768)];
 
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -55,14 +51,12 @@ void main() {
         find.byKey(const Key('appointments-premium-workspace')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('appointments-ux-toolbar')), findsOneWidget);
       expect(
-        find.byKey(const Key('appointments-ux-toolbar')),
+        find.byKey(const Key('appointments-status-strip')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const Key('appointments-day-board')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('appointments-day-board')), findsOneWidget);
       expect(find.text('Ngày'), findsWidgets);
       expect(find.text('Danh sách'), findsOneWidget);
       if (size.width >= 1120) {
@@ -81,21 +75,20 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.build(SalonThemeTemplate.salonNoirGold),
             home: const Scaffold(
-              body: Padding(
-                padding: EdgeInsets.all(16),
-                child: InvoicesPage(),
-              ),
+              body: Padding(padding: EdgeInsets.all(16), child: InvoicesPage()),
             ),
           ),
         ),
       );
       await tester.pump(const Duration(seconds: 2));
-      expect(
-        find.byKey(const Key('billing-premium-header')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('billing-premium-header')), findsOneWidget);
       expect(
         find.byKey(const Key('billing-premium-workspace')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('billing-history-action')), findsOneWidget);
+      expect(
+        find.byKey(const Key('billing-pos-total-summary')),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
@@ -126,14 +119,8 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 2));
 
-    expect(
-      find.byKey(const Key('staff-premium-header')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('staff-premium-workspace')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('staff-premium-header')), findsOneWidget);
+    expect(find.byKey(const Key('staff-premium-workspace')), findsOneWidget);
     expect(find.text('Bàn thao tác nhân viên'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

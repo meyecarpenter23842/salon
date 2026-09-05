@@ -10,10 +10,7 @@ Future<void> _showAppointmentDetailDialog(
     builder: (dialogContext) => Dialog(
       insetPadding: const EdgeInsets.all(24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 430,
-          maxHeight: 680,
-        ),
+        constraints: const BoxConstraints(maxWidth: 430, maxHeight: 680),
         child: _AppointmentDetailSheet(
           appointment: appointment,
           onClose: () => Navigator.of(dialogContext).pop(),
@@ -36,33 +33,92 @@ class _AppointmentDetailSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tone = _statusColor(appointment.status);
     final statusAction = _statusActionLabel(appointment.status);
-    final invoice =
-        ref.watch(appointmentInvoiceHistoryProvider(appointment.id));
+    final invoice = ref.watch(
+      appointmentInvoiceHistoryProvider(appointment.id),
+    );
 
     return Container(
       key: const Key('appointments-detail-sheet'),
       decoration: BoxDecoration(
         gradient: AppColors.cardGradient,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _selectedBorderColor(tone),
-        ),
+        border: Border.all(color: _selectedBorderColor(tone)),
         boxShadow: AppColors.surfaceShadow,
       ),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 10),
+            padding: const EdgeInsets.fromLTRB(14, 9, 7, 8),
             child: Row(
               children: [
-                _MiniStatusBadge(
-                  label: appointment.status,
-                  tone: tone,
-                ),
+                _MiniStatusBadge(label: appointment.status, tone: tone),
                 const Spacer(),
+                if (statusAction != null)
+                  Tooltip(
+                    message: statusAction,
+                    child: IconButton.filledTonal(
+                      key: const Key('appointment-status-action'),
+                      onPressed: () =>
+                          _updateAppointmentStatus(context, ref, appointment),
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(
+                        _statusActionIcon(appointment.status),
+                        size: 17,
+                      ),
+                    ),
+                  ),
+                IconButton(
+                  key: const Key('appointment-edit-action'),
+                  tooltip: 'Chỉnh sửa lịch',
+                  onPressed: () => _openAppointmentEditor(
+                    context,
+                    ref,
+                    appointment: appointment,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.edit_outlined, size: 17),
+                ),
+                if (appointment.status != 'Đã hủy')
+                  PopupMenuButton<String>(
+                    tooltip: 'Thêm thao tác',
+                    icon: const Icon(Icons.more_vert_rounded, size: 18),
+                    onSelected: (value) {
+                      if (value == 'undo') {
+                        _undoAppointmentComplete(context, ref, appointment);
+                      } else if (value == 'cancel') {
+                        _cancelAppointment(context, ref, appointment);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      if (appointment.status == 'Hoàn thành')
+                        const PopupMenuItem(
+                          value: 'undo',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.undo_outlined),
+                            title: Text('Hoàn tác về Đang làm'),
+                          ),
+                        ),
+                      PopupMenuItem(
+                        value: 'cancel',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(
+                            Icons.event_busy_outlined,
+                            color: AppColors.danger,
+                          ),
+                          title: Text(
+                            'Hủy lịch',
+                            style: TextStyle(color: AppColors.danger),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 IconButton(
                   tooltip: 'Đóng chi tiết',
                   onPressed: onClose,
+                  visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.close_rounded, size: 18),
                 ),
               ],
@@ -95,9 +151,14 @@ class _AppointmentDetailSheet extends ConsumerWidget {
                     children: [
                       OutlinedButton.icon(
                         key: const Key('appointment-open-customer'),
-                        onPressed: () =>
-                            openCustomerProfileFromAppointment(ref, appointment),
-                        icon: const Icon(Icons.person_outline_rounded, size: 16),
+                        onPressed: () => openCustomerProfileFromAppointment(
+                          ref,
+                          appointment,
+                        ),
+                        icon: const Icon(
+                          Icons.person_outline_rounded,
+                          size: 16,
+                        ),
                         label: const Text('Hồ sơ khách'),
                       ),
                       OutlinedButton.icon(
@@ -144,26 +205,24 @@ class _AppointmentDetailSheet extends ConsumerWidget {
                     label: 'Khu vực / ghế',
                     value: appointment.slotLabel,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   Text(
                     'Dịch vụ',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                    style: Theme.of(context).textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   _ServiceSummaryBlock(appointment: appointment),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   Text(
                     'Ghi chú',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                    style: Theme.of(context).textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(11),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: AppColors.featureSurface,
                       borderRadius: BorderRadius.circular(10),
@@ -182,95 +241,21 @@ class _AppointmentDetailSheet extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   _AppointmentInvoiceSummary(invoiceState: invoice),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: [
-                      if (appointment.status != 'Chờ xác nhận' &&
-                          appointment.status != 'Đã hủy')
-                        TextButton.icon(
-                          key: const Key('appointment-open-checkout'),
-                          onPressed: () => _sendAppointmentToInvoice(
-                            context,
-                            ref,
-                            appointment,
-                          ),
-                          icon: const Icon(
-                            Icons.payments_outlined,
-                            size: 16,
-                          ),
-                          label: const Text('Thanh toán'),
-                        ),
-                      if (appointment.status == 'Hoàn thành')
-                        TextButton.icon(
-                          onPressed: () => _undoAppointmentComplete(
-                            context,
-                            ref,
-                            appointment,
-                          ),
-                          icon: const Icon(Icons.undo_outlined, size: 16),
-                          label: const Text('Hoàn tác'),
-                        ),
-                      if (appointment.status != 'Đã hủy')
-                        TextButton.icon(
-                          onPressed: () => _cancelAppointment(
-                            context,
-                            ref,
-                            appointment,
-                          ),
-                          icon: Icon(
-                            Icons.event_busy_outlined,
-                            size: 16,
-                            color: AppColors.danger,
-                          ),
-                          label: Text(
-                            'Hủy lịch',
-                            style: TextStyle(color: AppColors.danger),
-                          ),
-                        ),
-                    ],
-                  ),
+                  if (appointment.status != 'Chờ xác nhận' &&
+                      appointment.status != 'Đã hủy') ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      key: const Key('appointment-open-checkout'),
+                      onPressed: () =>
+                          _sendAppointmentToInvoice(context, ref, appointment),
+                      icon: const Icon(Icons.payments_outlined, size: 16),
+                      label: const Text('Mở tính tiền'),
+                    ),
+                  ],
                 ],
               ),
-            ),
-          ),
-          Divider(height: 1, color: AppColors.workspaceDivider),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openAppointmentEditor(
-                      context,
-                      ref,
-                      appointment: appointment,
-                    ),
-                    icon: const Icon(Icons.edit_outlined, size: 17),
-                    label: const Text('Chỉnh sửa'),
-                  ),
-                ),
-                if (statusAction != null) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => _updateAppointmentStatus(
-                        context,
-                        ref,
-                        appointment,
-                      ),
-                      icon: Icon(
-                        _statusActionIcon(appointment.status),
-                        size: 17,
-                      ),
-                      label: Text(statusAction),
-                    ),
-                  ),
-                ],
-              ],
             ),
           ),
         ],
@@ -283,10 +268,7 @@ Color _selectedBorderColor(Color tone) =>
     tone.withValues(alpha: AppColors.isLight ? 0.32 : 0.42);
 
 class _IconValue extends StatelessWidget {
-  const _IconValue({
-    required this.icon,
-    required this.text,
-  });
+  const _IconValue({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -300,10 +282,7 @@ class _IconValue extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
           ),
         ),
       ],
@@ -346,10 +325,7 @@ class _DetailInfoTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 9.5,
-                  ),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -405,9 +381,11 @@ class _ServiceSummaryBlock extends StatelessWidget {
               ],
             )
           else
-            for (var index = 0;
-                index < appointment.services.length;
-                index++) ...[
+            for (
+              var index = 0;
+              index < appointment.services.length;
+              index++
+            ) ...[
               Row(
                 children: [
                   const PremiumIconBadge(
@@ -436,10 +414,7 @@ class _ServiceSummaryBlock extends StatelessWidget {
               if (index != appointment.services.length - 1)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 7),
-                  child: Divider(
-                    height: 1,
-                    color: AppColors.workspaceDivider,
-                  ),
+                  child: Divider(height: 1, color: AppColors.workspaceDivider),
                 ),
             ],
           if (appointment.services.isNotEmpty && total > 0) ...[
