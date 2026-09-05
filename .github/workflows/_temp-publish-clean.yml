@@ -1,0 +1,187 @@
+name: Temp publish clean V2-8 detail UI
+
+on:
+  push:
+    branches:
+      - 'automation/v2-8-publish-clean'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout validated patch source
+        uses: actions/checkout@v4
+        with:
+          ref: automation/v2-8-publish-clean
+          path: patch-src
+
+      - name: Checkout clean target branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/v2-8-compact-detail-final
+          path: work
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply validated compact detail UI
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, pathlib
+          src = pathlib.Path('../patch-src/tool/.ui_refine_patch.py.gz.b64').read_text().strip()
+          pathlib.Path('/tmp/apply_ui_refine.py').write_bytes(gzip.decompress(base64.b64decode(src)))
+          PY
+          python3 /tmp/apply_ui_refine.py
+
+      - name: Remove superseded detail widgets
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def remove_until(text, start_marker, next_marker):
+              start = text.index(start_marker)
+              end = text.index(next_marker, start + len(start_marker))
+              return text[:start] + text[end:]
+
+          customer_path = Path('lib/features/customers/presentation/pages/customers_page.dart')
+          customer = customer_path.read_text()
+          customer = remove_until(
+              customer,
+              'class _CustomerMetricStrip extends StatelessWidget {',
+              'class _InvoiceHistory extends StatelessWidget {',
+          )
+          customer_path.write_text(customer)
+
+          employee_path = Path('lib/features/employees/presentation/pages/employees_page.dart')
+          employee = employee_path.read_text()
+          for start_marker, next_marker in [
+              ('class _EmployeeOverviewTab extends StatelessWidget {', 'class _ProfileMetrics extends StatelessWidget {'),
+              ('class _ProfileMetrics extends StatelessWidget {', 'class _EmployeeScheduleTab extends StatelessWidget {'),
+              ('class _EmployeeScheduleTab extends StatelessWidget {', 'class _AppointmentProfileRow extends StatelessWidget {'),
+              ('class _EmployeePerformanceTab extends StatelessWidget {', 'class _TopServiceRow extends StatelessWidget {'),
+              ('class _TopServiceRow extends StatelessWidget {', 'class _EmployeeHistoryTab extends StatelessWidget {'),
+              ('class _EmployeeHistoryTab extends StatelessWidget {', 'class _SectionLabel extends StatelessWidget {'),
+              ('class _SectionLabel extends StatelessWidget {', 'class _InlineEmpty extends StatelessWidget {'),
+              ('class _InlineEmpty extends StatelessWidget {', 'Color _statusTone(String status) {'),
+          ]:
+              employee = remove_until(employee, start_marker, next_marker)
+          employee_path.write_text(employee)
+          PY
+
+      - name: Apply responsive hardening and updated employee UI test
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          employee_path = Path('lib/features/employees/presentation/pages/employees_page.dart')
+          employee = employee_path.read_text()
+          employee = employee.replace(
+              'if (constraints.maxWidth < 900) {\n          return Column(',
+              'if (constraints.maxWidth < 760) {\n          return Column(',
+              1,
+          )
+          employee = employee.replace(
+              "IconButton.outlined(\n                  tooltip: 'Sửa hồ sơ',",
+              "IconButton.outlined(\n                  key: const Key('employee-profile-edit-action'),\n                  tooltip: 'Sửa hồ sơ',",
+              1,
+          )
+          employee_path.write_text(employee)
+
+          sales_path = Path('lib/features/sales/presentation/pages/sales_page.dart')
+          sales = sales_path.read_text()
+          sales = sales.replace(
+              'Expanded(flex: 13, child: list),\n            const SizedBox(width: 10),\n            Expanded(flex: 7, child: detail),',
+              'Expanded(flex: 11, child: list),\n            const SizedBox(width: 10),\n            Expanded(flex: 9, child: detail),',
+              1,
+          )
+          sales_path.write_text(sales)
+
+          test_path = Path('test/employee_profile_layout_test.dart')
+          test = test_path.read_text()
+          test = test.replace(
+              "      expect(find.byKey(const Key('employee-profile-tabs')), findsOneWidget);\n      expect(\n        find.byKey(const Key('employee-profile-overview')),\n        findsOneWidget,\n      );",
+              "      expect(find.byKey(const Key('employee-profile-card')), findsOneWidget);\n      expect(\n        find.byKey(const Key('employee-profile-edit-action')),\n        findsOneWidget,\n      );",
+          )
+          test = test.replace(
+              "    await tester.tap(find.text('Sửa hồ sơ').first);",
+              "    await tester.tap(\n      find.byKey(const Key('employee-profile-edit-action')),\n    );",
+          )
+          test_path.write_text(test)
+          PY
+
+      - name: Apply height-adaptive employee cards
+        working-directory: work
+        run: python3 ../patch-src/tool/.ui_refine_height_fix.py
+
+      - name: Format affected files
+        working-directory: work
+        run: |
+          dart format \
+            lib/features/customers/presentation/pages/customers_page.dart \
+            lib/features/services/presentation/pages/services_page.dart \
+            lib/features/services/presentation/widgets/service_performance_panel.dart \
+            lib/features/sales/presentation/pages/sales_page.dart \
+            lib/features/sales/presentation/widgets/product_performance_panel.dart \
+            lib/features/employees/presentation/pages/employees_page.dart \
+            test/employee_profile_layout_test.dart
+
+      - name: Install dependencies
+        working-directory: work
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: work
+        run: flutter analyze
+
+      - name: Test full suite
+        working-directory: work
+        run: flutter test
+
+      - name: Restore runner-only automatic changes
+        working-directory: work
+        run: git restore analysis_options.yaml pubspec.lock
+
+      - name: Verify exact final scope
+        working-directory: work
+        shell: bash
+        run: |
+          cat > /tmp/expected.txt <<'EOF'
+          lib/features/customers/presentation/pages/customers_page.dart
+          lib/features/employees/presentation/pages/employees_page.dart
+          lib/features/sales/presentation/pages/sales_page.dart
+          lib/features/sales/presentation/widgets/product_performance_panel.dart
+          lib/features/services/presentation/pages/services_page.dart
+          lib/features/services/presentation/widgets/service_performance_panel.dart
+          test/employee_profile_layout_test.dart
+          EOF
+          git diff --name-only | sort > /tmp/actual.txt
+          sort /tmp/expected.txt -o /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          git diff --check
+
+      - name: Commit one clean batch and push target branch
+        working-directory: work
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            lib/features/customers/presentation/pages/customers_page.dart \
+            lib/features/employees/presentation/pages/employees_page.dart \
+            lib/features/sales/presentation/pages/sales_page.dart \
+            lib/features/sales/presentation/widgets/product_performance_panel.dart \
+            lib/features/services/presentation/pages/services_page.dart \
+            lib/features/services/presentation/widgets/service_performance_panel.dart \
+            test/employee_profile_layout_test.dart
+          git commit -m 'refactor: compact management detail panels'
+          git push origin HEAD:refactor/v2-8-compact-detail-final
