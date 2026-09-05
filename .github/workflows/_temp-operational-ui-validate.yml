@@ -1,0 +1,81 @@
+name: Temp operational UI validation
+
+on:
+  push:
+    branches:
+      - 'automation/v2-8-operational-ui-validate'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply approved operational layout
+        run: python3 tool/.operational_ui_patch.py
+
+      - name: Format affected files
+        run: |
+          dart format \
+            lib/features/appointments/presentation/pages/appointments_page.dart \
+            lib/features/appointments/presentation/pages/appointments_controls.dart \
+            lib/features/appointments/presentation/pages/appointments_detail_sheet.dart \
+            lib/features/invoices/presentation/pages/invoices_pos_page.dart \
+            lib/features/invoices/presentation/pages/pos_bill_panel.dart \
+            lib/features/invoices/presentation/pages/pos_checkout_panel.dart \
+            test/operation_ui_batch_test.dart \
+            test/invoices_pos_layout_test.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test full suite
+        run: flutter test
+
+      - name: Restore runner-only dependency changes
+        if: always()
+        run: git checkout -- pubspec.lock analysis_options.yaml || true
+
+      - name: Verify scope
+        if: always()
+        run: |
+          git diff --check
+          git status --short
+
+      - name: Save generated files
+        if: always()
+        run: |
+          mkdir -p /tmp/operational-ui/lib/features/appointments/presentation/pages
+          mkdir -p /tmp/operational-ui/lib/features/invoices/presentation/pages
+          mkdir -p /tmp/operational-ui/test
+          cp lib/features/appointments/presentation/pages/appointments_page.dart /tmp/operational-ui/lib/features/appointments/presentation/pages/
+          cp lib/features/appointments/presentation/pages/appointments_controls.dart /tmp/operational-ui/lib/features/appointments/presentation/pages/
+          cp lib/features/appointments/presentation/pages/appointments_detail_sheet.dart /tmp/operational-ui/lib/features/appointments/presentation/pages/
+          cp lib/features/invoices/presentation/pages/invoices_pos_page.dart /tmp/operational-ui/lib/features/invoices/presentation/pages/
+          cp lib/features/invoices/presentation/pages/pos_bill_panel.dart /tmp/operational-ui/lib/features/invoices/presentation/pages/
+          cp lib/features/invoices/presentation/pages/pos_checkout_panel.dart /tmp/operational-ui/lib/features/invoices/presentation/pages/
+          cp test/operation_ui_batch_test.dart /tmp/operational-ui/test/
+          cp test/invoices_pos_layout_test.dart /tmp/operational-ui/test/
+          git diff -- . ':!.github/workflows/_temp-operational-ui-validate.yml' ':!tool/.operational_ui_patch.py' > /tmp/operational-ui/generated.patch
+
+      - name: Upload generated files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-ui-generated
+          path: /tmp/operational-ui
+          if-no-files-found: error
