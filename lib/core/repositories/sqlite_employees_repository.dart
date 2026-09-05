@@ -210,8 +210,8 @@ class SqliteEmployeesRepository
       args.add(end.toIso8601String());
     }
     if (excludeCompleted) {
-      clauses.add('status != ?');
-      args.add('Hoàn thành');
+      clauses.add('status NOT IN (?, ?)');
+      args.addAll(const ['Hoàn thành', 'Đã hủy']);
     }
 
     final rows = await database.query(

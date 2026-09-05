@@ -38,6 +38,7 @@ final _invoiceCatalogKindProvider = StateProvider<_PosCatalogKind>(
   (ref) => _PosCatalogKind.services,
 );
 final _invoiceCatalogQueryProvider = StateProvider<String>((ref) => '');
+final _invoiceServiceEmployeeIdProvider = StateProvider<String?>((ref) => null);
 
 Future<void> _selectInvoiceCustomer(
   BuildContext context,
@@ -68,8 +69,19 @@ Future<void> _addInvoiceService(
   BuildContext context,
   WidgetRef ref,
   ServiceCatalogItem service,
+  String? employeeId,
 ) async {
-  await ref.read(invoicesRepositoryProvider).addInvoiceService(service.id);
+  if (employeeId == null || employeeId.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Chọn nhân viên thực hiện trước khi thêm dịch vụ.'),
+      ),
+    );
+    return;
+  }
+  await ref
+      .read(invoicesRepositoryProvider)
+      .addInvoiceService(service.id, employeeId: employeeId);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
   ScaffoldMessenger.of(
@@ -277,6 +289,7 @@ class InvoicesPage extends ConsumerWidget {
     final customersState = ref.watch(customersViewProvider);
     final servicesState = ref.watch(servicesViewProvider);
     final productsState = ref.watch(retailProductsViewProvider);
+    final employeesState = ref.watch(employeesViewProvider);
 
     return draftState.when(
       data: (draft) => historyState.when(
@@ -287,6 +300,7 @@ class InvoicesPage extends ConsumerWidget {
             customers: customers,
             servicesState: servicesState,
             productsState: productsState,
+            employeesState: employeesState,
           ),
           loading: () =>
               const PremiumLoadingState(label: 'Đang tải khách hàng…'),
@@ -321,6 +335,7 @@ class _BillingView extends StatelessWidget {
     required this.customers,
     required this.servicesState,
     required this.productsState,
+    required this.employeesState,
   });
 
   final InvoiceDraft draft;
@@ -328,6 +343,7 @@ class _BillingView extends StatelessWidget {
   final List<CustomerProfile> customers;
   final AsyncValue<List<ServiceCatalogItem>> servicesState;
   final AsyncValue<List<RetailProductItem>> productsState;
+  final AsyncValue<List<Map<String, Object?>>> employeesState;
 
   @override
   Widget build(BuildContext context) {
@@ -370,6 +386,7 @@ class _BillingView extends StatelessWidget {
                       draft: draft,
                       servicesState: servicesState,
                       productsState: productsState,
+                      employeesState: employeesState,
                       dense: dense,
                     ),
                   ),

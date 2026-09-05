@@ -18,6 +18,10 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
   final AppointmentsRepository _delegate;
 
   static const String _cancelledStatus = 'Đã hủy';
+  static const Set<String> _schedulableEmployeeStatuses = {
+    'Đang làm việc',
+    'Sắp có lịch',
+  };
 
   @override
   Future<List<AppointmentEntry>> fetchAppointmentsView({DateTime? day}) async {
@@ -52,6 +56,10 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
   }) async {
     final database = await _database.database;
     var effectiveInput = input;
+
+    if (input.status != _cancelledStatus) {
+      await _ensureEmployeeSchedulable(database, input.employeeId);
+    }
 
     if (existingId != null && existingId.isNotEmpty) {
       await _ensureAppointmentMutable(database, existingId);
@@ -107,6 +115,7 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
         final startsAt = DateTime.tryParse(row['starts_at']?.toString() ?? '');
         final employeeId = row['employee_id']?.toString() ?? '';
         if (startsAt != null && employeeId.isNotEmpty) {
+          await _ensureEmployeeSchedulable(database, employeeId);
           await _ensureNoScheduleConflict(
             database,
             employeeId: employeeId,
@@ -176,6 +185,31 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
     if (paid.isNotEmpty) {
       throw StateError(
         'Lịch hẹn đã thanh toán nên không thể chỉnh sửa, hủy hoặc đổi trạng thái.',
+      );
+    }
+  }
+
+  Future<void> _ensureEmployeeSchedulable(
+    DatabaseExecutor database,
+    String employeeId,
+  ) async {
+    final rows = await database.query(
+      'employees',
+      columns: const ['full_name', 'status'],
+      where: 'id = ?',
+      whereArgs: [employeeId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      throw StateError('Nhân viên được chọn không còn tồn tại.');
+    }
+
+    final status = rows.first['status']?.toString() ?? '';
+    if (!_schedulableEmployeeStatuses.contains(status)) {
+      final name = rows.first['full_name']?.toString() ?? 'Nhân viên';
+      throw StateError(
+        '$name đang ở trạng thái ${status.isEmpty ? 'không hoạt động' : status} '
+        'nên không thể nhận lịch hẹn.',
       );
     }
   }
@@ -301,7 +335,34 @@ class GuardedInvoicesRepository
   Future<InvoiceDraft> addInvoiceService(
     String serviceId, {
     String? employeeId,
-  }) => _delegate.addInvoiceService(serviceId, employeeId: employeeId);
+  }) async {
+    final normalizedEmployeeId = employeeId?.trim() ?? '';
+    if (normalizedEmployeeId.isNotEmpty) {
+      final database = await _database.database;
+      final rows = await database.query(
+        'employees',
+        columns: const ['full_name', 'status'],
+        where: 'id = ?',
+        whereArgs: [normalizedEmployeeId],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw StateError('Nhân viên thực hiện không còn tồn tại.');
+      }
+      final status = rows.first['status']?.toString() ?? '';
+      if (status != 'Đang làm việc' && status != 'Sắp có lịch') {
+        final name = rows.first['full_name']?.toString() ?? 'Nhân viên';
+        throw StateError(
+          '$name đang ở trạng thái ${status.isEmpty ? 'không hoạt động' : status} '
+          'nên không thể được gán thực hiện dịch vụ.',
+        );
+      }
+    }
+    return _delegate.addInvoiceService(
+      serviceId,
+      employeeId: normalizedEmployeeId.isEmpty ? null : normalizedEmployeeId,
+    );
+  }
 
   @override
   Future<InvoiceDraft> addInvoiceProduct(String productId) =>

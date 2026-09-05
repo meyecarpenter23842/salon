@@ -199,7 +199,8 @@ class SqliteInvoicesRepository
     }
 
     final existingIndex = draft.lines.indexWhere(
-      (line) => line.serviceId == serviceId,
+      (line) =>
+          line.serviceId == serviceId && line.employeeId == employeeId,
     );
     final now = DateTime.now();
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
