@@ -7,23 +7,37 @@ import '../../../../core/models/service_upsert_input.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/compact_management.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 import '../widgets/service_performance_panel.dart';
 
 final serviceSearchQueryProvider = StateProvider<String>((ref) => '');
 final serviceCategoryFilterProvider = StateProvider<String>((ref) => 'Tất cả');
+final serviceStatusFilterProvider = StateProvider<String>((ref) => 'Tất cả');
 final selectedServiceIndexProvider = StateProvider<int>((ref) => 0);
 
-final filteredServicesProvider = FutureProvider<List<ServiceCatalogItem>>((ref) async {
-  final services = await ref.watch(servicesRepositoryProvider).fetchServicesView();
+final filteredServicesProvider = FutureProvider<List<ServiceCatalogItem>>((
+  ref,
+) async {
+  final services = await ref
+      .watch(servicesRepositoryProvider)
+      .fetchServicesView();
   final query = ref.watch(serviceSearchQueryProvider).trim().toLowerCase();
   final category = ref.watch(serviceCategoryFilterProvider);
+  final status = ref.watch(serviceStatusFilterProvider);
   return services.where((item) {
     final categoryOk = category == 'Tất cả' || item.category == category;
-    final queryOk = query.isEmpty ||
-        [item.name, item.category, item.description]
-            .any((value) => value.toLowerCase().contains(query));
-    return categoryOk && queryOk;
+    final statusOk =
+        status == 'Tất cả' ||
+        (status == 'Đang dùng' ? item.isActive : !item.isActive);
+    final queryOk =
+        query.isEmpty ||
+        [
+          item.name,
+          item.category,
+          item.description,
+        ].any((value) => value.toLowerCase().contains(query));
+    return categoryOk && statusOk && queryOk;
   }).toList();
 });
 
@@ -36,10 +50,8 @@ Future<void> _openServiceEditor(
   if (!context.mounted) return;
   final input = await showDialog<ServiceUpsertInput>(
     context: context,
-    builder: (_) => _ServiceEditorDialog(
-      service: service,
-      existingServices: all,
-    ),
+    builder: (_) =>
+        _ServiceEditorDialog(service: service, existingServices: all),
   );
   if (input == null || !context.mounted) return;
   final saved = await ref
@@ -86,15 +98,17 @@ class ServicesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ref.watch(filteredServicesProvider).when(
-      data: (items) => _ServicesView(items: items),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => PremiumEmptyState(
-        icon: Icons.error_outline_rounded,
-        title: 'Không tải được dịch vụ',
-        message: '$error',
-      ),
-    );
+    return ref
+        .watch(filteredServicesProvider)
+        .when(
+          data: (items) => _ServicesView(items: items),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => PremiumEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Không tải được dịch vụ',
+            message: '$error',
+          ),
+        );
   }
 }
 
@@ -108,129 +122,33 @@ class _ServicesView extends ConsumerWidget {
     final index = ref.watch(selectedServiceIndexProvider);
     final effective = items.isEmpty ? 0 : index.clamp(0, items.length - 1);
     final selected = items.isEmpty ? null : items[effective];
-    final active = items.where((item) => item.isActive).length;
-    final hidden = items.length - active;
-    final hot = items.where((item) => item.popularityLabel == 'Bán chạy').length;
 
-    final header = PremiumSectionCard(
-      key: const Key('services-premium-header'),
-      child: PremiumPageHeader(
-        icon: Icons.content_cut_rounded,
-        eyebrow: 'Catalog dịch vụ',
-        title: 'Dịch vụ',
-        subtitle:
-            'Giá, thời lượng, trạng thái và định lượng nội bộ trong cùng một workspace.',
-        trailing: [
-          PremiumStatusPill(
-            label: '${items.length} dịch vụ',
-            tone: AppColors.copper,
+    return KeyedSubtree(
+      key: const Key('services-premium-workspace'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CompactManagementHeader(
+            key: const Key('services-premium-header'),
+            title: 'Dịch vụ',
+            subtitle:
+                'Catalog, giá, thời lượng và hiệu suất trong một workspace.',
+            actionLabel: 'Thêm dịch vụ',
+            actionIcon: Icons.add_rounded,
+            onAction: () => _openServiceEditor(context, ref),
           ),
-          FilledButton.icon(
-            onPressed: () => _openServiceEditor(context, ref),
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Thêm dịch vụ'),
+          const SizedBox(height: 12),
+          const _Toolbar(),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _Workspace(
+              items: items,
+              selectedIndex: effective,
+              selected: selected,
+            ),
           ),
         ],
       ),
-    );
-
-    final stats = _StatGrid(
-      cards: [
-        PremiumStatCard(
-          icon: Icons.content_cut_rounded,
-          label: 'Tổng dịch vụ',
-          value: '${items.length}',
-        ),
-        PremiumStatCard(
-          icon: Icons.check_circle_outline,
-          label: 'Đang áp dụng',
-          value: '$active',
-          tone: AppColors.success,
-        ),
-        PremiumStatCard(
-          icon: Icons.visibility_off_outlined,
-          label: 'Tạm ẩn',
-          value: '$hidden',
-          tone: AppColors.textMuted,
-        ),
-        PremiumStatCard(
-          icon: Icons.trending_up_rounded,
-          label: 'Bán chạy',
-          value: '$hot',
-          tone: AppColors.warning,
-        ),
-      ],
-    );
-
-    final workspace = _Workspace(
-      items: items,
-      selectedIndex: effective,
-      selected: selected,
-    );
-
-    return LayoutBuilder(
-      builder: (context, viewport) {
-        if (viewport.maxHeight < 760) {
-          return ListView(
-            key: const Key('services-premium-workspace'),
-            primary: false,
-            children: [
-              header,
-              const SizedBox(height: 14),
-              stats,
-              const SizedBox(height: 14),
-              const _Toolbar(),
-              const SizedBox(height: 14),
-              SizedBox(height: 760, child: workspace),
-            ],
-          );
-        }
-
-        return KeyedSubtree(
-          key: const Key('services-premium-workspace'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              header,
-              const SizedBox(height: 14),
-              stats,
-              const SizedBox(height: 14),
-              const _Toolbar(),
-              const SizedBox(height: 14),
-              Expanded(child: workspace),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _StatGrid extends StatelessWidget {
-  const _StatGrid({required this.cards});
-
-  final List<Widget> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1120
-            ? 4
-            : constraints.maxWidth >= 620
-                ? 2
-                : 1;
-        const gap = 12.0;
-        final width =
-            (constraints.maxWidth - (columns - 1) * gap) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final card in cards) SizedBox(width: width, child: card),
-          ],
-        );
-      },
     );
   }
 }
@@ -240,46 +158,77 @@ class _Toolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(serviceCategoryFilterProvider);
-    return PremiumSectionCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextFormField(
-            initialValue: ref.watch(serviceSearchQueryProvider),
-            onChanged: (value) {
-              ref.read(serviceSearchQueryProvider.notifier).state = value;
-              ref.read(selectedServiceIndexProvider.notifier).state = 0;
-            },
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
-              hintText: 'Tìm dịch vụ, nhóm hoặc mô tả',
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final category in [
-                'Tất cả',
-                ...ServiceUpsertInput.categories,
-              ])
-                FilterChip(
-                  label: Text(category),
-                  selected: category == selected,
-                  showCheckmark: false,
-                  onSelected: (_) {
-                    ref.read(serviceCategoryFilterProvider.notifier).state =
-                        category;
-                    ref.read(selectedServiceIndexProvider.notifier).state = 0;
-                  },
-                ),
-            ],
-          ),
-        ],
+    final selectedCategory = ref.watch(serviceCategoryFilterProvider);
+    final selectedStatus = ref.watch(serviceStatusFilterProvider);
+
+    final search = TextFormField(
+      initialValue: ref.watch(serviceSearchQueryProvider),
+      onChanged: (value) {
+        ref.read(serviceSearchQueryProvider.notifier).state = value;
+        ref.read(selectedServiceIndexProvider.notifier).state = 0;
+      },
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.search_rounded),
+        hintText: 'Tìm dịch vụ, nhóm hoặc mô tả',
       ),
+    );
+
+    final category = DropdownButtonFormField<String>(
+      initialValue: selectedCategory,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.category_outlined),
+        labelText: 'Nhóm dịch vụ',
+      ),
+      items: ['Tất cả', ...ServiceUpsertInput.categories]
+          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+          .toList(growable: false),
+      onChanged: (value) {
+        if (value == null) return;
+        ref.read(serviceCategoryFilterProvider.notifier).state = value;
+        ref.read(selectedServiceIndexProvider.notifier).state = 0;
+      },
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (constraints.maxWidth >= 760)
+              Row(
+                children: [
+                  Expanded(child: search),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 230, child: category),
+                ],
+              )
+            else ...[
+              search,
+              const SizedBox(height: 8),
+              category,
+            ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final status in const ['Tất cả', 'Đang dùng', 'Tạm ẩn'])
+                  FilterChip(
+                    label: Text(status),
+                    selected: selectedStatus == status,
+                    showCheckmark: false,
+                    onSelected: (_) {
+                      ref.read(serviceStatusFilterProvider.notifier).state =
+                          status;
+                      ref.read(selectedServiceIndexProvider.notifier).state = 0;
+                    },
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -297,6 +246,7 @@ class _Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final list = _ServiceList(items: items, selectedIndex: selectedIndex);
     final detail = PremiumAnimatedDetail(
       transitionKey: ValueKey(selected?.id ?? 'service-empty'),
       child: _ServiceDetail(service: selected),
@@ -308,14 +258,8 @@ class _Workspace extends StatelessWidget {
           return ListView(
             primary: false,
             children: [
-              SizedBox(
-                height: 310,
-                child: _ServiceList(
-                  items: items,
-                  selectedIndex: selectedIndex,
-                ),
-              ),
-              const SizedBox(height: 12),
+              SizedBox(height: 310, child: list),
+              const SizedBox(height: 10),
               SizedBox(height: 430, child: detail),
             ],
           );
@@ -324,15 +268,9 @@ class _Workspace extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              flex: 11,
-              child: _ServiceList(
-                items: items,
-                selectedIndex: selectedIndex,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(flex: 9, child: detail),
+            SizedBox(width: constraints.maxWidth * 0.38, child: list),
+            const SizedBox(width: 10),
+            Expanded(child: detail),
           ],
         );
       },
@@ -366,13 +304,14 @@ class _ServiceList extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final item = items[index];
                 final isSelected = index == selectedIndex;
-                final tone =
-                    item.isActive ? AppColors.success : AppColors.textMuted;
+                final tone = item.isActive
+                    ? AppColors.success
+                    : AppColors.textMuted;
                 return PremiumInteractiveSurface(
                   selected: isSelected,
-                  onTap: () => ref
-                      .read(selectedServiceIndexProvider.notifier)
-                      .state = index,
+                  onTap: () =>
+                      ref.read(selectedServiceIndexProvider.notifier).state =
+                          index,
                   child: Row(
                     children: [
                       PremiumIconBadge(
@@ -412,9 +351,7 @@ class _ServiceList extends ConsumerWidget {
                         children: [
                           Text(
                             item.priceLabel,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 4),
                           PremiumStatusPill(
@@ -599,10 +536,7 @@ class _MetricStrip extends StatelessWidget {
                     metrics[index].$1,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -634,61 +568,65 @@ class _FormulaPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ref.watch(serviceFormulasViewProvider).when(
-      loading: () => const LinearProgressIndicator(minHeight: 2),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (all) {
-        final matches = all.where((formula) => formula.serviceId == service.id).toList();
-        final formula = matches.isEmpty ? null : matches.first;
-        return Container(
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            color: AppColors.featureSurface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              PremiumIconBadge(
-                icon: Icons.lock_outline_rounded,
-                size: 34,
-                tone: AppColors.info,
+    return ref
+        .watch(serviceFormulasViewProvider)
+        .when(
+          loading: () => const LinearProgressIndicator(minHeight: 2),
+          error: (_, _) => const SizedBox.shrink(),
+          data: (all) {
+            final matches = all
+                .where((formula) => formula.serviceId == service.id)
+                .toList();
+            final formula = matches.isEmpty ? null : matches.first;
+            return Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: AppColors.featureSurface,
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Định lượng nội bộ',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  PremiumIconBadge(
+                    icon: Icons.lock_outline_rounded,
+                    size: 34,
+                    tone: AppColors.info,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Định lượng nội bộ',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          formula?.formulaText ?? 'Chưa có định lượng.',
+                          style: TextStyle(
+                            color: formula == null
+                                ? AppColors.textMuted
+                                : AppColors.textSecondary,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      formula?.formulaText ?? 'Chưa có định lượng.',
-                      style: TextStyle(
-                        color: formula == null
-                            ? AppColors.textMuted
-                            : AppColors.textSecondary,
-                        height: 1.45,
-                      ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _edit(context, ref, formula),
+                    icon: Icon(
+                      formula == null ? Icons.add_rounded : Icons.edit_outlined,
+                      size: 16,
                     ),
-                  ],
-                ),
+                    label: Text(formula == null ? 'Thêm' : 'Sửa'),
+                  ),
+                ],
               ),
-              TextButton.icon(
-                onPressed: () => _edit(context, ref, formula),
-                icon: Icon(
-                  formula == null ? Icons.add_rounded : Icons.edit_outlined,
-                  size: 16,
-                ),
-                label: Text(formula == null ? 'Thêm' : 'Sửa'),
-              ),
-            ],
-          ),
+            );
+          },
         );
-      },
-    );
   }
 
   Future<void> _edit(
@@ -701,7 +639,9 @@ class _FormulaPanel extends ConsumerWidget {
       builder: (_) => _FormulaDialog(service: service, existing: existing),
     );
     if (result == null || !context.mounted) return;
-    await ref.read(serviceFormulaRepositoryProvider).saveFormula(
+    await ref
+        .read(serviceFormulaRepositoryProvider)
+        .saveFormula(
           serviceId: service.id,
           serviceName: service.name,
           formulaText: result.formulaText,
@@ -729,7 +669,9 @@ class _FormulaDialogState extends State<_FormulaDialog> {
   @override
   void initState() {
     super.initState();
-    controller = TextEditingController(text: widget.existing?.formulaText ?? '');
+    controller = TextEditingController(
+      text: widget.existing?.formulaText ?? '',
+    );
     hidden = widget.existing?.isHiddenFromStaff ?? true;
   }
 
@@ -784,10 +726,7 @@ class _FormulaDialogState extends State<_FormulaDialog> {
 }
 
 class _ServiceEditorDialog extends StatefulWidget {
-  const _ServiceEditorDialog({
-    this.service,
-    required this.existingServices,
-  });
+  const _ServiceEditorDialog({this.service, required this.existingServices});
 
   final ServiceCatalogItem? service;
   final List<ServiceCatalogItem> existingServices;
@@ -850,14 +789,16 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                   controller: name,
                   decoration: const InputDecoration(labelText: 'Tên dịch vụ'),
                   validator: (value) {
-                    final normalized =
-                        ServiceUpsertInput.normalizeName(value ?? '');
+                    final normalized = ServiceUpsertInput.normalizeName(
+                      value ?? '',
+                    );
                     if (normalized.isEmpty) return 'Nhập tên dịch vụ';
                     final duplicate = widget.existingServices.any(
                       (item) =>
                           item.id != widget.service?.id &&
-                          ServiceUpsertInput.normalizeName(item.name)
-                                  .toLowerCase() ==
+                          ServiceUpsertInput.normalizeName(
+                                item.name,
+                              ).toLowerCase() ==
                               normalized.toLowerCase(),
                     );
                     return duplicate ? 'Tên dịch vụ đã tồn tại' : null;
@@ -869,10 +810,8 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                   decoration: const InputDecoration(labelText: 'Nhóm dịch vụ'),
                   items: ServiceUpsertInput.categories
                       .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value),
-                        ),
+                        (value) =>
+                            DropdownMenuItem(value: value, child: Text(value)),
                       )
                       .toList(),
                   onChanged: (value) {
@@ -917,10 +856,8 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                   decoration: const InputDecoration(labelText: 'Độ phổ biến'),
                   items: ServiceUpsertInput.popularityLabels
                       .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value),
-                        ),
+                        (value) =>
+                            DropdownMenuItem(value: value, child: Text(value)),
                       )
                       .toList(),
                   onChanged: (value) {
@@ -937,10 +874,9 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                   controller: description,
                   decoration: const InputDecoration(labelText: 'Mô tả'),
                   maxLines: 3,
-                  validator: (value) =>
-                      value == null || value.trim().isEmpty
-                          ? 'Nhập mô tả dịch vụ'
-                          : null,
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Nhập mô tả dịch vụ'
+                      : null,
                 ),
               ],
             ),
