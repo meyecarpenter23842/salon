@@ -145,32 +145,6 @@ Future<void> _openLineDiscountEditor(
   ref.invalidate(invoiceDraftProvider);
 }
 
-Future<void> _checkoutInvoice(
-  BuildContext context,
-  WidgetRef ref,
-  InvoiceDraft draft,
-) async {
-  await ref.read(invoicesRepositoryProvider).checkoutInvoice();
-  if (!context.mounted) return;
-  ref.invalidate(invoiceDraftProvider);
-  ref.invalidate(invoiceHistoryProvider);
-  ref.invalidate(customerInvoiceHistoryProvider(draft.customerId));
-  if (draft.appointmentId != null) {
-    ref.invalidate(appointmentInvoiceHistoryProvider(draft.appointmentId!));
-  }
-  ref.read(customersRefreshProvider.notifier).state++;
-  ref.invalidate(customersRepositoryProvider);
-  ref.invalidate(customersViewProvider);
-  ref.invalidate(appointmentsRepositoryProvider);
-  ref.invalidate(appointmentsViewProvider);
-  ref.invalidate(overviewSummaryProvider);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Đã thanh toán hóa đơn ${_currency(draft.totalAmount)}'),
-    ),
-  );
-}
-
 Future<RetailProductItem?> _openRetailProductEditor(
   BuildContext context,
   WidgetRef ref,
