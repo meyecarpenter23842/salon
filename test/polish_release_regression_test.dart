@@ -10,6 +10,7 @@ import 'package:salonmanager/core/settings/local_settings_store.dart';
 import 'package:salonmanager/features/appointments/presentation/pages/appointments_page.dart';
 import 'package:salonmanager/features/customers/presentation/pages/customers_page.dart';
 import 'package:salonmanager/features/employees/presentation/pages/employees_page.dart';
+import 'package:salonmanager/features/inventory/presentation/pages/inventory_page.dart';
 import 'package:salonmanager/features/invoices/presentation/pages/invoices_page.dart';
 import 'package:salonmanager/features/overview/presentation/pages/overview_page.dart';
 import 'package:salonmanager/features/reports/presentation/pages/reports_page.dart';
@@ -25,6 +26,7 @@ void main() {
     DesktopSection.customers: CustomersPage,
     DesktopSection.services: ServicesPage,
     DesktopSection.sales: SalesPage,
+    DesktopSection.inventory: InventoryPage,
     DesktopSection.employees: EmployeesPage,
     DesktopSection.reports: ReportsPage,
     DesktopSection.settings: SettingsPage,
