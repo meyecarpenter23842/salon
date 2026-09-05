@@ -283,6 +283,36 @@ class SalonDatabase {
           );
         }
 
+        if (oldVersion < 11) {
+          batch.execute(
+            'CREATE TABLE IF NOT EXISTS inventory_stock ('
+            'product_id TEXT PRIMARY KEY, '
+            'stock_on_hand INTEGER NOT NULL DEFAULT 0, '
+            'updated_at TEXT NOT NULL'
+            ')',
+          );
+          batch.execute(
+            'CREATE TABLE IF NOT EXISTS inventory_movements ('
+            'id TEXT PRIMARY KEY, '
+            'product_id TEXT NOT NULL, '
+            'movement_type TEXT NOT NULL, '
+            'quantity_delta INTEGER NOT NULL, '
+            'stock_before INTEGER NOT NULL, '
+            'stock_after INTEGER NOT NULL, '
+            "note TEXT NOT NULL DEFAULT '', "
+            'created_at TEXT NOT NULL'
+            ')',
+          );
+          batch.execute(
+            'CREATE INDEX IF NOT EXISTS idx_inventory_movements_product_id '
+            'ON inventory_movements(product_id)',
+          );
+          batch.execute(
+            'CREATE INDEX IF NOT EXISTS idx_inventory_movements_created_at '
+            'ON inventory_movements(created_at)',
+          );
+        }
+
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {

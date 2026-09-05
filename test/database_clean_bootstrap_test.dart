@@ -88,6 +88,8 @@ void main() {
       'services',
       'service_formulas',
       'retail_products',
+      'inventory_stock',
+      'inventory_movements',
       'appointments',
       'appointment_services',
       'invoices',

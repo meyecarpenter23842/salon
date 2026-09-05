@@ -16,6 +16,7 @@ import '../core/theme/app_motion.dart';
 import '../features/appointments/presentation/pages/appointments_page.dart';
 import '../features/customers/presentation/pages/customers_page.dart';
 import '../features/employees/presentation/pages/employees_page.dart';
+import '../features/inventory/presentation/pages/inventory_page.dart';
 import '../features/invoices/presentation/pages/invoices_page.dart';
 import '../features/overview/presentation/pages/overview_page.dart';
 import '../features/overview/presentation/pages/staff_workstation_page.dart';
@@ -753,6 +754,7 @@ class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
       DesktopSection.services => const ServicesPage(),
       DesktopSection.employees => const EmployeesPage(),
       DesktopSection.sales => const SalesPage(),
+      DesktopSection.inventory => const InventoryPage(),
       DesktopSection.invoices => const InvoicesPage(),
       DesktopSection.reports => const ReportsPage(),
       DesktopSection.settings => const SettingsPage(),

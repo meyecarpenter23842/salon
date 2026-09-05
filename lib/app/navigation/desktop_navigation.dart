@@ -8,6 +8,7 @@ enum DesktopSection {
   services,
   employees,
   sales,
+  inventory,
   invoices,
   reports,
   settings,
@@ -49,6 +50,10 @@ const desktopNavigationItems = [
   ),
   DesktopNavigationItem(
     section: DesktopSection.sales,
+    group: DesktopNavigationGroup.management,
+  ),
+  DesktopNavigationItem(
+    section: DesktopSection.inventory,
     group: DesktopNavigationGroup.management,
   ),
   DesktopNavigationItem(
@@ -95,6 +100,8 @@ extension DesktopSectionX on DesktopSection {
         return 'Nhân viên';
       case DesktopSection.sales:
         return 'Sản phẩm';
+      case DesktopSection.inventory:
+        return 'Kho hàng';
       case DesktopSection.invoices:
         return 'Tính tiền';
       case DesktopSection.reports:
@@ -118,6 +125,8 @@ extension DesktopSectionX on DesktopSection {
         return Icons.badge_outlined;
       case DesktopSection.sales:
         return Icons.inventory_2_outlined;
+      case DesktopSection.inventory:
+        return Icons.warehouse_outlined;
       case DesktopSection.invoices:
         return Icons.point_of_sale_outlined;
       case DesktopSection.reports:
@@ -141,6 +150,8 @@ extension DesktopSectionX on DesktopSection {
         return 'Quản lý nhân viên, vai trò, ca làm, trạng thái và hoa hồng.';
       case DesktopSection.sales:
         return 'Quản lý sản phẩm bán lẻ, giá bán và cấu hình hiển thị.';
+      case DesktopSection.inventory:
+        return 'Theo dõi tồn sản phẩm, nhập kho và điều chỉnh tồn nội bộ.';
       case DesktopSection.invoices:
         return 'Tính tiền nhanh cho khách và theo dõi các hóa đơn gần đây.';
       case DesktopSection.reports:
