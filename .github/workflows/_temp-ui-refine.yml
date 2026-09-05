@@ -1,0 +1,78 @@
+name: Temp UI refine validation
+
+on:
+  push:
+    branches:
+      - 'refactor/v2-8-compact-detail-popups'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-generated-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Decode patch script
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, pathlib
+          src = pathlib.Path('tool/.ui_refine_patch.py.gz.b64').read_text().strip()
+          pathlib.Path('/tmp/apply_ui_refine.py').write_bytes(gzip.decompress(base64.b64decode(src)))
+          PY
+
+      - name: Apply approved compact detail layout
+        run: python3 /tmp/apply_ui_refine.py
+
+      - name: Format affected files
+        run: |
+          dart format \
+            lib/features/customers/presentation/pages/customers_page.dart \
+            lib/features/services/presentation/pages/services_page.dart \
+            lib/features/services/presentation/widgets/service_performance_panel.dart \
+            lib/features/sales/presentation/pages/sales_page.dart \
+            lib/features/sales/presentation/widgets/product_performance_panel.dart \
+            lib/features/employees/presentation/pages/employees_page.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Save generated files
+        if: always()
+        run: |
+          mkdir -p /tmp/ui-refine-artifact/lib/features/customers/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/lib/features/services/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/lib/features/services/presentation/widgets
+          mkdir -p /tmp/ui-refine-artifact/lib/features/sales/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/lib/features/sales/presentation/widgets
+          mkdir -p /tmp/ui-refine-artifact/lib/features/employees/presentation/pages
+          cp lib/features/customers/presentation/pages/customers_page.dart /tmp/ui-refine-artifact/lib/features/customers/presentation/pages/
+          cp lib/features/services/presentation/pages/services_page.dart /tmp/ui-refine-artifact/lib/features/services/presentation/pages/
+          cp lib/features/services/presentation/widgets/service_performance_panel.dart /tmp/ui-refine-artifact/lib/features/services/presentation/widgets/
+          cp lib/features/sales/presentation/pages/sales_page.dart /tmp/ui-refine-artifact/lib/features/sales/presentation/pages/
+          cp lib/features/sales/presentation/widgets/product_performance_panel.dart /tmp/ui-refine-artifact/lib/features/sales/presentation/widgets/
+          cp lib/features/employees/presentation/pages/employees_page.dart /tmp/ui-refine-artifact/lib/features/employees/presentation/pages/
+          git diff -- . ':!.github/workflows/_temp-ui-refine.yml' ':!tool/.ui_refine_patch.py.gz.b64' > /tmp/ui-refine-artifact/generated.patch
+
+      - name: Upload generated files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-detail-generated
+          path: /tmp/ui-refine-artifact
+          if-no-files-found: error
