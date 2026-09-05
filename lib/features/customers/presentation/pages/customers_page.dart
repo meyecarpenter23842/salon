@@ -850,44 +850,44 @@ class _CustomerDetail extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.featureSurface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.cardBorder),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.history_rounded,
-                                size: 18,
-                                color: AppColors.copper,
+                  Container(
+                    key: const Key('customer-history-preview-card'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.featureSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.history_rounded,
+                              size: 18,
+                              color: AppColors.copper,
+                            ),
+                            const SizedBox(width: 7),
+                            const Expanded(
+                              child: Text(
+                                'Lịch sử gần đây',
+                                style: TextStyle(fontWeight: FontWeight.w900),
                               ),
-                              const SizedBox(width: 7),
-                              const Expanded(
-                                child: Text(
-                                  'Lịch sử gần đây',
-                                  style: TextStyle(fontWeight: FontWeight.w900),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: invoices.isEmpty
-                                    ? null
-                                    : () => _showHistory(context, invoices),
-                                child: Text('Xem tất cả (${invoices.length})'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Expanded(child: _historyPreview(history)),
-                        ],
-                      ),
+                            ),
+                            TextButton(
+                              onPressed: invoices.isEmpty
+                                  ? null
+                                  : () => _showHistory(context, invoices),
+                              child: Text('Xem tất cả (${invoices.length})'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        _historyPreview(history),
+                      ],
                     ),
                   ),
                 ],
@@ -987,9 +987,10 @@ class _CustomerDetail extends ConsumerWidget {
           );
         }
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             for (var index = 0; index < rows.length; index++) ...[
-              Expanded(child: _invoiceRow(rows[index])),
+              _invoiceRow(rows[index]),
               if (index < rows.length - 1) const PremiumDivider(),
             ],
           ],
