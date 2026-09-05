@@ -78,7 +78,8 @@ class _SalesView extends ConsumerWidget {
           CompactManagementHeader(
             key: const Key('sales-premium-header'),
             title: 'Sản phẩm',
-            subtitle: 'Catalog bán lẻ, giá, hoa hồng và trạng thái hiển thị.',
+            subtitle:
+                'Catalog bán lẻ, giá và trạng thái. Hoa hồng bán lẻ chưa được tính.',
             actionLabel: 'Thêm sản phẩm',
             actionIcon: Icons.add_box_outlined,
             onAction: () => _openProductEditor(context, ref),
@@ -368,7 +369,7 @@ class _ProductDetail extends ConsumerWidget {
         child: PremiumEmptyState(
           icon: Icons.inventory_2_outlined,
           title: 'Chọn một sản phẩm',
-          message: 'Giá bán, hoa hồng và quyền hiển thị sẽ hiện ở đây.',
+          message: 'Giá bán, hiệu suất và quyền hiển thị sẽ hiện ở đây.',
         ),
       );
     }
@@ -470,9 +471,9 @@ class _ProductDetail extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: _info(
-                            icon: Icons.percent_rounded,
-                            label: 'Hoa hồng',
-                            value: '${_percent(item.commissionPercent)}%',
+                            icon: Icons.sell_outlined,
+                            label: 'Giá bán',
+                            value: item.salePriceLabel,
                           ),
                         ),
                         Expanded(
@@ -569,8 +570,8 @@ class _ProductMetricStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final metrics = [
       ('Giá bán', item.salePriceLabel),
-      ('Hoa hồng', '${_percent(item.commissionPercent)}%'),
       ('Staff', item.isHiddenFromStaff ? 'Ẩn' : 'Hiển thị'),
+      ('Hoa hồng bán lẻ', 'Chưa hỗ trợ'),
     ];
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -720,20 +721,11 @@ class _RetailProductEditorDialogState
                   },
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _commissionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Hoa hồng nhân viên (%)',
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Hoa hồng bán lẻ chưa được tính trong phiên bản hiện tại.',
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  validator: (value) {
-                    final parsed = double.tryParse(value?.trim() ?? '');
-                    return parsed == null || parsed < 0 || parsed > 100
-                        ? 'Nhập phần trăm 0-100'
-                        : null;
-                  },
                 ),
                 const SizedBox(height: 12),
                 SwitchListTile.adaptive(

@@ -57,8 +57,7 @@ class _AppointmentEditorDialogState
         _resolveInitialEmployeeId(appointment) ?? widget.initialEmployeeId;
     _selectedCustomerId = _resolveInitialCustomerId(appointment);
     _durationController = TextEditingController(
-      text: appointment?.durationMinutes.toString() ??
-          _selectedServicesDuration.toString(),
+      text: _selectedServicesDuration.toString(),
     );
     _slotController = TextEditingController(
       text: appointment?.slotLabel ?? 'Ghế VIP 1',
@@ -267,6 +266,7 @@ class _AppointmentEditorDialogState
                     prefixIcon: Icon(Icons.badge_outlined),
                   ),
                   items: widget.employees
+                      .where(_isSchedulableEmployee)
                       .map(
                         (employee) => DropdownMenuItem(
                           value: employee['id']?.toString(),
@@ -352,15 +352,11 @@ class _AppointmentEditorDialogState
                     final stacked = constraints.maxWidth < 500;
                     final duration = TextFormField(
                       controller: _durationController,
+                      readOnly: true,
                       decoration: const InputDecoration(
                         labelText: 'Thời lượng (phút)',
+                        helperText: 'Tự tính theo tổng thời lượng dịch vụ đã chọn.',
                       ),
-                      validator: (value) {
-                        final minutes = int.tryParse(value?.trim() ?? '');
-                        return minutes == null || minutes <= 0
-                            ? 'Nhập số phút hợp lệ'
-                            : null;
-                      },
                     );
                     final slot = TextFormField(
                       controller: _slotController,
@@ -457,7 +453,7 @@ class _AppointmentEditorDialogState
             services.map((service) => service.name).join(' + '),
         staffName: employee['name']!.toString(),
         status: _status,
-        durationMinutes: int.parse(_durationController.text.trim()),
+        durationMinutes: _selectedServicesDuration,
         slotLabel: _slotController.text.trim(),
         note: _noteController.text.trim(),
         dayLabel: _dayLabel,
@@ -495,12 +491,18 @@ class _AppointmentEditorDialogState
   String? _resolveInitialEmployeeId(AppointmentEntry? appointment) {
     if (appointment == null) return null;
     for (final employee in widget.employees) {
+      if (!_isSchedulableEmployee(employee)) continue;
       if (employee['id']?.toString() == appointment.employeeId ||
           employee['name']?.toString() == appointment.staffName) {
         return employee['id']?.toString();
       }
     }
     return null;
+  }
+
+  bool _isSchedulableEmployee(Map<String, Object?> employee) {
+    final status = employee['status']?.toString() ?? '';
+    return status == 'Đang làm việc' || status == 'Sắp có lịch';
   }
 
   CustomerProfile? get _selectedCustomer {

@@ -16,12 +16,14 @@ class _CatalogPanel extends ConsumerStatefulWidget {
     required this.draft,
     required this.servicesState,
     required this.productsState,
+    required this.employeesState,
     required this.dense,
   });
 
   final InvoiceDraft draft;
   final AsyncValue<List<ServiceCatalogItem>> servicesState;
   final AsyncValue<List<RetailProductItem>> productsState;
+  final AsyncValue<List<Map<String, Object?>>> employeesState;
   final bool dense;
 
   @override
@@ -51,6 +53,7 @@ class _CatalogPanelState extends ConsumerState<_CatalogPanel> {
     final dense = widget.dense;
     final kind = ref.watch(_invoiceCatalogKindProvider);
     final query = ref.watch(_invoiceCatalogQueryProvider).trim().toLowerCase();
+    final selectedEmployeeId = ref.watch(_invoiceServiceEmployeeIdProvider);
 
     return PremiumSectionCard(
       key: const Key('billing-pos-catalog'),
@@ -119,12 +122,20 @@ class _CatalogPanelState extends ConsumerState<_CatalogPanel> {
             ),
           ),
           const SizedBox(height: 10),
+          if (kind == _PosCatalogKind.services) ...[
+            _ServiceEmployeePicker(
+              state: widget.employeesState,
+              selectedEmployeeId: selectedEmployeeId,
+            ),
+            const SizedBox(height: 10),
+          ],
           Expanded(
             child: kind == _PosCatalogKind.services
                 ? _ServiceCatalogList(
                     draft: draft,
                     state: widget.servicesState,
                     query: query,
+                    employeeId: selectedEmployeeId,
                   )
                 : _ProductCatalogList(
                     draft: draft,
@@ -138,16 +149,86 @@ class _CatalogPanelState extends ConsumerState<_CatalogPanel> {
   }
 }
 
+class _ServiceEmployeePicker extends ConsumerWidget {
+  const _ServiceEmployeePicker({
+    required this.state,
+    required this.selectedEmployeeId,
+  });
+
+  final AsyncValue<List<Map<String, Object?>>> state;
+  final String? selectedEmployeeId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return state.when(
+      data: (employees) {
+        final available = employees
+            .where((employee) {
+              final status = employee['status']?.toString() ?? '';
+              return status == 'Đang làm việc' || status == 'Sắp có lịch';
+            })
+            .toList(growable: false);
+        final selectedIsAvailable = available.any(
+          (employee) => employee['id']?.toString() == selectedEmployeeId,
+        );
+        final effectiveValue =
+            selectedIsAvailable ? selectedEmployeeId : null;
+
+        if (!selectedIsAvailable && selectedEmployeeId != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(_invoiceServiceEmployeeIdProvider.notifier).state = null;
+          });
+        }
+
+        return DropdownButtonFormField<String>(
+          key: ValueKey('billing-service-employee-$effectiveValue'),
+          initialValue: effectiveValue,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Nhân viên thực hiện dịch vụ',
+            prefixIcon: Icon(Icons.badge_outlined, size: 18),
+            helperText: 'Bắt buộc với dịch vụ walk-in để tính đúng hiệu suất.',
+          ),
+          items: available
+              .map(
+                (employee) => DropdownMenuItem<String>(
+                  value: employee['id']?.toString(),
+                  child: Text(
+                    '${employee['name']} • ${employee['role']}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: available.isEmpty
+              ? null
+              : (value) {
+                  ref.read(_invoiceServiceEmployeeIdProvider.notifier).state =
+                      value;
+                },
+        );
+      },
+      loading: () => const LinearProgressIndicator(minHeight: 2),
+      error: (error, _) => Text(
+        'Không tải được nhân viên: $error',
+        style: TextStyle(color: AppColors.danger, fontSize: 10.5),
+      ),
+    );
+  }
+}
+
 class _ServiceCatalogList extends ConsumerWidget {
   const _ServiceCatalogList({
     required this.draft,
     required this.state,
     required this.query,
+    required this.employeeId,
   });
 
   final InvoiceDraft draft;
   final AsyncValue<List<ServiceCatalogItem>> state;
   final String query;
+  final String? employeeId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -188,7 +269,12 @@ class _ServiceCatalogList extends ConsumerWidget {
               onTap: draft.isPaid
                   ? null
                   : () => _queueCatalogMutation(
-                        () => _addInvoiceService(context, ref, service),
+                        () => _addInvoiceService(
+                          context,
+                          ref,
+                          service,
+                          employeeId,
+                        ),
                       ),
             );
           },
