@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -11,10 +14,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/models/customer_profile.dart';
 import '../../../../core/models/invoice_draft.dart';
 import '../../../../core/models/invoice_draft_line.dart';
+import '../../../../core/models/receipt_template_config.dart';
 import '../../../../core/models/retail_product_item.dart';
 import '../../../../core/models/retail_product_upsert_input.dart';
 import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/settings/receipt_template_store.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
@@ -24,6 +29,8 @@ part 'pos_bill_panel.dart';
 part 'pos_catalog_panel.dart';
 part 'pos_checkout_panel.dart';
 part 'pos_dialogs.dart';
+part 'receipt_pdf_renderer.dart';
+part 'receipt_settings_dialog.dart';
 
 enum _PosCatalogKind { services, products }
 
@@ -386,7 +393,7 @@ class _BillingView extends StatelessWidget {
   }
 }
 
-class _PosHeader extends StatelessWidget {
+class _PosHeader extends ConsumerWidget {
   const _PosHeader({
     required this.draft,
     required this.history,
@@ -400,7 +407,10 @@ class _PosHeader extends StatelessWidget {
   final bool dense;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsViewProvider).valueOrNull;
+    final salonName = settings?['salonName']?.toString() ?? 'Hair Spa Manager';
+
     return SizedBox(
       key: const Key('billing-premium-header'),
       height: 42,
@@ -433,6 +443,32 @@ class _PosHeader extends StatelessWidget {
             ),
           ],
           const Spacer(),
+          if (dense)
+            IconButton(
+              key: const Key('billing-receipt-settings-action'),
+              tooltip: 'Thiết lập phiếu in',
+              onPressed: () => showAppDialog<void>(
+                context: context,
+                builder: (_) => _ReceiptSettingsDialog(
+                  fallbackSalonName: salonName,
+                ),
+              ),
+              icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            )
+          else ...[
+            OutlinedButton.icon(
+              key: const Key('billing-receipt-settings-action'),
+              onPressed: () => showAppDialog<void>(
+                context: context,
+                builder: (_) => _ReceiptSettingsDialog(
+                  fallbackSalonName: salonName,
+                ),
+              ),
+              icon: const Icon(Icons.receipt_long_outlined, size: 17),
+              label: const Text('Phiếu in'),
+            ),
+            const SizedBox(width: 8),
+          ],
           OutlinedButton.icon(
             key: const Key('billing-history-action'),
             onPressed: () =>
