@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/models/inventory_item.dart';
 import '../../../../core/providers/inventory_providers.dart';
+import '../../../../core/repositories/inventory_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/compact_management.dart';
 
@@ -328,20 +329,17 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
 
     try {
       final repository = ref.read(inventoryRepositoryProvider);
-      for (final line in input.lines) {
-        if (mode == _InventoryMutationMode.receive) {
-          await repository.receiveStock(
+      final batchLines = [
+        for (final line in input.lines)
+          InventoryStockBatchLine(
             productId: line.productId,
             quantity: line.quantity,
-            note: input.note,
-          );
-        } else {
-          await repository.adjustStock(
-            productId: line.productId,
-            newQuantity: line.quantity,
-            note: input.note,
-          );
-        }
+          ),
+      ];
+      if (mode == _InventoryMutationMode.receive) {
+        await repository.receiveStockBatch(lines: batchLines, note: input.note);
+      } else {
+        await repository.adjustStockBatch(lines: batchLines, note: input.note);
       }
       if (!context.mounted) return;
       ref.read(inventoryRefreshNonceProvider.notifier).state++;

@@ -150,6 +150,10 @@ class SqliteRetailProductsRepository
     final existing = existingId == null
         ? null
         : await _findById(database, existingId);
+    if (existingId != null && existing == null) {
+      throw StateError('Product $existingId not found');
+    }
+
     final now = DateTime.now();
     final item = RetailProductMapper.fromUpsertInput(
       id: existing?.id ?? EntityId.create('product'),
@@ -157,12 +161,25 @@ class SqliteRetailProductsRepository
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
+    final row = RetailProductMapper.toDatabase(item);
 
-    await database.insert(
-      'retail_products',
-      RetailProductMapper.toDatabase(item),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    if (existing == null) {
+      await database.insert(
+        'retail_products',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    } else {
+      final updatedCount = await database.update(
+        'retail_products',
+        row,
+        where: 'id = ?',
+        whereArgs: [existing.id],
+      );
+      if (updatedCount != 1) {
+        throw StateError('Product ${existing.id} disappeared during edit');
+      }
+    }
 
     return item;
   }

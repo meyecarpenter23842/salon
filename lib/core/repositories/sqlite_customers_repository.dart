@@ -78,6 +78,13 @@ class SqliteCustomersRepository implements CustomersRepository {
     String? existingId,
   }) async {
     final database = await _database.database;
+    final existingCustomer = existingId == null
+        ? null
+        : await _findById(database, existingId);
+    if (existingId != null && existingCustomer == null) {
+      throw StateError('Customer $existingId not found');
+    }
+
     final normalizedPhone = _normalizePhone(input.phone);
     if (normalizedPhone.isEmpty) {
       throw StateError('Số điện thoại cần có ít nhất một chữ số hợp lệ.');
@@ -94,14 +101,9 @@ class SqliteCustomersRepository implements CustomersRepository {
       );
     }
 
-    final existingCustomer = existingId == null
-        ? null
-        : await _findById(database, existingId);
     final now = DateTime.now();
-    final id = existingCustomer?.id ?? EntityId.create('customer');
-
     final customer = CustomerProfile.fromUpsertInput(
-      id: id,
+      id: existingCustomer?.id ?? EntityId.create('customer'),
       input: input,
       createdAt: existingCustomer?.createdAt ?? now,
       updatedAt: now,
@@ -110,12 +112,25 @@ class SqliteCustomersRepository implements CustomersRepository {
       totalSpent: existingCustomer?.totalSpent ?? 0,
       lastVisitAt: existingCustomer?.lastVisitAt,
     );
+    final row = CustomerMapper.toDatabase(customer);
 
-    await database.insert(
-      'customers',
-      CustomerMapper.toDatabase(customer),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    if (existingCustomer == null) {
+      await database.insert(
+        'customers',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    } else {
+      final updatedCount = await database.update(
+        'customers',
+        row,
+        where: 'id = ?',
+        whereArgs: [existingCustomer.id],
+      );
+      if (updatedCount != 1) {
+        throw StateError('Customer ${existingCustomer.id} disappeared during edit');
+      }
+    }
 
     return customer;
   }
