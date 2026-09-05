@@ -110,7 +110,7 @@ Lưu ý:
 - Reports: dùng SQLite runtime và trả trạng thái zero/empty khi chưa có dữ liệu thật.
 - Database production mới không tự tạo customer/service/employee/appointment/invoice mẫu.
 - Fake data chỉ thuộc backend fake được chọn rõ ràng trong test/demo; không được dùng để bootstrap SQLite production.
-- Invoice draft trên DB sạch được giữ tạm trong memory cho tới khi chọn khách thật; việc chỉ mở màn Tính tiền không tạo record nghiệp vụ giả trong SQLite.
+- Invoice draft chưa chọn khách không tạo customer/invoice nghiệp vụ giả; khi bill dở có thay đổi, trạng thái draft được lưu bền trong SQLite và được khôi phục sau khi mở lại app.
 - Settings: đang dùng SettingsRepository dựa trên LocalSettingsStore (SharedPreferences), không lưu vào SQLite.
 
 Có thể dùng Overview và Reports để đọc nhanh số liệu vận hành cục bộ của máy đang chạy app. Với máy mới chưa phát sinh dữ liệu, các màn này hiển thị số 0/empty state thay vì số liệu mẫu.

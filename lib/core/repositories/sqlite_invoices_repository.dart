@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../database/invoice_draft_mapper.dart';
@@ -15,8 +17,7 @@ class SqliteInvoicesRepository
 
   final SalonDatabase _database;
   static const String _draftInvoiceId = 'invoice-draft-001';
-
-  InvoiceDraft? _transientDraft;
+  static const String _draftStateSettingsKey = 'invoice_draft_state_v1';
 
   @override
   Future<InvoiceDraft> fetchInvoiceDraft() async {
@@ -64,6 +65,13 @@ class SqliteInvoicesRepository
     AppointmentEntry appointment,
   ) async {
     final database = await _database.database;
+    final currentDraft = await _loadDraft(database);
+    if (currentDraft.lines.isNotEmpty) {
+      throw StateError(
+        'Bill đang làm đã có dữ liệu. Hãy hoàn tất hoặc xóa bill hiện tại trước khi chuyển lịch sang Tính tiền.',
+      );
+    }
+
     final now = DateTime.now();
     final lines = await _buildLinesFromAppointment(database, appointment, now);
     final draft = InvoiceDraft(
@@ -129,8 +137,18 @@ class SqliteInvoicesRepository
   Future<InvoiceDraft> selectInvoiceCustomer(String customerId) async {
     final database = await _database.database;
     final draft = await _loadDraft(database);
-    if (draft.appointmentId != null && draft.customerId != customerId) {
-      throw StateError('Cannot change customer for appointment-linked invoice');
+    final currentCustomerId = draft.customerId.trim();
+    final customerChanged =
+        currentCustomerId.isNotEmpty && currentCustomerId != customerId;
+    if (draft.appointmentId != null && customerChanged) {
+      throw StateError(
+        'Bill đang gắn với khách của lịch hẹn nên không thể đổi sang khách khác.',
+      );
+    }
+    if (draft.lines.isNotEmpty && customerChanged) {
+      throw StateError(
+        'Bill đang làm đã có dữ liệu của khách khác. Hãy hoàn tất hoặc xóa bill trước khi đổi khách.',
+      );
     }
     return _saveDraft(
       database,
@@ -509,12 +527,25 @@ class SqliteInvoicesRepository
       whereArgs: const [_draftInvoiceId],
       limit: 1,
     );
-    if (invoiceRows.isEmpty) {
-      return _transientDraft ??= _newEmptyDraft();
+    if (invoiceRows.isNotEmpty) {
+      return _loadInvoiceById(database, _draftInvoiceId);
     }
 
-    _transientDraft = null;
-    return _loadInvoiceById(database, _draftInvoiceId);
+    final stateRows = await database.query(
+      'app_settings',
+      columns: const ['value'],
+      where: 'key = ?',
+      whereArgs: const [_draftStateSettingsKey],
+      limit: 1,
+    );
+    if (stateRows.isNotEmpty) {
+      final raw = stateRows.first['value']?.toString() ?? '';
+      if (raw.isNotEmpty) {
+        return _decodeDraftState(raw);
+      }
+    }
+
+    return _newEmptyDraft();
   }
 
   InvoiceDraft _newEmptyDraft() {
@@ -564,50 +595,77 @@ class SqliteInvoicesRepository
     bool rewriteItems = false,
   }) async {
     if (draft.customerId.trim().isEmpty) {
-      _transientDraft = draft;
+      await database.transaction((transaction) async {
+        await transaction.delete(
+          'invoice_items',
+          where: 'invoice_id = ?',
+          whereArgs: [draft.id],
+        );
+        await transaction.delete(
+          'invoices',
+          where: 'id = ? AND paid_at IS NULL',
+          whereArgs: [draft.id],
+        );
+        await transaction.insert(
+          'app_settings',
+          {
+            'key': _draftStateSettingsKey,
+            'value': _encodeDraftState(draft),
+            'updated_at': draft.updatedAt.toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      });
       return draft;
     }
 
-    final existingRows = await database.query(
-      'invoices',
-      columns: const ['id'],
-      where: 'id = ?',
-      whereArgs: [draft.id],
-      limit: 1,
-    );
-    final isNewDraft = existingRows.isEmpty;
-
-    if (isNewDraft) {
-      await database.insert(
+    await database.transaction((transaction) async {
+      final existingRows = await transaction.query(
         'invoices',
-        InvoiceMapper.toDatabase(draft),
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-    } else {
-      await database.update(
-        'invoices',
-        InvoiceMapper.toDatabase(draft),
+        columns: const ['id'],
         where: 'id = ?',
         whereArgs: [draft.id],
+        limit: 1,
       );
-    }
+      final isNewDraft = existingRows.isEmpty;
 
-    if (rewriteItems || isNewDraft) {
-      await database.delete(
-        'invoice_items',
-        where: 'invoice_id = ?',
-        whereArgs: [draft.id],
-      );
-      for (final line in draft.lines) {
-        await database.insert(
-          'invoice_items',
-          InvoiceDraftMapper.toDatabase(line),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+      if (isNewDraft) {
+        await transaction.insert(
+          'invoices',
+          InvoiceMapper.toDatabase(draft),
+          conflictAlgorithm: ConflictAlgorithm.abort,
+        );
+      } else {
+        await transaction.update(
+          'invoices',
+          InvoiceMapper.toDatabase(draft),
+          where: 'id = ?',
+          whereArgs: [draft.id],
         );
       }
-    }
 
-    _transientDraft = null;
+      if (rewriteItems || isNewDraft) {
+        await transaction.delete(
+          'invoice_items',
+          where: 'invoice_id = ?',
+          whereArgs: [draft.id],
+        );
+        for (final line in draft.lines) {
+          await transaction.insert(
+            'invoice_items',
+            InvoiceDraftMapper.toDatabase(line),
+            conflictAlgorithm: ConflictAlgorithm.abort,
+          );
+        }
+      }
+
+      await transaction.delete(
+        'app_settings',
+        where: 'key = ?',
+        whereArgs: const [_draftStateSettingsKey],
+      );
+    });
+
     return _loadInvoiceById(database, draft.id);
   }
 
@@ -655,35 +713,26 @@ class SqliteInvoicesRepository
 
       await _applyCustomerCheckoutMetrics(transaction, draft, now);
 
-      final resetDraft = InvoiceDraft(
-        id: _draftInvoiceId,
-        appointmentId: null,
-        customerId: draft.customerId,
-        discountAmount: 0,
-        paymentMethod: InvoiceDraft.paymentMethods.first,
-        paidAt: null,
-        createdAt: now,
-        updatedAt: now,
-        lines: const [],
-      );
-
       await transaction.delete(
         'invoice_items',
         where: 'invoice_id = ?',
         whereArgs: const [_draftInvoiceId],
       );
-      final resetCount = await transaction.update(
+      final deletedDrafts = await transaction.delete(
         'invoices',
-        InvoiceMapper.toDatabase(resetDraft),
-        where: 'id = ?',
+        where: 'id = ? AND paid_at IS NULL',
         whereArgs: const [_draftInvoiceId],
       );
-      if (resetCount != 1) {
+      if (deletedDrafts != 1) {
         throw StateError('Invoice draft disappeared during checkout.');
       }
+      await transaction.delete(
+        'app_settings',
+        where: 'key = ?',
+        whereArgs: const [_draftStateSettingsKey],
+      );
     });
 
-    _transientDraft = null;
     return _loadDraft(database);
   }
 
@@ -692,10 +741,6 @@ class SqliteInvoicesRepository
     InvoiceDraft draft,
     DateTime paidAt,
   ) async {
-    if (draft.totalAmount <= 0) {
-      return;
-    }
-
     final earnedPoints = draft.totalAmount ~/ 10000;
     final customerRows = await database.query(
       'customers',
@@ -747,6 +792,92 @@ class SqliteInvoicesRepository
         'updated_at': paidAt.toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  String _encodeDraftState(InvoiceDraft draft) {
+    return jsonEncode({
+      'id': draft.id,
+      'appointmentId': draft.appointmentId,
+      'customerId': draft.customerId,
+      'discountAmount': draft.discountAmount,
+      'paymentMethod': draft.paymentMethod,
+      'paidAt': draft.paidAt?.toIso8601String(),
+      'createdAt': draft.createdAt.toIso8601String(),
+      'updatedAt': draft.updatedAt.toIso8601String(),
+      'lines': [
+        for (final line in draft.lines)
+          {
+            'id': line.id,
+            'invoiceId': line.invoiceId,
+            'itemType': line.itemType,
+            'serviceId': line.serviceId,
+            'productId': line.productId,
+            'employeeId': line.employeeId,
+            'title': line.title,
+            'quantity': line.quantity,
+            'unitPrice': line.unitPrice,
+            'discountAmount': line.discountAmount,
+            'totalPrice': line.totalPrice,
+          },
+      ],
+    });
+  }
+
+  InvoiceDraft _decodeDraftState(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      throw StateError('Invoice draft state is invalid.');
+    }
+    final rawLines = decoded['lines'];
+    if (rawLines is! List) {
+      throw StateError('Invoice draft lines are invalid.');
+    }
+
+    final createdAt =
+        DateTime.tryParse(decoded['createdAt']?.toString() ?? '') ??
+        DateTime.now();
+    final updatedAt =
+        DateTime.tryParse(decoded['updatedAt']?.toString() ?? '') ?? createdAt;
+    final paidAtRaw = decoded['paidAt']?.toString();
+    final paidAt = paidAtRaw == null || paidAtRaw.isEmpty
+        ? null
+        : DateTime.tryParse(paidAtRaw);
+
+    final lines = <InvoiceDraftLine>[];
+    for (final rawLine in rawLines) {
+      if (rawLine is! Map) {
+        throw StateError('Invoice draft line state is invalid.');
+      }
+      lines.add(
+        InvoiceDraftLine(
+          id: rawLine['id']?.toString() ?? '',
+          invoiceId: rawLine['invoiceId']?.toString() ?? _draftInvoiceId,
+          itemType: rawLine['itemType']?.toString() ?? 'service',
+          serviceId: rawLine['serviceId']?.toString(),
+          productId: rawLine['productId']?.toString(),
+          employeeId: rawLine['employeeId']?.toString(),
+          title: rawLine['title']?.toString() ?? '',
+          quantity: _toInt(rawLine['quantity']),
+          unitPrice: _toInt(rawLine['unitPrice']),
+          discountAmount: _toInt(rawLine['discountAmount']),
+          totalPrice: _toInt(rawLine['totalPrice']),
+        ),
+      );
+    }
+
+    return InvoiceDraft(
+      id: decoded['id']?.toString() ?? _draftInvoiceId,
+      appointmentId: decoded['appointmentId']?.toString(),
+      customerId: decoded['customerId']?.toString() ?? '',
+      discountAmount: _toInt(decoded['discountAmount']),
+      paymentMethod: InvoiceDraft.normalizePaymentMethod(
+        decoded['paymentMethod']?.toString() ?? '',
+      ),
+      paidAt: paidAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      lines: lines,
     );
   }
 
