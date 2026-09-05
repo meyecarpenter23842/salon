@@ -13,6 +13,7 @@ import '../models/service_catalog_item.dart';
 import '../models/service_formula_item.dart';
 import 'data_backend_provider.dart';
 import '../repositories/fake_repositories.dart';
+import '../repositories/guarded_salon_repositories.dart';
 import '../repositories/invoice_line_actions_repository.dart';
 import '../repositories/repository_contracts.dart';
 import '../repositories/sqlite_appointments_repository.dart';
@@ -41,7 +42,10 @@ final overviewRepositoryProvider = Provider<OverviewRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return SqliteOverviewRepository(SalonDatabase.instance, fakeDataSource);
+      return GuardedOverviewRepository(
+        SalonDatabase.instance,
+        SqliteOverviewRepository(SalonDatabase.instance, fakeDataSource),
+      );
     case AppDataBackend.fake:
       return FakeOverviewRepository(fakeDataSource);
   }
@@ -53,9 +57,12 @@ final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return SqliteAppointmentsRepository(
+      return GuardedAppointmentsRepository(
         SalonDatabase.instance,
-        fakeDataSource,
+        SqliteAppointmentsRepository(
+          SalonDatabase.instance,
+          fakeDataSource,
+        ),
       );
     case AppDataBackend.fake:
       return FakeAppointmentsRepository(fakeDataSource);
@@ -128,7 +135,10 @@ final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return SqliteInvoicesRepository(SalonDatabase.instance, fakeDataSource);
+      return GuardedInvoicesRepository(
+        SalonDatabase.instance,
+        SqliteInvoicesRepository(SalonDatabase.instance, fakeDataSource),
+      );
     case AppDataBackend.fake:
       return FakeInvoicesRepository(fakeDataSource);
   }

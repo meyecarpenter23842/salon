@@ -71,6 +71,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataBackendProvider.overrideWithValue(AppDataBackend.fake),
+        appointmentDayRolloverProvider.overrideWithValue(DateTime.now()),
       ],
     );
     addTearDown(container.dispose);

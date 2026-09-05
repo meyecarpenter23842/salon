@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -43,9 +44,18 @@ final appointmentEmployeesProvider = FutureProvider<List<Map<String, Object?>>>(
   },
 );
 
+final appointmentDayRolloverProvider = Provider<DateTime>((ref) {
+  final now = DateTime.now();
+  final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+  final timer = Timer(nextMidnight.difference(now), ref.invalidateSelf);
+  ref.onDispose(timer.cancel);
+  return now;
+});
+
 final filteredAppointmentsProvider = FutureProvider<List<AppointmentEntry>>((
   ref,
 ) async {
+  ref.watch(appointmentDayRolloverProvider);
   final allItems = await ref
       .watch(appointmentsRepositoryProvider)
       .fetchAppointmentsView();
@@ -73,6 +83,21 @@ final filteredAppointmentsProvider = FutureProvider<List<AppointmentEntry>>((
       .toList(growable: false);
 });
 
+bool _blockPaidAppointment(
+  BuildContext context,
+  AppointmentEntry? appointment,
+) {
+  if (appointment?.isPaid != true) return false;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text(
+        'Lịch hẹn đã thanh toán nên được khóa chỉnh sửa và trạng thái.',
+      ),
+    ),
+  );
+  return true;
+}
+
 Future<void> _openAppointmentEditor(
   BuildContext context,
   WidgetRef ref, {
@@ -81,6 +106,8 @@ Future<void> _openAppointmentEditor(
   String? initialTimeLabel,
   String? initialDayLabel,
 }) async {
+  if (_blockPaidAppointment(context, appointment)) return;
+
   final customers = await ref
       .read(customersRepositoryProvider)
       .fetchCustomersView();
@@ -159,6 +186,7 @@ Future<void> _updateAppointmentStatus(
   WidgetRef ref,
   AppointmentEntry appointment,
 ) async {
+  if (_blockPaidAppointment(context, appointment)) return;
   final nextStatus = _nextStatus(appointment.status);
   if (nextStatus == null) return;
 
@@ -189,9 +217,18 @@ Future<void> _undoAppointmentComplete(
   WidgetRef ref,
   AppointmentEntry appointment,
 ) async {
-  await ref
-      .read(appointmentsRepositoryProvider)
-      .updateAppointmentStatus(appointment.id, 'Đang làm');
+  if (_blockPaidAppointment(context, appointment)) return;
+  try {
+    await ref
+        .read(appointmentsRepositoryProvider)
+        .updateAppointmentStatus(appointment.id, 'Đang làm');
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_appointmentSaveErrorMessage(error))),
+    );
+    return;
+  }
   if (!context.mounted) return;
   ref.invalidate(filteredAppointmentsProvider);
   ref.invalidate(appointmentsViewProvider);
@@ -206,6 +243,7 @@ Future<void> _cancelAppointment(
   WidgetRef ref,
   AppointmentEntry appointment,
 ) async {
+  if (_blockPaidAppointment(context, appointment)) return;
   final shouldCancel = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -225,9 +263,17 @@ Future<void> _cancelAppointment(
   );
   if (shouldCancel != true) return;
 
-  await ref
-      .read(appointmentsRepositoryProvider)
-      .updateAppointmentStatus(appointment.id, 'Đã hủy');
+  try {
+    await ref
+        .read(appointmentsRepositoryProvider)
+        .updateAppointmentStatus(appointment.id, 'Đã hủy');
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_appointmentSaveErrorMessage(error))),
+    );
+    return;
+  }
   if (!context.mounted) return;
   ref.invalidate(filteredAppointmentsProvider);
   ref.invalidate(appointmentsViewProvider);
@@ -242,9 +288,18 @@ Future<void> _sendAppointmentToInvoice(
   WidgetRef ref,
   AppointmentEntry appointment,
 ) async {
-  await ref
-      .read(invoicesRepositoryProvider)
-      .prefillDraftFromAppointment(appointment);
+  if (_blockPaidAppointment(context, appointment)) return;
+  try {
+    await ref
+        .read(invoicesRepositoryProvider)
+        .prefillDraftFromAppointment(appointment);
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_appointmentSaveErrorMessage(error))),
+    );
+    return;
+  }
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
   ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
@@ -263,6 +318,7 @@ Future<void> _handleAppointmentMenuAction(
   AppointmentEntry appointment,
   _AppointmentMenuAction action,
 ) async {
+  if (_blockPaidAppointment(context, appointment)) return;
   switch (action) {
     case _AppointmentMenuAction.advance:
       await _updateAppointmentStatus(context, ref, appointment);
