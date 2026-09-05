@@ -109,10 +109,25 @@ void main() {
     final unpaidCard = find.byKey(const Key('staff-appointment-unpaid'));
     final paidCard = find.byKey(const Key('staff-appointment-paid'));
 
-    expect(find.descendant(of: unpaidCard, matching: find.text('Chờ thu')), findsOneWidget);
-    expect(find.descendant(of: paidCard, matching: find.text('Đã thu')), findsWidgets);
-    expect(find.descendant(of: paidCard, matching: find.text('Hoàn tác')), findsNothing);
-    expect(find.descendant(of: paidCard, matching: find.text('Tính tiền')), findsNothing);
+    expect(
+      find.descendant(of: unpaidCard, matching: find.text('Chờ thu')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: paidCard, matching: find.text('Đã thu')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(
+        of: paidCard,
+        matching: find.text('Hoàn tác hoàn thành'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: paidCard, matching: find.text('Tính tiền')),
+      findsNothing,
+    );
     expect(find.byKey(const Key('staff-actions-paid')), findsNothing);
   });
 
@@ -203,14 +218,171 @@ void main() {
     expect(find.text('Đang có bill chưa hoàn tất'), findsOneWidget);
     expect(container.read(desktopSectionProvider), isNot(DesktopSection.invoices));
   });
+
+  testWidgets('staff workstation uses compact operation-first desktop layout', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    final appointments = [
+      _appointment(
+        id: 'layout-booked',
+        startsAt: DateTime(now.year, now.month, now.day, 9),
+        status: 'Đã đặt',
+        customerName: 'Khách layout',
+      ),
+      _appointment(
+        id: 'layout-active',
+        startsAt: DateTime(now.year, now.month, now.day, 10),
+        status: 'Đang làm',
+        customerName: 'Khách đang làm',
+      ),
+    ];
+
+    await _pumpStandalone(
+      tester,
+      appointments: appointments,
+      draft: _draft(),
+      size: const Size(1366, 768),
+    );
+
+    expect(find.byKey(const Key('staff-compact-header')), findsOneWidget);
+    expect(find.byKey(const Key('staff-search')), findsOneWidget);
+    expect(find.byKey(const Key('staff-filter-bar')), findsOneWidget);
+    expect(find.byKey(const Key('staff-operation-workspace')), findsOneWidget);
+    expect(find.text('Lượt hôm nay'), findsNothing);
+    expect(find.text('Đang phục vụ'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(1600, 900);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('staff search matches customer name and phone', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    final lan = _appointment(
+      id: 'search-lan',
+      startsAt: DateTime(now.year, now.month, now.day, 9),
+      status: 'Đã đặt',
+      customerName: 'Chị Lan',
+      customerPhone: '0909 123 456',
+    );
+    final minh = _appointment(
+      id: 'search-minh',
+      startsAt: DateTime(now.year, now.month, now.day, 10),
+      status: 'Đang làm',
+      customerName: 'Anh Minh',
+      customerPhone: '0938 111 444',
+    );
+
+    await _pumpStandalone(
+      tester,
+      appointments: [lan, minh],
+      draft: _draft(),
+    );
+
+    await tester.enterText(find.byKey(const Key('staff-search')), '0938');
+    await tester.pump();
+
+    expect(find.text('Anh Minh'), findsOneWidget);
+    expect(find.text('Chị Lan'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('staff-search')), 'lan');
+    await tester.pump();
+
+    expect(find.text('Chị Lan'), findsOneWidget);
+    expect(find.text('Anh Minh'), findsNothing);
+  });
+
+  testWidgets('staff filters states and exposes one primary action per row', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    final waiting = _appointment(
+      id: 'primary-waiting',
+      startsAt: DateTime(now.year, now.month, now.day, 9),
+      status: 'Chờ xác nhận',
+      customerName: 'Khách chờ',
+    );
+    final booked = _appointment(
+      id: 'primary-booked',
+      startsAt: DateTime(now.year, now.month, now.day, 10),
+      status: 'Đã đặt',
+      customerName: 'Khách đã đặt',
+    );
+    final active = _appointment(
+      id: 'primary-active',
+      startsAt: DateTime(now.year, now.month, now.day, 11),
+      status: 'Đang làm',
+      customerName: 'Khách đang làm',
+    );
+    final unpaid = _appointment(
+      id: 'primary-unpaid',
+      startsAt: DateTime(now.year, now.month, now.day, 12),
+      status: 'Hoàn thành',
+      customerName: 'Khách chờ thu',
+    );
+
+    await _pumpStandalone(
+      tester,
+      appointments: [waiting, booked, active, unpaid],
+      draft: _draft(),
+    );
+
+    final waitingCard =
+        find.byKey(const Key('staff-appointment-primary-waiting'));
+    final bookedCard = find.byKey(const Key('staff-appointment-primary-booked'));
+    final activeCard = find.byKey(const Key('staff-appointment-primary-active'));
+    final unpaidCard = find.byKey(const Key('staff-appointment-primary-unpaid'));
+
+    expect(
+      find.descendant(of: waitingCard, matching: find.text('Xác nhận lịch')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: waitingCard, matching: find.text('Bắt đầu')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: bookedCard, matching: find.text('Bắt đầu')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: bookedCard, matching: find.text('Tính tiền')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: activeCard, matching: find.text('Hoàn thành')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: activeCard, matching: find.text('Tính tiền')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: unpaidCard, matching: find.text('Tính tiền')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('staff-filter-active')));
+    await tester.pump();
+
+    expect(find.text('Khách đang làm'), findsOneWidget);
+    expect(find.text('Khách chờ'), findsNothing);
+    expect(find.text('Khách đã đặt'), findsNothing);
+    expect(find.text('Khách chờ thu'), findsNothing);
+  });
 }
 
 Future<void> _pumpStandalone(
   WidgetTester tester, {
   required List<AppointmentEntry> appointments,
   required InvoiceDraft draft,
+  Size size = const Size(1400, 900),
 }) async {
-  tester.view.physicalSize = const Size(1400, 900);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -239,6 +411,7 @@ AppointmentEntry _appointment({
   required String status,
   required String customerName,
   String customerId = 'customer-1',
+  String customerPhone = '0900000000',
   bool isPaid = false,
 }) {
   final now = DateTime.now();
@@ -248,7 +421,7 @@ AppointmentEntry _appointment({
     serviceId: 'service-1',
     employeeId: 'employee-1',
     customerName: customerName,
-    customerPhone: '0900000000',
+    customerPhone: customerPhone,
     serviceName: 'Gội đầu',
     staffName: 'Hương',
     status: status,
