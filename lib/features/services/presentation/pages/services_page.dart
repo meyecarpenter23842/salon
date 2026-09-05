@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/models/catalog_option.dart';
 import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/models/service_formula_item.dart';
 import '../../../../core/models/service_upsert_input.dart';
+import '../../../../core/providers/catalog_options_providers.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/catalog_option_picker.dart';
 import '../../../../shared/widgets/compact_management.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 import '../widgets/service_performance_panel.dart';
@@ -160,6 +163,11 @@ class _Toolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedCategory = ref.watch(serviceCategoryFilterProvider);
     final selectedStatus = ref.watch(serviceStatusFilterProvider);
+    final categoryNamesState = ref.watch(
+      catalogOptionNamesProvider(CatalogOptionKind.serviceGroup),
+    );
+    final categoryNames =
+        categoryNamesState.value ?? CatalogOptionKind.serviceGroup.defaultNames;
 
     final search = TextFormField(
       initialValue: ref.watch(serviceSearchQueryProvider),
@@ -180,7 +188,7 @@ class _Toolbar extends ConsumerWidget {
         prefixIcon: Icon(Icons.category_outlined),
         labelText: 'Nhóm dịch vụ',
       ),
-      items: ['Tất cả', ...ServiceUpsertInput.categories]
+      items: ['Tất cả', ...categoryNames]
           .map((item) => DropdownMenuItem(value: item, child: Text(item)))
           .toList(growable: false),
       onChanged: (value) {
@@ -840,15 +848,10 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                   },
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: const InputDecoration(labelText: 'Nhóm dịch vụ'),
-                  items: ServiceUpsertInput.categories
-                      .map(
-                        (value) =>
-                            DropdownMenuItem(value: value, child: Text(value)),
-                      )
-                      .toList(),
+                CatalogOptionPicker(
+                  kind: CatalogOptionKind.serviceGroup,
+                  labelText: 'Nhóm dịch vụ',
+                  value: category,
                   onChanged: (value) {
                     if (value != null) setState(() => category = value);
                   },

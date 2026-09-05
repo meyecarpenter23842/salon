@@ -52,8 +52,10 @@ class ServiceUpsertInput {
 
   static String normalizeName(String value) => _normalizeText(value);
 
-  static String normalizeCategory(String value) =>
-      _normalizeEnum(value, categories, fallback: 'Chăm sóc');
+  static String normalizeCategory(String value) {
+    final normalized = _normalizeText(value);
+    return normalized.isEmpty ? 'Chăm sóc' : normalized;
+  }
 
   static String normalizePopularityLabel(String value) =>
       _normalizeEnum(value, popularityLabels, fallback: 'Ổn định');

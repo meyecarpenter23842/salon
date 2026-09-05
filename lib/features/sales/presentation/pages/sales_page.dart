@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/models/catalog_option.dart';
 import '../../../../core/models/retail_product_item.dart';
 import '../../../../core/models/retail_product_upsert_input.dart';
+import '../../../../core/providers/catalog_options_providers.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
+import '../../../../shared/widgets/catalog_option_picker.dart';
 import '../../../../shared/widgets/compact_management.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 import '../widgets/product_performance_panel.dart';
@@ -131,6 +134,11 @@ class _SalesToolbar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedStatus = ref.watch(salesProductStatusProvider);
+    final groupNamesState = ref.watch(
+      catalogOptionNamesProvider(CatalogOptionKind.productGroup),
+    );
+    final groupNames =
+        groupNamesState.value ?? CatalogOptionKind.productGroup.defaultNames;
     final search = TextFormField(
       initialValue: ref.watch(salesProductQueryProvider),
       onChanged: (value) {
@@ -154,7 +162,7 @@ class _SalesToolbar extends ConsumerWidget {
           value: null,
           child: Text('Tất cả nhóm'),
         ),
-        ...RetailProductUpsertInput.productTypes.map(
+        ...groupNames.map(
           (item) => DropdownMenuItem<String?>(value: item, child: Text(item)),
         ),
       ],
@@ -617,10 +625,10 @@ class _RetailProductEditorDialogState
     extends State<_RetailProductEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
-  late final TextEditingController _brandController;
   late final TextEditingController _volumeController;
   late final TextEditingController _priceController;
   late final TextEditingController _commissionController;
+  late String _brand;
   late String _type;
   late bool _isActive;
   late bool _isHiddenFromStaff;
@@ -630,7 +638,7 @@ class _RetailProductEditorDialogState
     super.initState();
     final existing = widget.existing;
     _nameController = TextEditingController(text: existing?.name ?? '');
-    _brandController = TextEditingController(text: existing?.brand ?? '');
+    _brand = existing?.brand ?? '';
     _volumeController = TextEditingController(
       text: existing?.volumeLabel ?? '',
     );
@@ -649,7 +657,6 @@ class _RetailProductEditorDialogState
   @override
   void dispose() {
     _nameController.dispose();
-    _brandController.dispose();
     _volumeController.dispose();
     _priceController.dispose();
     _commissionController.dispose();
@@ -676,9 +683,13 @@ class _RetailProductEditorDialogState
                       : null,
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _brandController,
-                  decoration: const InputDecoration(labelText: 'Thương hiệu'),
+                CatalogOptionPicker(
+                  kind: CatalogOptionKind.productBrand,
+                  labelText: 'Thương hiệu',
+                  value: _brand.isEmpty ? null : _brand,
+                  allowEmpty: true,
+                  emptyLabel: 'Không thương hiệu',
+                  onChanged: (value) => setState(() => _brand = value ?? ''),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -688,15 +699,10 @@ class _RetailProductEditorDialogState
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _type,
-                  decoration: const InputDecoration(labelText: 'Nhóm sản phẩm'),
-                  items: RetailProductUpsertInput.productTypes
-                      .map(
-                        (item) =>
-                            DropdownMenuItem(value: item, child: Text(item)),
-                      )
-                      .toList(),
+                CatalogOptionPicker(
+                  kind: CatalogOptionKind.productGroup,
+                  labelText: 'Nhóm sản phẩm',
+                  value: _type,
                   onChanged: (value) {
                     if (value != null) setState(() => _type = value);
                   },
@@ -766,7 +772,7 @@ class _RetailProductEditorDialogState
     Navigator.of(context).pop(
       RetailProductUpsertInput(
         name: _nameController.text.trim(),
-        brand: _brandController.text.trim(),
+        brand: _brand,
         volumeLabel: _volumeController.text.trim(),
         productType: _type,
         salePrice: int.parse(_priceController.text.trim()),

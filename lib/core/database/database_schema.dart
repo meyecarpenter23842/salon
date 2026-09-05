@@ -1,7 +1,7 @@
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 11;
+  static const int version = 12;
 
   static const List<String> createStatements = [
     '''
@@ -83,6 +83,17 @@ class DatabaseSchema {
       is_hidden_from_staff INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+    ''',
+    '''
+    CREATE TABLE catalog_options (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(kind, normalized_name)
     )
     ''',
     '''
@@ -197,6 +208,7 @@ class DatabaseSchema {
     'CREATE INDEX idx_invoice_items_employee_id ON invoice_items(employee_id)',
     'CREATE INDEX idx_service_formulas_service_id ON service_formulas(service_id)',
     'CREATE INDEX idx_retail_products_type ON retail_products(product_type)',
+    'CREATE INDEX idx_catalog_options_kind ON catalog_options(kind)',
     'CREATE INDEX idx_inventory_movements_product_id ON inventory_movements(product_id)',
     'CREATE INDEX idx_inventory_movements_created_at ON inventory_movements(created_at)',
   ];
