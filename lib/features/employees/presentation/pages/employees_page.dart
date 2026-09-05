@@ -348,7 +348,7 @@ class _EmployeeWorkspace extends StatelessWidget {
           child: _EmployeeDetail(employee: selected),
         );
 
-        if (constraints.maxWidth < 900) {
+        if (constraints.maxWidth < 760) {
           return Column(
             children: [
               SizedBox(height: 210, child: list),
@@ -500,322 +500,592 @@ class _EmployeeProfileBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final status = profile['status']?.toString() ?? '';
     final tone = _statusTone(status);
+    final today = _mapList(profile['todayAppointments']);
+    final upcoming = _mapList(profile['upcomingAppointments']);
+    final topServices = _mapList(profile['topServices']);
+    final history = _mapList(profile['serviceHistory']);
+    final nextAppointment = today.isNotEmpty
+        ? today.first
+        : upcoming.isNotEmpty
+        ? upcoming.first
+        : null;
 
     return PremiumSectionCard(
       key: const Key('employee-profile-card'),
       padding: EdgeInsets.zero,
-      child: DefaultTabController(
-        length: 4,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: Row(
-                children: [
-                  PremiumIconBadge(
-                    icon: Icons.person_rounded,
-                    size: 46,
-                    tone: tone,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile['name']?.toString() ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${profile['role']} • ${profile['phone']}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: AppColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  PremiumStatusPill(label: status, tone: tone),
-                ],
-              ),
-            ),
-            const PremiumDivider(),
-            SizedBox(
-              key: const Key('employee-profile-tabs'),
-              height: 42,
-              child: TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                dividerColor: Colors.transparent,
-                labelColor: AppColors.copper,
-                unselectedLabelColor: AppColors.textMuted,
-                indicatorColor: AppColors.copper,
-                tabs: const [
-                  Tab(text: 'Tổng quan'),
-                  Tab(text: 'Lịch hẹn'),
-                  Tab(text: 'Hiệu suất'),
-                  Tab(text: 'Lịch sử phục vụ'),
-                ],
-              ),
-            ),
-            const PremiumDivider(),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _EmployeeOverviewTab(profile: profile),
-                  _EmployeeScheduleTab(profile: profile),
-                  _EmployeePerformanceTab(profile: profile),
-                  _EmployeeHistoryTab(profile: profile),
-                ],
-              ),
-            ),
-            const PremiumDivider(),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => _openEmployeeEditor(
-                        context,
-                        ref,
-                        employee: baseEmployee,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+            child: Row(
+              children: [
+                PremiumIconBadge(
+                  icon: Icons.person_rounded,
+                  size: 46,
+                  tone: tone,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile['name']?.toString() ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Sửa hồ sơ'),
-                    ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${profile['role']} • ${profile['phone']}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        profile['specialty']?.toString() ??
+                            'Chưa thiết lập chuyên môn',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          _updateEmployeeStatus(context, ref, baseEmployee),
-                      icon: const Icon(Icons.sync_alt_outlined),
-                      label: const Text('Đổi trạng thái'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmployeeOverviewTab extends StatelessWidget {
-  const _EmployeeOverviewTab({required this.profile});
-
-  final Map<String, Object?> profile;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      key: const Key('employee-profile-overview'),
-      primary: false,
-      padding: const EdgeInsets.all(14),
-      children: [
-        _ProfileMetrics(profile: profile),
-        const SizedBox(height: 12),
-        PremiumInfoRow(
-          icon: Icons.schedule_outlined,
-          label: 'Ca làm',
-          value: profile['shift']?.toString() ?? 'Chưa thiết lập',
-        ),
-        const PremiumDivider(indent: 42),
-        PremiumInfoRow(
-          icon: Icons.auto_awesome_outlined,
-          label: 'Chuyên môn',
-          value: profile['specialty']?.toString() ?? 'Chưa thiết lập',
-        ),
-        const PremiumDivider(indent: 42),
-        PremiumInfoRow(
-          icon: Icons.percent_rounded,
-          label: 'Hoa hồng / KPI',
-          value: profile['commission']?.toString() ?? 'KPI cố định',
-        ),
-        const PremiumDivider(indent: 42),
-        PremiumInfoRow(
-          icon: Icons.event_available_outlined,
-          label: 'Lịch tiếp theo',
-          value:
-              profile['nextAppointmentLabel']?.toString() ??
-              'Chưa có lịch sắp tới',
-        ),
-        const PremiumDivider(indent: 42),
-        PremiumInfoRow(
-          icon: Icons.star_outline_rounded,
-          label: 'Đánh giá',
-          value: (profile['rating']?.toString().trim().isEmpty ?? true)
-              ? 'Chưa có đánh giá'
-              : profile['rating'].toString(),
-        ),
-        const PremiumDivider(indent: 42),
-        PremiumInfoRow(
-          icon: Icons.sticky_note_2_outlined,
-          label: 'Ghi chú vận hành',
-          value: (profile['note']?.toString().trim().isEmpty ?? true)
-              ? 'Chưa có ghi chú'
-              : profile['note'].toString(),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.featureSurface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.verified_outlined, size: 17, color: AppColors.copper),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  profile['dataNote']?.toString() ??
-                      'Số liệu hiệu suất được tổng hợp từ dữ liệu đã ghi nhận.',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileMetrics extends StatelessWidget {
-  const _ProfileMetrics({required this.profile});
-
-  final Map<String, Object?> profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final metrics = [
-      (
-        'Lịch hôm nay',
-        '${_intValue(profile['todayAppointmentCount'])}',
-        Icons.event_note_outlined,
-      ),
-      (
-        'Dịch vụ tháng',
-        '${_intValue(profile['monthServiceCount'])}',
-        Icons.content_cut_rounded,
-      ),
-      (
-        'Doanh thu DV',
-        profile['monthRevenue']?.toString() ?? '0đ',
-        Icons.payments_outlined,
-      ),
-      (
-        'Hoa hồng ước tính',
-        profile['estimatedCommission']?.toString() ?? '0đ',
-        Icons.percent_rounded,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 620 ? 4 : 2;
-        const gap = 8.0;
-        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final metric in metrics)
-              Container(
-                key: metric.$1 == 'Doanh thu DV'
-                    ? const Key('employee-profile-month-revenue')
-                    : null,
-                width: width,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.featureSurface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.cardBorder),
+                PremiumStatusPill(label: status, tone: tone),
+                const SizedBox(width: 6),
+                IconButton.outlined(
+                  key: const Key('employee-profile-edit-action'),
+                  tooltip: 'Sửa hồ sơ',
+                  onPressed: () =>
+                      _openEmployeeEditor(context, ref, employee: baseEmployee),
+                  icon: const Icon(Icons.edit_outlined),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(metric.$3, size: 17, color: AppColors.copper),
-                    const SizedBox(height: 7),
-                    Text(
-                      metric.$2,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      metric.$1,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 9.5,
+                PopupMenuButton<String>(
+                  tooltip: 'Thêm thao tác',
+                  onSelected: (value) {
+                    if (value == 'status') {
+                      _updateEmployeeStatus(context, ref, baseEmployee);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'status',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.sync_alt_outlined),
+                        title: Text('Đổi trạng thái'),
                       ),
                     ),
                   ],
                 ),
+              ],
+            ),
+          ),
+          const PremiumDivider(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _metric(
+                          Icons.event_note_outlined,
+                          'Lịch hôm nay',
+                          '${_intValue(profile['todayAppointmentCount'])}',
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          Icons.payments_outlined,
+                          'Doanh thu tháng',
+                          profile['monthRevenue']?.toString() ?? '0đ',
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          Icons.content_cut_rounded,
+                          'Dịch vụ',
+                          '${_intValue(profile['monthServiceCount'])}',
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          Icons.people_outline_rounded,
+                          'Khách',
+                          '${_intValue(profile['monthCustomerCount'])}',
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          Icons.percent_rounded,
+                          'Hoa hồng',
+                          profile['estimatedCommission']?.toString() ?? '0đ',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final next = _nextAppointmentCard(
+                          context,
+                          nextAppointment,
+                          [...today, ...upcoming],
+                        );
+                        final top = _topServicesCard(topServices);
+                        if (constraints.maxWidth < 720) {
+                          return Column(
+                            children: [
+                              Expanded(child: next),
+                              const SizedBox(height: 8),
+                              Expanded(child: top),
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(flex: 11, child: next),
+                            const SizedBox(width: 8),
+                            Expanded(flex: 9, child: top),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(height: 142, child: _historyCard(context, history)),
+                ],
               ),
-          ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.copper),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _nextAppointmentCard(
+    BuildContext context,
+    Map<String, Object?>? next,
+    List<Map<String, Object?>> appointments,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 96;
+        if (compact) {
+          final summary = next == null
+              ? (profile['nextAppointmentLabel']?.toString() ??
+                    'Chưa có lịch sắp tới')
+              : '${next['timeRange']?.toString() ?? ''} · ${next['customerName']?.toString() ?? 'Khách'} · ${next['serviceName']?.toString() ?? 'Dịch vụ'}';
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.featureSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.event_available_outlined,
+                  size: 16,
+                  color: AppColors.copper,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Lịch tiếp theo · $summary',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ),
+                if (appointments.isNotEmpty)
+                  IconButton(
+                    tooltip: 'Xem lịch',
+                    onPressed: () => _showAppointments(context, appointments),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                  ),
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.featureSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.event_available_outlined,
+                    size: 18,
+                    color: AppColors.copper,
+                  ),
+                  const SizedBox(width: 7),
+                  const Expanded(
+                    child: Text(
+                      'Lịch tiếp theo',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: appointments.isEmpty
+                        ? null
+                        : () => _showAppointments(context, appointments),
+                    child: const Text('Xem lịch'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (next == null)
+                Text(
+                  profile['nextAppointmentLabel']?.toString() ??
+                      'Chưa có lịch sắp tới.',
+                  style: TextStyle(color: AppColors.textMuted),
+                )
+              else ...[
+                Text(
+                  next['timeRange']?.toString() ?? '',
+                  style: TextStyle(
+                    color: AppColors.copper,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  next['customerName']?.toString() ?? 'Khách',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  next['serviceName']?.toString() ?? 'Dịch vụ',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+                ),
+                const SizedBox(height: 7),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: PremiumStatusPill(
+                    label: next['status']?.toString() ?? '',
+                    tone: _appointmentStatusTone(
+                      next['status']?.toString() ?? '',
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         );
       },
     );
   }
-}
 
-class _EmployeeScheduleTab extends StatelessWidget {
-  const _EmployeeScheduleTab({required this.profile});
+  Widget _topServicesCard(List<Map<String, Object?>> services) {
+    final rows = services.take(3).toList(growable: false);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 96;
+        if (compact) {
+          final summary = rows.isEmpty
+              ? 'Chưa có dữ liệu'
+              : '${rows.first['title']?.toString() ?? 'Dịch vụ'} · ${_intValue(rows.first['quantity'])} lượt';
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.featureSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.content_cut_rounded,
+                  size: 16,
+                  color: AppColors.copper,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Top dịch vụ · $summary',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
-  final Map<String, Object?> profile;
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.featureSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.content_cut_rounded,
+                    size: 18,
+                    color: AppColors.copper,
+                  ),
+                  const SizedBox(width: 7),
+                  const Expanded(
+                    child: Text(
+                      'Top dịch vụ tháng này',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (rows.isEmpty)
+                Text(
+                  'Chưa có dữ liệu dịch vụ.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+                )
+              else
+                for (var index = 0; index < rows.length; index++) ...[
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        child: Text(
+                          '${index + 1}.',
+                          style: TextStyle(
+                            color: AppColors.copper,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          rows[index]['title']?.toString() ?? 'Dịch vụ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${_intValue(rows[index]['quantity'])} lượt',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (index < rows.length - 1) const SizedBox(height: 6),
+                ],
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final today = _mapList(profile['todayAppointments']);
-    final todayIds = today.map((row) => row['id']?.toString()).toSet();
-    final upcoming = _mapList(profile['upcomingAppointments'])
-        .where((row) => !todayIds.contains(row['id']?.toString()))
-        .toList(growable: false);
+  Widget _historyCard(
+    BuildContext context,
+    List<Map<String, Object?>> history,
+  ) {
+    final rows = history.take(2).toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 7),
+      decoration: BoxDecoration(
+        color: AppColors.featureSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history_rounded, size: 18, color: AppColors.copper),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Lịch sử phục vụ gần đây',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton(
+                onPressed: history.isEmpty
+                    ? null
+                    : () => _showHistory(context, history),
+                child: Text('Xem tất cả (${history.length})'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          if (rows.isEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Chưa có lịch sử dịch vụ đã thanh toán.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+              ),
+            )
+          else
+            for (var index = 0; index < rows.length; index++) ...[
+              Expanded(child: _historyRow(rows[index])),
+              if (index < rows.length - 1) const PremiumDivider(),
+            ],
+        ],
+      ),
+    );
+  }
 
-    return ListView(
-      key: const Key('employee-profile-schedule'),
-      primary: false,
-      padding: const EdgeInsets.all(14),
+  Widget _historyRow(Map<String, Object?> row) {
+    return Row(
       children: [
-        _SectionLabel(title: 'Hôm nay', count: today.length),
-        const SizedBox(height: 8),
-        if (today.isEmpty)
-          const _InlineEmpty(
-            icon: Icons.event_busy_outlined,
-            text: 'Chưa có lịch hôm nay.',
-          )
-        else
-          for (final row in today) ...[
-            _AppointmentProfileRow(row: row),
-            const SizedBox(height: 7),
-          ],
-        const SizedBox(height: 10),
-        _SectionLabel(title: 'Sắp tới', count: upcoming.length),
-        const SizedBox(height: 8),
-        if (upcoming.isEmpty)
-          const _InlineEmpty(
-            icon: Icons.event_available_outlined,
-            text: 'Chưa có lịch sắp tới.',
-          )
-        else
-          for (final row in upcoming) ...[
-            _AppointmentProfileRow(row: row),
-            const SizedBox(height: 7),
-          ],
+        SizedBox(
+          width: 92,
+          child: Text(
+            '${row['dateLabel'] ?? ''} ${row['timeLabel'] ?? ''}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '${row['customerName'] ?? 'Khách'} • ${row['title'] ?? 'Dịch vụ'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          row['revenueLabel']?.toString() ?? '0đ',
+          style: TextStyle(
+            color: AppColors.copper,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
       ],
+    );
+  }
+
+  Future<void> _showHistory(
+    BuildContext context,
+    List<Map<String, Object?>> history,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lịch sử phục vụ'),
+        content: SizedBox(
+          width: 760,
+          height: 480,
+          child: ListView.separated(
+            itemCount: history.length,
+            separatorBuilder: (_, _) => const PremiumDivider(),
+            itemBuilder: (_, index) =>
+                SizedBox(height: 50, child: _historyRow(history[index])),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAppointments(
+    BuildContext context,
+    List<Map<String, Object?>> appointments,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lịch nhân viên'),
+        content: SizedBox(
+          width: 760,
+          height: 480,
+          child: ListView.separated(
+            itemCount: appointments.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (_, index) =>
+                _AppointmentProfileRow(row: appointments[index]),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -877,243 +1147,6 @@ class _AppointmentProfileRow extends StatelessWidget {
           PremiumStatusPill(
             label: status,
             tone: _appointmentStatusTone(status),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmployeePerformanceTab extends StatelessWidget {
-  const _EmployeePerformanceTab({required this.profile});
-
-  final Map<String, Object?> profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final topServices = _mapList(profile['topServices']);
-    return ListView(
-      key: const Key('employee-profile-performance'),
-      primary: false,
-      padding: const EdgeInsets.all(14),
-      children: [
-        _ProfileMetrics(profile: profile),
-        const SizedBox(height: 14),
-        _SectionLabel(
-          title: 'Dịch vụ nổi bật tháng này',
-          count: topServices.length,
-        ),
-        const SizedBox(height: 8),
-        if (topServices.isEmpty)
-          const _InlineEmpty(
-            icon: Icons.query_stats_outlined,
-            text: 'Chưa có dịch vụ đã thanh toán trong tháng.',
-          )
-        else
-          for (var index = 0; index < topServices.length; index++) ...[
-            _TopServiceRow(index: index + 1, row: topServices[index]),
-            if (index < topServices.length - 1) const SizedBox(height: 7),
-          ],
-        const SizedBox(height: 14),
-        PremiumInfoRow(
-          icon: Icons.people_outline_rounded,
-          label: 'Khách đã phục vụ tháng này',
-          value: '${_intValue(profile['monthCustomerCount'])} khách',
-        ),
-        const PremiumDivider(indent: 42),
-        PremiumInfoRow(
-          icon: Icons.percent_rounded,
-          label: 'Hoa hồng ước tính',
-          value: profile['estimatedCommission']?.toString() ?? '0đ',
-        ),
-      ],
-    );
-  }
-}
-
-class _TopServiceRow extends StatelessWidget {
-  const _TopServiceRow({required this.index, required this.row});
-
-  final int index;
-  final Map<String, Object?> row;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.featureSurface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          PremiumIconBadge(
-            icon: Icons.content_cut_rounded,
-            size: 34,
-            tone: index == 1 ? AppColors.copper : AppColors.info,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row['title']?.toString() ?? 'Dịch vụ',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  '${_intValue(row['quantity'])} lượt',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            row['revenueLabel']?.toString() ?? '0đ',
-            style: TextStyle(
-              color: AppColors.copper,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmployeeHistoryTab extends StatelessWidget {
-  const _EmployeeHistoryTab({required this.profile});
-
-  final Map<String, Object?> profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final history = _mapList(profile['serviceHistory']);
-    return ListView.separated(
-      key: const Key('employee-profile-history'),
-      primary: false,
-      padding: const EdgeInsets.all(14),
-      itemCount: history.isEmpty ? 1 : history.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 7),
-      itemBuilder: (context, index) {
-        if (history.isEmpty) {
-          return const _InlineEmpty(
-            icon: Icons.history_rounded,
-            text: 'Chưa có lịch sử dịch vụ đã thanh toán.',
-          );
-        }
-        final row = history[index];
-        return Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.featureSurface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.cardBorder),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 82,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      row['dateLabel']?.toString() ?? '',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      row['timeLabel']?.toString() ?? '',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 9.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      row['customerName']?.toString() ?? 'Khách',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      '${row['title']} ×${_intValue(row['quantity'])}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                row['revenueLabel']?.toString() ?? '0đ',
-                style: TextStyle(
-                  color: AppColors.copper,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.title, required this.count});
-
-  final String title;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-        PremiumStatusPill(label: '$count', tone: AppColors.copper),
-      ],
-    );
-  }
-}
-
-class _InlineEmpty extends StatelessWidget {
-  const _InlineEmpty({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.featureSurface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.textMuted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: TextStyle(color: AppColors.textMuted)),
           ),
         ],
       ),

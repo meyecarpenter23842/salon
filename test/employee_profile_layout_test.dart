@@ -42,12 +42,16 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('employees-premium-header')), findsOneWidget);
-      expect(find.byKey(const Key('employee-profile-tabs')), findsOneWidget);
+      expect(find.byKey(const Key('employee-profile-card')), findsOneWidget);
       expect(
-        find.byKey(const Key('employee-profile-overview')),
+        find.byKey(const Key('employee-profile-edit-action')),
         findsOneWidget,
       );
-      expect(tester.takeException(), isNull, reason: '${size.width}x${size.height}');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '${size.width}x${size.height}',
+      );
     }
 
     addTearDown(tester.view.resetPhysicalSize);
@@ -64,25 +68,27 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDataBackendProvider.overrideWithValue(AppDataBackend.fake)],
+        overrides: [
+          appDataBackendProvider.overrideWithValue(AppDataBackend.fake),
+        ],
         child: MaterialApp(
           theme: AppTheme.build(SalonThemeTemplate.salonNoirGold),
           home: const Scaffold(
-            body: Padding(
-              padding: EdgeInsets.all(16),
-              child: EmployeesPage(),
-            ),
+            body: Padding(padding: EdgeInsets.all(16), child: EmployeesPage()),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Sửa hồ sơ').first);
+    await tester.tap(find.byKey(const Key('employee-profile-edit-action')));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(TextFormField, 'Họ tên'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, 'Hoa hồng / KPI'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextFormField, 'Hoa hồng / KPI'),
+      findsOneWidget,
+    );
     expect(find.widgetWithText(TextFormField, 'Dịch vụ tháng'), findsNothing);
     expect(find.widgetWithText(TextFormField, 'Doanh thu tháng'), findsNothing);
     expect(find.widgetWithText(TextFormField, 'Lịch hôm nay'), findsNothing);

@@ -243,9 +243,9 @@ class _SalesWorkspace extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: 13, child: list),
+            Expanded(flex: 11, child: list),
             const SizedBox(width: 10),
-            Expanded(flex: 7, child: detail),
+            Expanded(flex: 9, child: detail),
           ],
         );
       },
@@ -365,12 +365,13 @@ class _ProductDetail extends ConsumerWidget {
       );
     }
 
+    final tone = item.isActive ? AppColors.success : AppColors.textMuted;
     return PremiumSectionCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
             child: Row(
               children: [
                 const PremiumIconBadge(
@@ -391,6 +392,8 @@ class _ProductDetail extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${item.productType}${item.brand.isEmpty ? '' : ' • ${item.brand}'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: AppColors.textMuted),
                       ),
                     ],
@@ -398,68 +401,18 @@ class _ProductDetail extends ConsumerWidget {
                 ),
                 PremiumStatusPill(
                   label: item.isActive ? 'Đang kinh doanh' : 'Tạm ngưng',
-                  tone: item.isActive ? AppColors.success : AppColors.textMuted,
+                  tone: tone,
                 ),
-              ],
-            ),
-          ),
-          const PremiumDivider(),
-          Expanded(
-            child: SingleChildScrollView(
-              primary: false,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _ProductMetricStrip(item: item),
-                  const SizedBox(height: 12),
-                  ProductPerformancePanel(productId: item.id),
-                  const SizedBox(height: 12),
-                  PremiumInfoRow(
-                    icon: Icons.sell_outlined,
-                    label: 'Giá bán',
-                    value: item.salePriceLabel,
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.percent_rounded,
-                    label: 'Hoa hồng nhân viên',
-                    value: '${_percent(item.commissionPercent)}%',
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.badge_outlined,
-                    label: 'Hiển thị ở bàn nhân viên',
-                    value: item.isHiddenFromStaff
-                        ? 'Đang ẩn với staff'
-                        : 'Staff có thể thấy và bán thêm',
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.straighten_outlined,
-                    label: 'Dung tích / quy cách',
-                    value: item.volumeLabel.isEmpty
-                        ? 'Chưa khai báo'
-                        : item.volumeLabel,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const PremiumDivider(),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => _openProductEditor(context, ref, item),
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Sửa sản phẩm'),
-                  ),
+                const SizedBox(width: 6),
+                IconButton.outlined(
+                  tooltip: 'Sửa sản phẩm',
+                  onPressed: () => _openProductEditor(context, ref, item),
+                  icon: const Icon(Icons.edit_outlined),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () async {
+                PopupMenuButton<String>(
+                  tooltip: 'Thêm thao tác',
+                  onSelected: (value) async {
+                    if (value != 'toggle') return;
                     await ref
                         .read(retailProductsRepositoryProvider)
                         .updateProductActive(item.id, !item.isActive);
@@ -467,12 +420,107 @@ class _ProductDetail extends ConsumerWidget {
                     ref.read(salesProductRefreshNonceProvider.notifier).state++;
                     ref.invalidate(retailProductsViewProvider);
                   },
-                  icon: Icon(
-                    item.isActive
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'toggle',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(
+                          item.isActive
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        title: Text(item.isActive ? 'Tạm ẩn' : 'Bật lại'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const PremiumDivider(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  _ProductMetricStrip(item: item),
+                  const SizedBox(height: 10),
+                  Expanded(child: ProductPerformancePanel(productId: item.id)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.featureSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _info(
+                            icon: Icons.percent_rounded,
+                            label: 'Hoa hồng',
+                            value: '${_percent(item.commissionPercent)}%',
+                          ),
+                        ),
+                        Expanded(
+                          child: _info(
+                            icon: Icons.badge_outlined,
+                            label: 'Bàn nhân viên',
+                            value: item.isHiddenFromStaff
+                                ? 'Đang ẩn'
+                                : 'Được bán',
+                          ),
+                        ),
+                        Expanded(
+                          child: _info(
+                            icon: Icons.straighten_outlined,
+                            label: 'Quy cách',
+                            value: item.volumeLabel.isEmpty
+                                ? 'Chưa khai báo'
+                                : item.volumeLabel,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  label: Text(item.isActive ? 'Tạm ẩn' : 'Bật lại'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _info({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: AppColors.copper),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -492,14 +540,15 @@ class _ProductDetail extends ConsumerWidget {
       builder: (_) => _RetailProductEditorDialog(existing: existing),
     );
     if (input == null || !context.mounted) return;
-    final saved = await ref
+
+    await ref
         .read(retailProductsRepositoryProvider)
         .saveProduct(input, existingId: existing.id);
     if (!context.mounted) return;
-    ref.read(salesProductQueryProvider.notifier).state = saved.name;
-    ref.read(salesSelectedProductIndexProvider.notifier).state = 0;
     ref.read(salesProductRefreshNonceProvider.notifier).state++;
     ref.invalidate(retailProductsViewProvider);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Đã cập nhật sản phẩm')));
   }
 }
 
