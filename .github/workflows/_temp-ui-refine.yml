@@ -33,6 +33,41 @@ jobs:
       - name: Apply approved compact detail layout
         run: python3 /tmp/apply_ui_refine.py
 
+      - name: Remove superseded detail widgets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def remove_until(text, start_marker, next_marker):
+              start = text.index(start_marker)
+              end = text.index(next_marker, start + len(start_marker))
+              return text[:start] + text[end:]
+
+          customer_path = Path('lib/features/customers/presentation/pages/customers_page.dart')
+          customer = customer_path.read_text()
+          customer = remove_until(
+              customer,
+              'class _CustomerMetricStrip extends StatelessWidget {',
+              'class _InvoiceHistory extends StatelessWidget {',
+          )
+          customer_path.write_text(customer)
+
+          employee_path = Path('lib/features/employees/presentation/pages/employees_page.dart')
+          employee = employee_path.read_text()
+          for start_marker, next_marker in [
+              ('class _EmployeeOverviewTab extends StatelessWidget {', 'class _ProfileMetrics extends StatelessWidget {'),
+              ('class _ProfileMetrics extends StatelessWidget {', 'class _EmployeeScheduleTab extends StatelessWidget {'),
+              ('class _EmployeeScheduleTab extends StatelessWidget {', 'class _AppointmentProfileRow extends StatelessWidget {'),
+              ('class _EmployeePerformanceTab extends StatelessWidget {', 'class _TopServiceRow extends StatelessWidget {'),
+              ('class _TopServiceRow extends StatelessWidget {', 'class _EmployeeHistoryTab extends StatelessWidget {'),
+              ('class _EmployeeHistoryTab extends StatelessWidget {', 'class _SectionLabel extends StatelessWidget {'),
+              ('class _SectionLabel extends StatelessWidget {', 'class _InlineEmpty extends StatelessWidget {'),
+              ('class _InlineEmpty extends StatelessWidget {', 'Color _statusTone(String status) {'),
+          ]:
+              employee = remove_until(employee, start_marker, next_marker)
+          employee_path.write_text(employee)
+          PY
+
       - name: Format affected files
         run: |
           dart format \
