@@ -950,28 +950,92 @@ String _invoiceTimeLabel(DateTime value) {
       '${value.minute.toString().padLeft(2, '0')}';
 }
 
-Future<File> _createPaidInvoicePdfFile(
+Future<({pw.Font regular, pw.Font bold})> _loadReceiptPdfFonts() async {
+  final candidates = <({String regular, String bold})>[];
+
+  if (Platform.isWindows) {
+    final windowsDir = Platform.environment['WINDIR'] ?? r'C:\Windows';
+    final fontsDir = path.join(windowsDir, 'Fonts');
+    candidates.add((
+      regular: path.join(fontsDir, 'segoeui.ttf'),
+      bold: path.join(fontsDir, 'segoeuib.ttf'),
+    ));
+    candidates.add((
+      regular: path.join(fontsDir, 'arial.ttf'),
+      bold: path.join(fontsDir, 'arialbd.ttf'),
+    ));
+  } else if (Platform.isLinux) {
+    candidates.add((
+      regular: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      bold: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    ));
+  } else if (Platform.isMacOS) {
+    candidates.add((
+      regular: '/System/Library/Fonts/Supplemental/Arial.ttf',
+      bold: '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+    ));
+  }
+
+  for (final candidate in candidates) {
+    final regularFile = File(candidate.regular);
+    if (!await regularFile.exists()) continue;
+
+    final regularBytes = await regularFile.readAsBytes();
+    final regular = pw.Font.ttf(
+      regularBytes.buffer.asByteData(
+        regularBytes.offsetInBytes,
+        regularBytes.lengthInBytes,
+      ),
+    );
+
+    final boldFile = File(candidate.bold);
+    if (!await boldFile.exists()) {
+      return (regular: regular, bold: regular);
+    }
+
+    final boldBytes = await boldFile.readAsBytes();
+    final bold = pw.Font.ttf(
+      boldBytes.buffer.asByteData(
+        boldBytes.offsetInBytes,
+        boldBytes.lengthInBytes,
+      ),
+    );
+    return (regular: regular, bold: bold);
+  }
+
+  final fallback = pw.Font.helvetica();
+  return (regular: fallback, bold: fallback);
+}
+
+Future<File> _createInvoicePdfFile(
   InvoiceDraft invoice,
   CustomerProfile? customer,
 ) async {
+  final fonts = await _loadReceiptPdfFonts();
   final document = pw.Document();
   final paidAt = invoice.paidAt ?? invoice.updatedAt;
+  final theme = pw.ThemeData.withFont(base: fonts.regular, bold: fonts.bold);
+
   document.addPage(
     pw.MultiPage(
+      theme: theme,
+      margin: const pw.EdgeInsets.all(32),
       build: (_) => [
         pw.Text(
-          'PHIEU THANH TOAN',
+          'PHIẾU THANH TOÁN',
           style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
         ),
-        pw.SizedBox(height: 8),
-        pw.Text('Ma hoa don: ${invoice.id}'),
-        pw.Text('Khach hang: ${customer?.fullName ?? invoice.customerId}'),
-        pw.Text('SDT: ${customer?.phone ?? '-'}'),
-        pw.Text('Thanh toan: ${invoice.paymentMethod}'),
-        pw.Text('Thoi gian: ${_invoiceTimeLabel(paidAt)}'),
-        pw.SizedBox(height: 16),
+        pw.SizedBox(height: 10),
+        pw.Text('Mã hóa đơn: ${invoice.id}'),
+        pw.Text('Khách hàng: ${customer?.fullName ?? invoice.customerId}'),
+        pw.Text('SĐT: ${customer?.phone ?? '-'}'),
+        pw.Text('Thanh toán: ${invoice.paymentMethod}'),
+        pw.Text('Thời gian: ${_invoiceTimeLabel(paidAt)}'),
+        pw.SizedBox(height: 18),
         pw.TableHelper.fromTextArray(
-          headers: const ['Hang muc', 'SL', 'Don gia', 'Thanh tien'],
+          headers: const ['Hạng mục', 'SL', 'Đơn giá', 'Thành tiền'],
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          cellStyle: const pw.TextStyle(fontSize: 10.5),
           data: invoice.lines
               .map(
                 (line) => [
@@ -983,22 +1047,24 @@ Future<File> _createPaidInvoicePdfFile(
               )
               .toList(growable: false),
         ),
-        pw.SizedBox(height: 16),
+        pw.SizedBox(height: 18),
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.end,
-          children: [pw.Text('Tam tinh: ${_currency(invoice.subtotal)}')],
+          children: [pw.Text('Tạm tính: ${_currency(invoice.subtotal)}')],
         ),
+        pw.SizedBox(height: 4),
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.end,
           children: [
-            pw.Text('Giam gia: ${_currency(invoice.discountAmount)}'),
+            pw.Text('Giảm giá: ${_currency(invoice.discountAmount)}'),
           ],
         ),
+        pw.SizedBox(height: 6),
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.end,
           children: [
             pw.Text(
-              'Tong cong: ${_currency(invoice.totalAmount)}',
+              'TỔNG CỘNG: ${_currency(invoice.totalAmount)}',
               style: pw.TextStyle(
                 fontSize: 16,
                 fontWeight: pw.FontWeight.bold,
@@ -1029,12 +1095,11 @@ Future<void> _exportPaidInvoicePdf(
   CustomerProfile? customer,
 ) async {
   try {
-    final file = await _createPaidInvoicePdfFile(invoice, customer);
+    final file = await _createInvoicePdfFile(invoice, customer);
     if (Platform.isWindows) {
       await Process.start(
-        'cmd',
-        ['/c', 'start', '', file.path],
-        runInShell: true,
+        'explorer.exe',
+        ['/select,${file.path}'],
         mode: ProcessStartMode.detached,
       );
     }
@@ -1056,31 +1121,18 @@ Future<void> _printPaidInvoice(
   CustomerProfile? customer,
 ) async {
   try {
-    if (!Platform.isWindows) {
-      throw UnsupportedError('In phiếu trực tiếp hiện chỉ hỗ trợ Windows.');
-    }
-    final file = await _createPaidInvoicePdfFile(invoice, customer);
-    final escapedPath = file.path.replaceAll("'", "''");
-    final result = await Process.run(
-      'powershell',
-      [
-        '-NoProfile',
-        '-Command',
-        "Start-Process -FilePath '$escapedPath' -Verb Print",
-      ],
-      runInShell: true,
+    final file = await _createInvoicePdfFile(invoice, customer);
+    final bytes = await file.readAsBytes();
+    final printed = await Printing.layoutPdf(
+      name: 'Phiếu thanh toán ${invoice.id}',
+      onLayout: (_) async => bytes,
     );
-    if (result.exitCode != 0) {
-      throw StateError(
-        result.stderr.toString().trim().isEmpty
-            ? 'Windows không gửi được lệnh in.'
-            : result.stderr.toString().trim(),
-      );
-    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đã gửi phiếu tới trình in mặc định của Windows.'),
+      SnackBar(
+        content: Text(
+          printed ? 'Đã gửi phiếu tới máy in.' : 'Đã hủy in phiếu.',
+        ),
       ),
     );
   } catch (error) {

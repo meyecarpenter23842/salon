@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/models/customer_profile.dart';
@@ -240,91 +241,18 @@ Future<void> _exportInvoicePdf(
   CustomerProfile? customer,
 ) async {
   try {
-    final document = pw.Document();
-    final generatedAt = DateTime.now();
-    document.addPage(
-      pw.MultiPage(
-        build: (_) => [
-          pw.Text(
-            'PHIEU THANH TOAN',
-            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text('Ma hoa don: ${draft.id}'),
-          pw.Text('Khach hang: ${customer?.fullName ?? draft.customerId}'),
-          pw.Text('SDT: ${customer?.phone ?? '-'}'),
-          pw.Text(
-            'Ngay tao: ${generatedAt.day}/${generatedAt.month}/${generatedAt.year} '
-            '${generatedAt.hour.toString().padLeft(2, '0')}:'
-            '${generatedAt.minute.toString().padLeft(2, '0')}',
-          ),
-          pw.SizedBox(height: 16),
-          pw.TableHelper.fromTextArray(
-            headers: const ['Dich vu', 'SL', 'Don gia', 'Thanh tien'],
-            data: draft.lines
-                .map(
-                  (line) => [
-                    line.title,
-                    '${line.quantity}',
-                    _currency(line.unitPrice),
-                    _currency(line.totalPrice),
-                  ],
-                )
-                .toList(growable: false),
-          ),
-          pw.SizedBox(height: 16),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [pw.Text('Tam tinh: ${_currency(draft.subtotal)}')],
-          ),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [pw.Text('Giam gia: ${_currency(draft.discountAmount)}')],
-          ),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [
-              pw.Text(
-                'Tong cong: ${_currency(draft.totalAmount)}',
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 8),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [pw.Text('PTTT: ${draft.paymentMethod}')],
-          ),
-        ],
-      ),
-    );
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    final invoicesDir = Directory(
-      path.join(docsDir.path, 'HairSpaManager', 'invoices'),
-    );
-    if (!await invoicesDir.exists()) {
-      await invoicesDir.create(recursive: true);
+    final file = await _createInvoicePdfFile(draft, customer);
+    if (Platform.isWindows) {
+      await Process.start(
+        'explorer.exe',
+        ['/select,${file.path}'],
+        mode: ProcessStartMode.detached,
+      );
     }
-    final filePath = path.join(
-      invoicesDir.path,
-      'invoice_${draft.id}_${DateTime.now().millisecondsSinceEpoch}.pdf',
-    );
-    final file = File(filePath);
-    await file.writeAsBytes(await document.save());
-    await Process.start(
-      'cmd',
-      ['/c', 'start', '', filePath],
-      runInShell: true,
-      mode: ProcessStartMode.detached,
-    );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Đã xuất PDF hóa đơn: $filePath')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã xuất PDF hóa đơn: ${file.path}')),
+    );
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
