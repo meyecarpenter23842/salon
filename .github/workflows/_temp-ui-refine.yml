@@ -68,6 +68,47 @@ jobs:
           employee_path.write_text(employee)
           PY
 
+      - name: Harden compact detail layout for desktop sizes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          employee_path = Path('lib/features/employees/presentation/pages/employees_page.dart')
+          employee = employee_path.read_text()
+          employee = employee.replace(
+              'if (constraints.maxWidth < 900) {\n          return Column(',
+              'if (constraints.maxWidth < 760) {\n          return Column(',
+              1,
+          )
+          employee = employee.replace(
+              "IconButton.outlined(\n                  tooltip: 'Sửa hồ sơ',",
+              "IconButton.outlined(\n                  key: const Key('employee-profile-edit-action'),\n                  tooltip: 'Sửa hồ sơ',",
+              1,
+          )
+          employee_path.write_text(employee)
+
+          sales_path = Path('lib/features/sales/presentation/pages/sales_page.dart')
+          sales = sales_path.read_text()
+          sales = sales.replace(
+              'Expanded(flex: 13, child: list),\n            const SizedBox(width: 10),\n            Expanded(flex: 7, child: detail),',
+              'Expanded(flex: 11, child: list),\n            const SizedBox(width: 10),\n            Expanded(flex: 9, child: detail),',
+              1,
+          )
+          sales_path.write_text(sales)
+
+          test_path = Path('test/employee_profile_layout_test.dart')
+          test = test_path.read_text()
+          test = test.replace(
+              "      expect(find.byKey(const Key('employee-profile-tabs')), findsOneWidget);\n      expect(\n        find.byKey(const Key('employee-profile-overview')),\n        findsOneWidget,\n      );",
+              "      expect(find.byKey(const Key('employee-profile-card')), findsOneWidget);\n      expect(\n        find.byKey(const Key('employee-profile-edit-action')),\n        findsOneWidget,\n      );",
+          )
+          test = test.replace(
+              "    await tester.tap(find.text('Sửa hồ sơ').first);",
+              "    await tester.tap(\n      find.byKey(const Key('employee-profile-edit-action')),\n    );",
+          )
+          test_path.write_text(test)
+          PY
+
       - name: Format affected files
         run: |
           dart format \
@@ -76,7 +117,8 @@ jobs:
             lib/features/services/presentation/widgets/service_performance_panel.dart \
             lib/features/sales/presentation/pages/sales_page.dart \
             lib/features/sales/presentation/widgets/product_performance_panel.dart \
-            lib/features/employees/presentation/pages/employees_page.dart
+            lib/features/employees/presentation/pages/employees_page.dart \
+            test/employee_profile_layout_test.dart
 
       - name: Install dependencies
         run: flutter pub get
@@ -96,12 +138,14 @@ jobs:
           mkdir -p /tmp/ui-refine-artifact/lib/features/sales/presentation/pages
           mkdir -p /tmp/ui-refine-artifact/lib/features/sales/presentation/widgets
           mkdir -p /tmp/ui-refine-artifact/lib/features/employees/presentation/pages
+          mkdir -p /tmp/ui-refine-artifact/test
           cp lib/features/customers/presentation/pages/customers_page.dart /tmp/ui-refine-artifact/lib/features/customers/presentation/pages/
           cp lib/features/services/presentation/pages/services_page.dart /tmp/ui-refine-artifact/lib/features/services/presentation/pages/
           cp lib/features/services/presentation/widgets/service_performance_panel.dart /tmp/ui-refine-artifact/lib/features/services/presentation/widgets/
           cp lib/features/sales/presentation/pages/sales_page.dart /tmp/ui-refine-artifact/lib/features/sales/presentation/pages/
           cp lib/features/sales/presentation/widgets/product_performance_panel.dart /tmp/ui-refine-artifact/lib/features/sales/presentation/widgets/
           cp lib/features/employees/presentation/pages/employees_page.dart /tmp/ui-refine-artifact/lib/features/employees/presentation/pages/
+          cp test/employee_profile_layout_test.dart /tmp/ui-refine-artifact/test/
           git diff -- . ':!.github/workflows/_temp-ui-refine.yml' ':!tool/.ui_refine_patch.py.gz.b64' > /tmp/ui-refine-artifact/generated.patch
 
       - name: Upload generated files
