@@ -8,9 +8,12 @@
 - Dữ liệu runtime chính đang lưu bằng SQLite cục bộ.
 - Các màn hình Khách hàng, Lịch hẹn, Dịch vụ, Nhân sự, Hóa đơn và Thiết lập đã có luồng thao tác chính.
 - Lịch hẹn hỗ trợ nhiều dịch vụ trong một booking và hóa đơn có thể prefill từ toàn bộ dịch vụ của lịch hẹn.
+- Lịch đã thanh toán được khóa khỏi các thay đổi nghiệp vụ có thể làm lệch hóa đơn; lịch hủy không còn được tính như lịch active/upcoming.
+- POS lưu bền bill dở, bảo vệ checkout trùng và ghi nhận nhân viên thực hiện dịch vụ để thống kê đúng attribution.
 - Overview đã tổng hợp KPI và khối tổng quan từ SQLite runtime.
 - Reports đọc dữ liệu thật từ SQLite runtime; database mới/rỗng giữ trạng thái rỗng và không tự seed dữ liệu mẫu.
 - Reports period selector đã nối query thật theo kỳ: Hôm nay, 7 ngày, 30 ngày, Tháng này.
+- Doanh thu Reports/hiệu suất nhân viên dùng cùng cơ sở doanh thu thực thu sau giảm giá toàn bill; phần giảm toàn bill được phân bổ xuống dòng theo quy tắc deterministic.
 - Đã có tab Bán hàng để quản lý sản phẩm bán lẻ và cấu hình ẩn/hiện cho cửa sổ nhân viên.
 - Backup/Restore dữ liệu SQLite đã được tích hợp trong màn hình Cài đặt.
 
@@ -76,6 +79,8 @@ flutter analyze
 flutter test
 ```
 
+PR vào `main` còn có gate Windows tự động: chạy toàn bộ `flutter test` trên `windows-latest`, build `flutter build windows --release`, sau đó mở `salonmanager.exe` từ output Release và xác nhận process khởi động ổn định trước khi đóng.
+
 ## Build phát hành Windows
 
 ```bash
@@ -130,12 +135,14 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 3. Thêm hoặc sửa nhân sự, đổi trạng thái và mở lại app để xác nhận dữ liệu còn giữ.
 4. Sửa tên salon, tiền tệ, nhắc lịch trong Thiết lập và mở lại app để xác nhận persistence.
 5. Mở Overview và Reports để xác nhận số liệu thay đổi theo dữ liệu runtime trên máy.
-6. Chạy `flutter analyze`, `flutter test`, `flutter build windows --release`.
+6. Xác nhận PR CI xanh cả **Analyze and test** và **Windows regression smoke** trên đúng head SHA.
+7. Trước publish thực tế vẫn chạy một lượt tương tác Windows thủ công cho PDF/CSV/backup-restore và các đường dẫn local phụ thuộc OS.
 
 ## Hạn chế còn lại
 
-- Chưa có bộ test migration đầy đủ hoặc test riêng cho tất cả error path khi bootstrap.
-- Appointment correctness/transaction, checkout transaction, customer query semantics, settings ownership và backup safety tiếp tục được xử lý theo master issue.
+- Chưa có refund/void paid invoice đầy đủ.
+- Chưa tự trừ kho khi checkout hoặc chặn bán khi hết tồn.
+- Chưa có payroll/chấm công hoàn chỉnh.
 - README này mô tả publish nội bộ trên Windows, chưa bao gồm code signing hay installer chuyên biệt.
 
 ## Phương án update offline đã chốt
