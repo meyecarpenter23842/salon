@@ -1,7 +1,7 @@
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 10;
+  static const int version = 11;
 
   static const List<String> createStatements = [
     '''
@@ -83,6 +83,25 @@ class DatabaseSchema {
       is_hidden_from_staff INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+    ''',
+    '''
+    CREATE TABLE inventory_stock (
+      product_id TEXT PRIMARY KEY,
+      stock_on_hand INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    )
+    ''',
+    '''
+    CREATE TABLE inventory_movements (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      movement_type TEXT NOT NULL,
+      quantity_delta INTEGER NOT NULL,
+      stock_before INTEGER NOT NULL,
+      stock_after INTEGER NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
     )
     ''',
     '''
@@ -178,5 +197,7 @@ class DatabaseSchema {
     'CREATE INDEX idx_invoice_items_employee_id ON invoice_items(employee_id)',
     'CREATE INDEX idx_service_formulas_service_id ON service_formulas(service_id)',
     'CREATE INDEX idx_retail_products_type ON retail_products(product_type)',
+    'CREATE INDEX idx_inventory_movements_product_id ON inventory_movements(product_id)',
+    'CREATE INDEX idx_inventory_movements_created_at ON inventory_movements(created_at)',
   ];
 }
