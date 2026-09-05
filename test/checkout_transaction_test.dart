@@ -63,7 +63,7 @@ void main() {
     );
 
     expect(resetDraft.appointmentId, isNull);
-    expect(resetDraft.customerId, fixture.customerId);
+    expect(resetDraft.customerId, isEmpty);
     expect(resetDraft.lines, isEmpty);
   });
 
@@ -77,8 +77,8 @@ void main() {
 
     await fixture.database.execute('''
       CREATE TRIGGER fail_checkout_draft_reset
-      BEFORE UPDATE ON invoices
-      WHEN OLD.id = 'invoice-draft-001' AND NEW.appointment_id IS NULL
+      BEFORE DELETE ON invoices
+      WHEN OLD.id = 'invoice-draft-001'
       BEGIN
         SELECT RAISE(ABORT, 'forced checkout reset failure');
       END
