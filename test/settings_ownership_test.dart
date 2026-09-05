@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/models/payment_config.dart';
 import 'package:salonmanager/core/models/settings_upsert_input.dart';
 import 'package:salonmanager/core/repositories/sqlite_settings_repository.dart';
 import 'package:salonmanager/core/settings/local_settings_store.dart';
@@ -114,8 +115,8 @@ void main() {
       expect(payment.bankName, 'VCB');
       expect(payment.accountNumber, '999888777');
       expect(payment.accountHolder, 'SALON CHINH');
-      expect(payment.uploadedQrPayload, 'qr-payload');
-      expect(payment.qrMode, 'both');
+      expect(payment.uploadedQrPayload, isEmpty);
+      expect(payment.qrMode, PaymentConfig.qrModeGenerated);
       expect(payment.transferContentTemplate, 'HD + SĐT');
     },
   );

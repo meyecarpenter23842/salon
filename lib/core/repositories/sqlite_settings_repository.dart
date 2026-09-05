@@ -49,6 +49,15 @@ class SqliteSettingsRepository implements SettingsRepository {
     return <String, Object?>{
       ..._businessDefaults,
       ...business,
+      // The app currently formats and stores monetary values as VND only.
+      // Mask legacy unsupported values instead of advertising a currency the
+      // rest of the product cannot render correctly.
+      'currency': 'VND',
+      // Uploaded/custom QR modes were never configurable end-to-end. Keep any
+      // old database values dormant, but expose only the supported internal
+      // transfer-information QR mode.
+      'uploadedQrPayload': '',
+      'qrMode': PaymentConfig.qrModeGenerated,
       ...device,
       'themeDefault': 'Salon Emerald',
       'themeGoal':
@@ -61,39 +70,70 @@ class SqliteSettingsRepository implements SettingsRepository {
   Future<Map<String, Object?>> saveLocalSettings(
     SettingsUpsertInput input,
   ) async {
-    final database = await _database.database;
-    await _migrateLegacyBusinessSettings(database);
-
-    final now = DateTime.now().toIso8601String();
-    final businessValues = <String, String>{
-      'salonName': input.salonName,
-      'currency': input.currency,
-      'appointmentReminder': input.appointmentReminder,
-      'bankName': input.bankName,
-      'accountNumber': input.accountNumber,
-      'accountHolder': input.accountHolder,
-      'uploadedQrPayload': input.uploadedQrPayload,
-      'qrMode': input.qrMode,
-      'transferContentTemplate': input.transferContentTemplate,
-    };
-
-    await database.transaction((transaction) async {
-      for (final entry in businessValues.entries) {
-        await _upsertSetting(
-          transaction,
-          key: _databaseKeys[entry.key]!,
-          value: entry.value,
-          updatedAt: now,
-        );
-      }
-    });
-
-    await _localSettingsStore.saveDeviceSettings(
+    // Compatibility path only. Persist each ownership group through its own
+    // method so future callers cannot accidentally reintroduce cross-group
+    // overwrite logic here. Unsupported currency/QR modes are normalized.
+    await saveSalonProfileSettings(
+      salonName: input.salonName,
+      appointmentReminder: input.appointmentReminder,
+    );
+    await saveDeviceUpdateSettings(
       offlineUpdatePath: input.offlineUpdatePath,
       autoCheckOfflineUpdate: input.autoCheckOfflineUpdate,
       licenseKey: input.licenseKey,
     );
+    await savePaymentSettings(
+      bankName: input.bankName,
+      accountNumber: input.accountNumber,
+      accountHolder: input.accountHolder,
+      transferContentTemplate: input.transferContentTemplate,
+    );
+    return fetchLocalSettings();
+  }
 
+  @override
+  Future<Map<String, Object?>> saveSalonProfileSettings({
+    required String salonName,
+    required String appointmentReminder,
+  }) async {
+    await _saveBusinessValues({
+      'salonName': salonName.trim(),
+      'currency': 'VND',
+      'appointmentReminder': appointmentReminder,
+    });
+    return fetchLocalSettings();
+  }
+
+  @override
+  Future<Map<String, Object?>> saveDeviceUpdateSettings({
+    required String offlineUpdatePath,
+    required String autoCheckOfflineUpdate,
+    required String licenseKey,
+  }) async {
+    await _localSettingsStore.saveDeviceSettings(
+      offlineUpdatePath: offlineUpdatePath.trim(),
+      autoCheckOfflineUpdate: autoCheckOfflineUpdate,
+      licenseKey: licenseKey.trim(),
+    );
+    return fetchLocalSettings();
+  }
+
+  @override
+  Future<Map<String, Object?>> savePaymentSettings({
+    required String bankName,
+    required String accountNumber,
+    required String accountHolder,
+    required String transferContentTemplate,
+  }) async {
+    await _saveBusinessValues({
+      'bankName': bankName.trim(),
+      'accountNumber': accountNumber.trim(),
+      'accountHolder': accountHolder.trim(),
+      'qrMode': PaymentConfig.qrModeGenerated,
+      'transferContentTemplate': transferContentTemplate.trim().isEmpty
+          ? PaymentConfig.defaultTransferTemplate
+          : transferContentTemplate.trim(),
+    });
     return fetchLocalSettings();
   }
 
@@ -104,12 +144,30 @@ class SqliteSettingsRepository implements SettingsRepository {
       bankName: settings['bankName']?.toString() ?? '',
       accountNumber: settings['accountNumber']?.toString() ?? '',
       accountHolder: settings['accountHolder']?.toString() ?? '',
-      uploadedQrPayload: settings['uploadedQrPayload']?.toString() ?? '',
-      qrMode: settings['qrMode']?.toString() ?? PaymentConfig.qrModeBoth,
+      uploadedQrPayload: '',
+      qrMode: PaymentConfig.qrModeGenerated,
       transferContentTemplate:
           settings['transferContentTemplate']?.toString() ??
           PaymentConfig.defaultTransferTemplate,
     );
+  }
+
+  Future<void> _saveBusinessValues(Map<String, String> values) async {
+    final database = await _database.database;
+    await _migrateLegacyBusinessSettings(database);
+    final now = DateTime.now().toIso8601String();
+    await database.transaction((transaction) async {
+      for (final entry in values.entries) {
+        final key = _databaseKeys[entry.key];
+        if (key == null) continue;
+        await _upsertSetting(
+          transaction,
+          key: key,
+          value: entry.value,
+          updatedAt: now,
+        );
+      }
+    });
   }
 
   Future<Map<String, String>> _readBusinessSettings(Database database) async {

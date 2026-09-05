@@ -541,7 +541,7 @@ class _CheckoutQuickActions extends ConsumerWidget {
           ),
         ),
         Tooltip(
-          message: 'QR thanh toán',
+          message: 'QR thông tin chuyển khoản',
           child: IconButton(
             onPressed: enabled
                 ? () => _showConfiguredPaymentQrDialog(
@@ -595,14 +595,8 @@ Future<void> _showConfiguredPaymentQrDialog(
         .replaceAll('Mã hóa đơn', draft.id)
         .replaceAll('SĐT khách', customerPhone)
         .trim();
-    final uploadedPayload = config.uploadedQrPayload.trim();
-    final preferUploaded =
-        (config.qrMode == 'uploaded' || config.qrMode == 'both') &&
-        uploadedPayload.isNotEmpty;
-    final payload = preferUploaded
-        ? uploadedPayload
-        : config.hasRequiredBankFields
-        ? 'BANK=${config.bankName}|ACCOUNT=${config.accountNumber}|HOLDER=${config.accountHolder}|AMOUNT=${draft.totalAmount}|CONTENT=$transferContent'
+    final payload = config.hasRequiredBankFields
+        ? 'SALON_TRANSFER|BANK=${config.bankName}|ACCOUNT=${config.accountNumber}|HOLDER=${config.accountHolder}|AMOUNT=${draft.totalAmount}|CONTENT=$transferContent'
         : _buildPaymentQrPayload(draft, customer);
 
     await showAppDialog<void>(
@@ -612,7 +606,7 @@ Future<void> _showConfiguredPaymentQrDialog(
           children: [
             PremiumIconBadge(icon: Icons.qr_code_2_rounded, size: 38),
             SizedBox(width: 10),
-            Text('QR thanh toán'),
+            Text('QR thông tin chuyển khoản'),
           ],
         ),
         content: SizedBox(
@@ -654,6 +648,12 @@ Future<void> _showConfiguredPaymentQrDialog(
                   _ReceiptInfoLine(
                     label: 'Nội dung CK',
                     value: transferContent.isEmpty ? draft.id : transferContent,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'QR này mã hóa thông tin chuyển khoản nội bộ, không phải VietQR/NAPAS chuẩn. Nếu ứng dụng ngân hàng không nhận diện, hãy nhập tài khoản thủ công.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 10.5, color: AppColors.textMuted),
                   ),
                 ] else ...[
                   Text(

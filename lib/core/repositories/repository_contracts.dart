@@ -146,7 +146,28 @@ abstract interface class ReportsRepository {
 abstract interface class SettingsRepository {
   Future<Map<String, Object?>> fetchLocalSettings();
 
+  // Compatibility API for older callers. New UI flows should use the
+  // ownership-specific save methods below so one settings group cannot
+  // overwrite another with stale/default values.
   Future<Map<String, Object?>> saveLocalSettings(SettingsUpsertInput input);
+
+  Future<Map<String, Object?>> saveSalonProfileSettings({
+    required String salonName,
+    required String appointmentReminder,
+  });
+
+  Future<Map<String, Object?>> saveDeviceUpdateSettings({
+    required String offlineUpdatePath,
+    required String autoCheckOfflineUpdate,
+    required String licenseKey,
+  });
+
+  Future<Map<String, Object?>> savePaymentSettings({
+    required String bankName,
+    required String accountNumber,
+    required String accountHolder,
+    required String transferContentTemplate,
+  });
 
   Future<PaymentConfig> fetchPaymentConfig();
 }

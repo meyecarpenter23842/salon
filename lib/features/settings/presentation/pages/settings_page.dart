@@ -24,7 +24,16 @@ Future<void> _openLocalSettingsEditor(
   );
   if (input == null || !context.mounted) return;
 
-  final saved = await ref.read(settingsRepositoryProvider).saveLocalSettings(input);
+  final repository = ref.read(settingsRepositoryProvider);
+  await repository.saveSalonProfileSettings(
+    salonName: input.salonName,
+    appointmentReminder: input.appointmentReminder,
+  );
+  final saved = await repository.saveDeviceUpdateSettings(
+    offlineUpdatePath: input.offlineUpdatePath,
+    autoCheckOfflineUpdate: input.autoCheckOfflineUpdate,
+    licenseKey: input.licenseKey,
+  );
   if (!context.mounted) return;
 
   ref.invalidate(settingsViewProvider);
@@ -47,7 +56,12 @@ Future<void> _openPaymentConfigEditor(
   );
   if (input == null || !context.mounted) return;
 
-  await ref.read(settingsRepositoryProvider).saveLocalSettings(input);
+  await ref.read(settingsRepositoryProvider).savePaymentSettings(
+    bankName: input.bankName,
+    accountNumber: input.accountNumber,
+    accountHolder: input.accountHolder,
+    transferContentTemplate: input.transferContentTemplate,
+  );
   if (!context.mounted) return;
 
   ref.invalidate(settingsViewProvider);
@@ -137,7 +151,7 @@ class _SettingsView extends ConsumerWidget {
         subtitle: 'Ngân hàng, tài khoản, QR và nội dung chuyển khoản mặc định.',
         metrics: [
           _configuredOrFallback(summary['bankName'], 'Chưa cấu hình ngân hàng'),
-          summary['qrMode']?.toString() ?? 'both',
+          'QR thông tin CK',
         ],
         onTap: () => _showSettingsHubDialog(
           context,
@@ -693,9 +707,7 @@ class _PaymentConfigPanel extends ConsumerWidget {
   final Map<String, Object?> summary;
 
   static const _qrModeOptions = [
-    (label: 'Cả hai (VietQR + ảnh tải lên)', value: 'both'),
-    (label: 'VietQR sinh tự động', value: 'generated'),
-    (label: 'QR ảnh tải lên', value: 'uploaded'),
+    (label: 'QR thông tin chuyển khoản (nội bộ)', value: 'generated'),
   ];
 
   @override
@@ -780,7 +792,7 @@ class _LocalSettingsEditorDialog extends StatefulWidget {
 }
 
 class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> {
-  static const _currencyOptions = ['VND', 'USD'];
+  static const _currencyOptions = ['VND'];
   static const _reminderOptions = ['Bật', 'Tắt'];
   static const _autoCheckOptions = ['Tắt'];
 
@@ -875,13 +887,14 @@ class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> 
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _currency,
-                  decoration: const InputDecoration(labelText: 'Tiền tệ'),
+                  decoration: const InputDecoration(
+                    labelText: 'Tiền tệ',
+                    helperText: 'Phiên bản hiện tại chỉ hỗ trợ VND.',
+                  ),
                   items: _currencyOptions
                       .map((item) => DropdownMenuItem(value: item, child: Text(item)))
                       .toList(),
-                  onChanged: (value) {
-                    if (value != null) setState(() => _currency = value);
-                  },
+                  onChanged: null,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -953,9 +966,7 @@ class _PaymentConfigEditorDialogState extends State<_PaymentConfigEditorDialog> 
   late String _qrMode;
 
   static const _qrModes = [
-    (label: 'Cả hai (VietQR + ảnh tải lên)', value: 'both'),
-    (label: 'VietQR sinh tự động', value: 'generated'),
-    (label: 'QR ảnh tải lên', value: 'uploaded'),
+    (label: 'QR thông tin chuyển khoản (nội bộ)', value: 'generated'),
   ];
 
   @override
@@ -967,8 +978,7 @@ class _PaymentConfigEditorDialogState extends State<_PaymentConfigEditorDialog> 
     _transferTemplateController = TextEditingController(
       text: widget.summary['transferContentTemplate']?.toString() ?? 'Mã hóa đơn + SĐT khách',
     );
-    final savedMode = widget.summary['qrMode']?.toString() ?? 'both';
-    _qrMode = _qrModes.any((item) => item.value == savedMode) ? savedMode : 'both';
+    _qrMode = 'generated';
   }
 
   @override
@@ -1016,9 +1026,7 @@ class _PaymentConfigEditorDialogState extends State<_PaymentConfigEditorDialog> 
                           child: Text(item.label, overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged: (value) {
-                  if (value != null) setState(() => _qrMode = value);
-                },
+                onChanged: null,
               ),
               const SizedBox(height: 12),
               TextFormField(
