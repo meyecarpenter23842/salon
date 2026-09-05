@@ -23,7 +23,9 @@ jobs:
           cache: true
 
       - name: Apply approved operational layout
-        run: python3 tool/.operational_ui_patch.py
+        run: |
+          python3 tool/.operational_ui_patch.py
+          python3 tool/.operational_ui_lint_fix.py
 
       - name: Format affected files
         run: |
@@ -70,7 +72,7 @@ jobs:
           cp lib/features/invoices/presentation/pages/pos_checkout_panel.dart /tmp/operational-ui/lib/features/invoices/presentation/pages/
           cp test/operation_ui_batch_test.dart /tmp/operational-ui/test/
           cp test/invoices_pos_layout_test.dart /tmp/operational-ui/test/
-          git diff -- . ':!.github/workflows/_temp-operational-ui-validate.yml' ':!tool/.operational_ui_patch.py' > /tmp/operational-ui/generated.patch
+          git diff -- . ':!.github/workflows/_temp-operational-ui-validate.yml' ':!tool/.operational_ui_patch.py' ':!tool/.operational_ui_lint_fix.py' > /tmp/operational-ui/generated.patch
 
       - name: Upload generated files
         if: always()
