@@ -19,6 +19,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
   String? _groupFilter;
   String? _brandFilter;
   String? _selectedProductId;
+  final Set<String> _checkedProductIds = <String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -47,12 +48,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
         final normalizedQuery = _query.trim().toLowerCase();
         final filteredProducts = products.where((item) {
           final queryOk = normalizedQuery.isEmpty ||
-              [
-                item.name,
-                item.brand,
-                item.productType,
-                item.volumeLabel,
-              ].any(
+              [item.name, item.brand, item.productType, item.volumeLabel].any(
                 (value) => value.toLowerCase().contains(normalizedQuery),
               );
           final groupOk =
@@ -61,13 +57,16 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
           return queryOk && groupOk && brandOk;
         }).toList(growable: false);
         final selected = _resolveSelected(filteredProducts);
+        final checkedProducts = products
+            .where((item) => _checkedProductIds.contains(item.id))
+            .toList(growable: false);
         final movements =
             movementsState.value ?? const <InventoryMovementItem>[];
         final selectedMovements = selected == null
             ? const <InventoryMovementItem>[]
             : movements
-                  .where((item) => item.productId == selected.id)
-                  .toList(growable: false);
+                .where((item) => item.productId == selected.id)
+                .toList(growable: false);
         final totalUnits = products.fold<int>(
           0,
           (sum, item) => sum + item.stockOnHand,
@@ -86,15 +85,13 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                 title: 'Kho hàng',
                 subtitle:
                     'Theo dõi tồn nội bộ, nhập kho và điều chỉnh nhanh. Không chặn bán hàng.',
-                actionLabel: 'Nhập kho',
+                actionLabel: 'Nhập hàng',
                 actionIcon: Icons.add_box_outlined,
-                onAction: selected == null
-                    ? () => _showNoProductMessage(context)
-                    : () => _openMutationDialog(
-                        context,
-                        selected,
-                        _InventoryMutationMode.receive,
-                      ),
+                onAction: () => _startBatchMutation(
+                  context,
+                  checkedProducts,
+                  _InventoryMutationMode.receive,
+                ),
               ),
               const SizedBox(height: 10),
               CompactManagementSummary(
@@ -110,6 +107,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                 onChanged: (value) => setState(() {
                   _query = value;
                   _selectedProductId = null;
+                  _checkedProductIds.clear();
                 }),
                 decoration: const InputDecoration(
                   isDense: true,
@@ -137,16 +135,14 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                         ...groupNames.map(
                           (value) => DropdownMenuItem<String?>(
                             value: value,
-                            child: Text(
-                              value,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: Text(value, overflow: TextOverflow.ellipsis),
                           ),
                         ),
                       ],
                       onChanged: (value) => setState(() {
                         _groupFilter = value;
                         _selectedProductId = null;
+                        _checkedProductIds.clear();
                       }),
                     ),
                   ),
@@ -168,20 +164,35 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                         ...brandNames.map(
                           (value) => DropdownMenuItem<String?>(
                             value: value,
-                            child: Text(
-                              value,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: Text(value, overflow: TextOverflow.ellipsis),
                           ),
                         ),
                       ],
                       onChanged: (value) => setState(() {
                         _brandFilter = value;
                         _selectedProductId = null;
+                        _checkedProductIds.clear();
                       }),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              _BatchActionBar(
+                visibleProducts: filteredProducts,
+                checkedProductIds: _checkedProductIds,
+                onToggleAll: () => _toggleAll(filteredProducts),
+                onReceive: () => _startBatchMutation(
+                  context,
+                  checkedProducts,
+                  _InventoryMutationMode.receive,
+                ),
+                onAdjust: () => _startBatchMutation(
+                  context,
+                  checkedProducts,
+                  _InventoryMutationMode.adjust,
+                ),
+                onClear: () => setState(_checkedProductIds.clear),
               ),
               const SizedBox(height: 10),
               Expanded(
@@ -190,17 +201,24 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                     final list = _InventoryListPanel(
                       products: filteredProducts,
                       selectedProductId: selected?.id,
-                      onSelect: (item) {
-                        setState(() => _selectedProductId = item.id);
-                      },
-                      onReceive: (item) => _openMutationDialog(
+                      checkedProductIds: _checkedProductIds,
+                      onSelect: (item) =>
+                          setState(() => _selectedProductId = item.id),
+                      onToggleChecked: (item, checked) => setState(() {
+                        if (checked) {
+                          _checkedProductIds.add(item.id);
+                        } else {
+                          _checkedProductIds.remove(item.id);
+                        }
+                      }),
+                      onReceive: (item) => _startBatchMutation(
                         context,
-                        item,
+                        [item],
                         _InventoryMutationMode.receive,
                       ),
-                      onAdjust: (item) => _openMutationDialog(
+                      onAdjust: (item) => _startBatchMutation(
                         context,
-                        item,
+                        [item],
                         _InventoryMutationMode.adjust,
                       ),
                     );
@@ -211,26 +229,26 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                       movementsError: movementsState.hasError,
                       onReceive: selected == null
                           ? null
-                          : () => _openMutationDialog(
-                              context,
-                              selected,
-                              _InventoryMutationMode.receive,
-                            ),
+                          : () => _startBatchMutation(
+                                context,
+                                [selected],
+                                _InventoryMutationMode.receive,
+                              ),
                       onAdjust: selected == null
                           ? null
-                          : () => _openMutationDialog(
-                              context,
-                              selected,
-                              _InventoryMutationMode.adjust,
-                            ),
+                          : () => _startBatchMutation(
+                                context,
+                                [selected],
+                                _InventoryMutationMode.adjust,
+                              ),
                     );
 
                     if (constraints.maxWidth < 920) {
                       return Column(
                         children: [
-                          Expanded(flex: 11, child: list),
+                          Expanded(flex: 10, child: list),
                           const SizedBox(height: 10),
-                          Expanded(flex: 9, child: detail),
+                          Expanded(flex: 10, child: detail),
                         ],
                       );
                     }
@@ -263,55 +281,166 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
     return products.first;
   }
 
-  Future<void> _openMutationDialog(
+  void _toggleAll(List<InventoryProductItem> products) {
+    final ids = products.map((item) => item.id).toSet();
+    final allChecked = ids.isNotEmpty && ids.every(_checkedProductIds.contains);
+    setState(() {
+      if (allChecked) {
+        _checkedProductIds.removeAll(ids);
+      } else {
+        _checkedProductIds.addAll(ids);
+      }
+    });
+  }
+
+  Future<void> _startBatchMutation(
     BuildContext context,
-    InventoryProductItem product,
+    List<InventoryProductItem> products,
     _InventoryMutationMode mode,
   ) async {
-    setState(() => _selectedProductId = product.id);
-    final input = await showDialog<_InventoryMutationInput>(
+    if (products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chọn ít nhất một sản phẩm trước khi thao tác.'),
+        ),
+      );
+      return;
+    }
+
+    final input = await showDialog<_InventoryBatchInput>(
       context: context,
-      builder: (_) => _InventoryMutationDialog(product: product, mode: mode),
+      builder: (_) => _InventoryBatchMutationDialog(
+        products: products,
+        mode: mode,
+      ),
     );
-    if (input == null || !mounted) return;
+    if (input == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _InventoryConfirmDialog(
+        products: products,
+        input: input,
+        mode: mode,
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
 
     try {
       final repository = ref.read(inventoryRepositoryProvider);
-      if (mode == _InventoryMutationMode.receive) {
-        await repository.receiveStock(
-          productId: product.id,
-          quantity: input.quantity,
-          note: input.note,
-        );
-      } else {
-        await repository.adjustStock(
-          productId: product.id,
-          newQuantity: input.quantity,
-          note: input.note,
-        );
+      for (final line in input.lines) {
+        if (mode == _InventoryMutationMode.receive) {
+          await repository.receiveStock(
+            productId: line.productId,
+            quantity: line.quantity,
+            note: input.note,
+          );
+        } else {
+          await repository.adjustStock(
+            productId: line.productId,
+            newQuantity: line.quantity,
+            note: input.note,
+          );
+        }
       }
       if (!context.mounted) return;
       ref.read(inventoryRefreshNonceProvider.notifier).state++;
+      setState(_checkedProductIds.clear);
+      final total = input.lines.fold<int>(0, (sum, line) => sum + line.quantity);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             mode == _InventoryMutationMode.receive
-                ? 'Đã nhập ${input.quantity} đơn vị ${product.name}'
-                : 'Đã điều chỉnh tồn ${product.name} về ${input.quantity}',
+                ? 'Đã nhập ${input.lines.length} sản phẩm, tổng $total đơn vị.'
+                : 'Đã điều chỉnh tồn ${input.lines.length} sản phẩm.',
           ),
         ),
       );
     } catch (error) {
       if (!context.mounted) return;
+      ref.read(inventoryRefreshNonceProvider.notifier).state++;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Không cập nhật được tồn kho: $error')),
       );
     }
   }
+}
 
-  void _showNoProductMessage(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Chưa có sản phẩm để nhập kho.')),
+class _BatchActionBar extends StatelessWidget {
+  const _BatchActionBar({
+    required this.visibleProducts,
+    required this.checkedProductIds,
+    required this.onToggleAll,
+    required this.onReceive,
+    required this.onAdjust,
+    required this.onClear,
+  });
+
+  final List<InventoryProductItem> visibleProducts;
+  final Set<String> checkedProductIds;
+  final VoidCallback onToggleAll;
+  final VoidCallback onReceive;
+  final VoidCallback onAdjust;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleIds = visibleProducts.map((item) => item.id).toSet();
+    final visibleChecked =
+        visibleIds.where(checkedProductIds.contains).length;
+    final allChecked =
+        visibleIds.isNotEmpty && visibleChecked == visibleIds.length;
+    final someChecked = visibleChecked > 0 && !allChecked;
+
+    return Container(
+      key: const Key('inventory-batch-actions'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            tristate: true,
+            value: allChecked ? true : (someChecked ? null : false),
+            onChanged: visibleProducts.isEmpty ? null : (_) => onToggleAll(),
+          ),
+          const SizedBox(width: 3),
+          Expanded(
+            child: Text(
+              checkedProductIds.isEmpty
+                  ? 'Chọn sản phẩm để nhập hoặc điều chỉnh cùng lúc'
+                  : 'Đã chọn ${checkedProductIds.length} sản phẩm',
+              style: TextStyle(
+                color: checkedProductIds.isEmpty
+                    ? AppColors.textMuted
+                    : AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 11.5,
+              ),
+            ),
+          ),
+          if (checkedProductIds.isNotEmpty) ...[
+            TextButton(onPressed: onClear, child: const Text('Bỏ chọn')),
+            const SizedBox(width: 4),
+          ],
+          FilledButton.tonalIcon(
+            key: const Key('inventory-batch-receive'),
+            onPressed: checkedProductIds.isEmpty ? null : onReceive,
+            icon: const Icon(Icons.add_box_outlined, size: 17),
+            label: const Text('Nhập hàng'),
+          ),
+          const SizedBox(width: 6),
+          OutlinedButton.icon(
+            key: const Key('inventory-batch-adjust'),
+            onPressed: checkedProductIds.isEmpty ? null : onAdjust,
+            icon: const Icon(Icons.tune_rounded, size: 17),
+            label: const Text('Điều chỉnh'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -320,14 +449,18 @@ class _InventoryListPanel extends StatelessWidget {
   const _InventoryListPanel({
     required this.products,
     required this.selectedProductId,
+    required this.checkedProductIds,
     required this.onSelect,
+    required this.onToggleChecked,
     required this.onReceive,
     required this.onAdjust,
   });
 
   final List<InventoryProductItem> products;
   final String? selectedProductId;
+  final Set<String> checkedProductIds;
   final ValueChanged<InventoryProductItem> onSelect;
+  final void Function(InventoryProductItem item, bool checked) onToggleChecked;
   final ValueChanged<InventoryProductItem> onReceive;
   final ValueChanged<InventoryProductItem> onAdjust;
 
@@ -375,7 +508,10 @@ class _InventoryListPanel extends StatelessWidget {
                       return _InventoryProductRow(
                         product: item,
                         selected: item.id == selectedProductId,
+                        checked: checkedProductIds.contains(item.id),
                         onSelect: () => onSelect(item),
+                        onChecked: (value) =>
+                            onToggleChecked(item, value ?? false),
                         onReceive: () => onReceive(item),
                         onAdjust: () => onAdjust(item),
                       );
@@ -392,14 +528,18 @@ class _InventoryProductRow extends StatelessWidget {
   const _InventoryProductRow({
     required this.product,
     required this.selected,
+    required this.checked,
     required this.onSelect,
+    required this.onChecked,
     required this.onReceive,
     required this.onAdjust,
   });
 
   final InventoryProductItem product;
   final bool selected;
+  final bool checked;
   final VoidCallback onSelect;
+  final ValueChanged<bool?> onChecked;
   final VoidCallback onReceive;
   final VoidCallback onAdjust;
 
@@ -408,20 +548,21 @@ class _InventoryProductRow extends StatelessWidget {
     final stockTone = product.isOutOfStock
         ? AppColors.danger
         : product.isLowStock
-        ? AppColors.warning
-        : AppColors.success;
+            ? AppColors.warning
+            : AppColors.success;
 
     return Material(
       color: selected ? AppColors.selectedSurface : Colors.transparent,
       child: InkWell(
         onTap: onSelect,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
+              Checkbox(value: checked, onChanged: onChecked),
               SizedBox(
-                width: 34,
-                height: 34,
+                width: 32,
+                height: 32,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: stockTone.withValues(alpha: 0.10),
@@ -434,7 +575,7 @@ class _InventoryProductRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -458,9 +599,9 @@ class _InventoryProductRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               SizedBox(
-                width: 70,
+                width: 62,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -476,8 +617,8 @@ class _InventoryProductRow extends StatelessWidget {
                       product.isOutOfStock
                           ? 'Hết hàng'
                           : product.isLowStock
-                          ? 'Sắp hết'
-                          : 'Còn hàng',
+                              ? 'Sắp hết'
+                              : 'Còn hàng',
                       style: TextStyle(
                         color: stockTone,
                         fontSize: 10.5,
@@ -487,14 +628,13 @@ class _InventoryProductRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
               IconButton(
-                tooltip: 'Nhập kho',
+                tooltip: 'Nhập riêng sản phẩm này',
                 onPressed: onReceive,
                 icon: const Icon(Icons.add_box_outlined, size: 18),
               ),
               IconButton(
-                tooltip: 'Điều chỉnh tồn',
+                tooltip: 'Điều chỉnh riêng sản phẩm này',
                 onPressed: onAdjust,
                 icon: const Icon(Icons.tune_rounded, size: 18),
               ),
@@ -594,17 +734,18 @@ class _InventoryDetailPanel extends StatelessWidget {
             child: movementsLoading
                 ? const Center(child: CircularProgressIndicator())
                 : movementsError
-                ? const Center(child: Text('Không tải được lịch sử tồn.'))
-                : movements.isEmpty
-                ? const Center(child: Text('Chưa có biến động tồn kho.'))
-                : ListView.separated(
-                    primary: false,
-                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                    itemCount: movements.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
-                    itemBuilder: (context, index) =>
-                        _MovementRow(item: movements[index]),
-                  ),
+                    ? const Center(child: Text('Không tải được lịch sử tồn.'))
+                    : movements.isEmpty
+                        ? const Center(child: Text('Chưa có biến động tồn kho.'))
+                        : ListView.separated(
+                            primary: false,
+                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+                            itemCount: movements.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 6),
+                            itemBuilder: (context, index) =>
+                                _MovementRow(item: movements[index]),
+                          ),
           ),
         ],
       ),
@@ -622,8 +763,8 @@ class _MovementRow extends StatelessWidget {
     final tone = item.isReceipt
         ? AppColors.success
         : item.quantityDelta < 0
-        ? AppColors.warning
-        : AppColors.info;
+            ? AppColors.warning
+            : AppColors.info;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -738,42 +879,58 @@ class _InventoryErrorState extends StatelessWidget {
 
 enum _InventoryMutationMode { receive, adjust }
 
-class _InventoryMutationInput {
-  const _InventoryMutationInput({required this.quantity, required this.note});
+class _InventoryBatchLine {
+  const _InventoryBatchLine({required this.productId, required this.quantity});
 
+  final String productId;
   final int quantity;
+}
+
+class _InventoryBatchInput {
+  const _InventoryBatchInput({required this.lines, required this.note});
+
+  final List<_InventoryBatchLine> lines;
   final String note;
 }
 
-class _InventoryMutationDialog extends StatefulWidget {
-  const _InventoryMutationDialog({required this.product, required this.mode});
+class _InventoryBatchMutationDialog extends StatefulWidget {
+  const _InventoryBatchMutationDialog({
+    required this.products,
+    required this.mode,
+  });
 
-  final InventoryProductItem product;
+  final List<InventoryProductItem> products;
   final _InventoryMutationMode mode;
 
   @override
-  State<_InventoryMutationDialog> createState() =>
-      _InventoryMutationDialogState();
+  State<_InventoryBatchMutationDialog> createState() =>
+      _InventoryBatchMutationDialogState();
 }
 
-class _InventoryMutationDialogState extends State<_InventoryMutationDialog> {
+class _InventoryBatchMutationDialogState
+    extends State<_InventoryBatchMutationDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _quantityController;
   final _noteController = TextEditingController();
+  late final Map<String, TextEditingController> _quantityControllers;
 
   @override
   void initState() {
     super.initState();
-    _quantityController = TextEditingController(
-      text: widget.mode == _InventoryMutationMode.adjust
-          ? widget.product.stockOnHand.toString()
-          : '',
-    );
+    _quantityControllers = {
+      for (final product in widget.products)
+        product.id: TextEditingController(
+          text: widget.mode == _InventoryMutationMode.adjust
+              ? product.stockOnHand.toString()
+              : '',
+        ),
+    };
   }
 
   @override
   void dispose() {
-    _quantityController.dispose();
+    for (final controller in _quantityControllers.values) {
+      controller.dispose();
+    }
     _noteController.dispose();
     super.dispose();
   }
@@ -782,63 +939,112 @@ class _InventoryMutationDialogState extends State<_InventoryMutationDialog> {
   Widget build(BuildContext context) {
     final isReceive = widget.mode == _InventoryMutationMode.receive;
     return AlertDialog(
-      title: Text(isReceive ? 'Nhập kho' : 'Điều chỉnh tồn'),
+      title: Text(
+        isReceive
+            ? 'Nhập hàng • ${widget.products.length} sản phẩm'
+            : 'Điều chỉnh tồn • ${widget.products.length} sản phẩm',
+      ),
       content: SizedBox(
-        width: 420,
+        width: 620,
+        height: MediaQuery.sizeOf(context).height.clamp(360, 610).toDouble(),
         child: Form(
           key: _formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.product.name,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                isReceive
+                    ? 'Nhập số lượng cộng thêm cho từng sản phẩm đã chọn.'
+                    : 'Nhập tồn thực tế mới cho từng sản phẩm đã chọn.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Tồn hiện tại: ${widget.product.stockOnHand}',
-                style: TextStyle(color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _quantityController,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: isReceive ? 'Số lượng nhập' : 'Tồn thực tế mới',
-                  prefixIcon: Icon(
-                    isReceive ? Icons.add_box_outlined : Icons.tune_rounded,
-                  ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: widget.products.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 7),
+                  itemBuilder: (context, index) {
+                    final product = widget.products[index];
+                    return Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.panelAlt,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${product.metaLabel} • Tồn ${product.stockOnHand}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 10.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 155,
+                            child: TextFormField(
+                              key: Key('inventory-batch-quantity-${product.id}'),
+                              controller: _quantityControllers[product.id],
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                labelText: isReceive ? 'SL nhập' : 'Tồn mới',
+                              ),
+                              validator: (value) {
+                                final quantity =
+                                    int.tryParse(value?.trim() ?? '');
+                                if (quantity == null) {
+                                  return 'Nhập số nguyên';
+                                }
+                                if (isReceive && quantity <= 0) {
+                                  return 'Phải > 0';
+                                }
+                                if (!isReceive && quantity < 0) {
+                                  return 'Không được âm';
+                                }
+                                if (!isReceive &&
+                                    quantity == product.stockOnHand) {
+                                  return 'Chưa thay đổi';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-                validator: (value) {
-                  final quantity = int.tryParse(value?.trim() ?? '');
-                  if (quantity == null) return 'Nhập một số nguyên hợp lệ';
-                  if (isReceive && quantity <= 0) {
-                    return 'Số lượng nhập phải lớn hơn 0';
-                  }
-                  if (!isReceive && quantity < 0) {
-                    return 'Tồn kho không được âm';
-                  }
-                  if (!isReceive && quantity == widget.product.stockOnHand) {
-                    return 'Tồn mới đang bằng tồn hiện tại';
-                  }
-                  return null;
-                },
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _noteController,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  labelText: 'Ghi chú (không bắt buộc)',
+                  isDense: true,
+                  labelText: 'Ghi chú chung (không bắt buộc)',
                   hintText: 'Ví dụ: nhập từ nhà cung cấp / kiểm kê cuối ngày',
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Kho chỉ dùng để theo dõi nội bộ; thao tác này không khóa hay thay đổi luồng tính tiền.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
               ),
             ],
           ),
@@ -850,8 +1056,9 @@ class _InventoryMutationDialogState extends State<_InventoryMutationDialog> {
           child: const Text('Hủy'),
         ),
         FilledButton(
+          key: const Key('inventory-batch-submit'),
           onPressed: _submit,
-          child: Text(isReceive ? 'Xác nhận nhập' : 'Lưu điều chỉnh'),
+          child: Text(isReceive ? 'Nhập hàng' : 'Lưu điều chỉnh'),
         ),
       ],
     );
@@ -859,11 +1066,77 @@ class _InventoryMutationDialogState extends State<_InventoryMutationDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final lines = widget.products
+        .map(
+          (product) => _InventoryBatchLine(
+            productId: product.id,
+            quantity: int.parse(
+              _quantityControllers[product.id]!.text.trim(),
+            ),
+          ),
+        )
+        .toList(growable: false);
     Navigator.of(context).pop(
-      _InventoryMutationInput(
-        quantity: int.parse(_quantityController.text.trim()),
-        note: _noteController.text.trim(),
+      _InventoryBatchInput(lines: lines, note: _noteController.text.trim()),
+    );
+  }
+}
+
+class _InventoryConfirmDialog extends StatelessWidget {
+  const _InventoryConfirmDialog({
+    required this.products,
+    required this.input,
+    required this.mode,
+  });
+
+  final List<InventoryProductItem> products;
+  final _InventoryBatchInput input;
+  final _InventoryMutationMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final isReceive = mode == _InventoryMutationMode.receive;
+    final total = input.lines.fold<int>(0, (sum, line) => sum + line.quantity);
+    final previewNames = products.take(4).map((item) => item.name).join(', ');
+    final more = products.length > 4 ? ' và ${products.length - 4} sản phẩm khác' : '';
+
+    return AlertDialog(
+      key: const Key('inventory-final-confirm-dialog'),
+      title: Text(isReceive ? 'Xác nhận nhập hàng?' : 'Xác nhận điều chỉnh tồn?'),
+      content: SizedBox(
+        width: 430,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isReceive
+                  ? 'Sẽ nhập ${products.length} sản phẩm, tổng $total đơn vị.'
+                  : 'Sẽ cập nhật tồn mới cho ${products.length} sản phẩm.',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text('$previewNames$more'),
+            const SizedBox(height: 10),
+            Text(
+              'Chọn Có để ghi thay đổi vào kho. Chọn Không để quay lại mà không cập nhật.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+            ),
+          ],
+        ),
       ),
+      actions: [
+        TextButton(
+          key: const Key('inventory-confirm-no'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Không'),
+        ),
+        FilledButton(
+          key: const Key('inventory-confirm-yes'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Có'),
+        ),
+      ],
     );
   }
 }
