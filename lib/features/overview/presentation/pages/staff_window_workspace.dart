@@ -631,7 +631,7 @@ class _RailSection extends StatelessWidget {
                     ),
                   ),
                 ),
-                trailing?,
+                ?trailing,
               ],
             ),
           ),
