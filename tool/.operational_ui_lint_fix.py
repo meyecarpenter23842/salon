@@ -36,4 +36,10 @@ replacement = r'''class _AmountLine extends StatelessWidget {
 }
 
 '''
-path.write_text(text[:start] + replacement + text[end:])
+text = text[:start] + replacement + text[end:]
+# Keep the checkout column fully visible at the 1280x720 regression size
+# without reintroducing an inner scrollbar for the normal desktop layout.
+text = text.replace('SizedBox(height: dense ? 9 : 11)', 'SizedBox(height: dense ? 6 : 11)')
+text = text.replace('SizedBox(height: dense ? 9 : 12)', 'SizedBox(height: dense ? 6 : 12)')
+text = text.replace('const SizedBox(height: 7),\n          _CheckoutQuickActions(', 'const SizedBox(height: 4),\n          _CheckoutQuickActions(', 1)
+path.write_text(text)
