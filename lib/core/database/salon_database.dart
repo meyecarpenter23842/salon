@@ -313,6 +313,49 @@ class SalonDatabase {
           );
         }
 
+        if (oldVersion < 12) {
+          batch.execute(
+            'CREATE TABLE IF NOT EXISTS catalog_options ('
+            'id TEXT PRIMARY KEY, '
+            'kind TEXT NOT NULL, '
+            'name TEXT NOT NULL, '
+            'normalized_name TEXT NOT NULL, '
+            'created_at TEXT NOT NULL, '
+            'updated_at TEXT NOT NULL, '
+            'UNIQUE(kind, normalized_name)'
+            ')',
+          );
+          batch.execute(
+            'CREATE INDEX IF NOT EXISTS idx_catalog_options_kind '
+            'ON catalog_options(kind)',
+          );
+          final now = DateTime.now().toIso8601String();
+          batch.execute(
+            'INSERT OR IGNORE INTO catalog_options '
+            '(id, kind, name, normalized_name, created_at, updated_at) '
+            'SELECT '
+            "'catalog-product-group-' || rowid, 'product_group', TRIM(product_type), LOWER(TRIM(product_type)), ?, ? "
+            'FROM retail_products WHERE TRIM(product_type) <> \'\'',
+            [now, now],
+          );
+          batch.execute(
+            'INSERT OR IGNORE INTO catalog_options '
+            '(id, kind, name, normalized_name, created_at, updated_at) '
+            'SELECT '
+            "'catalog-product-brand-' || rowid, 'product_brand', TRIM(brand), LOWER(TRIM(brand)), ?, ? "
+            'FROM retail_products WHERE TRIM(brand) <> \'\'',
+            [now, now],
+          );
+          batch.execute(
+            'INSERT OR IGNORE INTO catalog_options '
+            '(id, kind, name, normalized_name, created_at, updated_at) '
+            'SELECT '
+            "'catalog-service-group-' || rowid, 'service_group', TRIM(category), LOWER(TRIM(category)), ?, ? "
+            'FROM services WHERE TRIM(category) <> \'\'',
+            [now, now],
+          );
+        }
+
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {

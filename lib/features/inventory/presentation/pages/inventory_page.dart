@@ -16,6 +16,8 @@ class InventoryPage extends ConsumerStatefulWidget {
 
 class _InventoryPageState extends ConsumerState<InventoryPage> {
   String _query = '';
+  String? _groupFilter;
+  String? _brandFilter;
   String? _selectedProductId;
 
   @override
@@ -30,23 +32,37 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
         onRetry: () => ref.invalidate(inventoryProductsViewProvider),
       ),
       data: (products) {
+        final groupNames = products
+            .map((item) => item.productType.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final brandNames = products
+            .map((item) => item.brand.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         final normalizedQuery = _query.trim().toLowerCase();
-        final filteredProducts = normalizedQuery.isEmpty
-            ? products
-            : products
-                  .where(
-                    (item) => [
-                      item.name,
-                      item.brand,
-                      item.productType,
-                      item.volumeLabel,
-                    ].any(
-                      (value) => value.toLowerCase().contains(normalizedQuery),
-                    ),
-                  )
-                  .toList(growable: false);
+        final filteredProducts = products.where((item) {
+          final queryOk = normalizedQuery.isEmpty ||
+              [
+                item.name,
+                item.brand,
+                item.productType,
+                item.volumeLabel,
+              ].any(
+                (value) => value.toLowerCase().contains(normalizedQuery),
+              );
+          final groupOk =
+              _groupFilter == null || item.productType == _groupFilter;
+          final brandOk = _brandFilter == null || item.brand == _brandFilter;
+          return queryOk && groupOk && brandOk;
+        }).toList(growable: false);
         final selected = _resolveSelected(filteredProducts);
-        final movements = movementsState.value ?? const <InventoryMovementItem>[];
+        final movements =
+            movementsState.value ?? const <InventoryMovementItem>[];
         final selectedMovements = selected == null
             ? const <InventoryMovementItem>[]
             : movements
@@ -57,7 +73,8 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
           (sum, item) => sum + item.stockOnHand,
         );
         final lowStockCount = products.where((item) => item.isLowStock).length;
-        final outOfStockCount = products.where((item) => item.isOutOfStock).length;
+        final outOfStockCount =
+            products.where((item) => item.isOutOfStock).length;
 
         return KeyedSubtree(
           key: const Key('inventory-premium-workspace'),
@@ -90,12 +107,81 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
               ),
               const SizedBox(height: 10),
               TextField(
-                onChanged: (value) => setState(() => _query = value),
+                onChanged: (value) => setState(() {
+                  _query = value;
+                  _selectedProductId = null;
+                }),
                 decoration: const InputDecoration(
                   isDense: true,
                   prefixIcon: Icon(Icons.search_rounded, size: 19),
                   hintText: 'Tìm tên, thương hiệu, nhóm hoặc dung tích…',
                 ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: _groupFilter,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        prefixIcon: Icon(Icons.category_outlined, size: 18),
+                        labelText: 'Nhóm sản phẩm',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Tất cả nhóm'),
+                        ),
+                        ...groupNames.map(
+                          (value) => DropdownMenuItem<String?>(
+                            value: value,
+                            child: Text(
+                              value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) => setState(() {
+                        _groupFilter = value;
+                        _selectedProductId = null;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: _brandFilter,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        prefixIcon: Icon(Icons.sell_outlined, size: 18),
+                        labelText: 'Thương hiệu',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Tất cả thương hiệu'),
+                        ),
+                        ...brandNames.map(
+                          (value) => DropdownMenuItem<String?>(
+                            value: value,
+                            child: Text(
+                              value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) => setState(() {
+                        _brandFilter = value;
+                        _selectedProductId = null;
+                      }),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               Expanded(
