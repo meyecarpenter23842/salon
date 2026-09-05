@@ -43,3 +43,56 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  windows-regression:
+    name: Windows regression smoke
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test on Windows
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Launch release executable
+        shell: pwsh
+        run: |
+          $releaseDir = Join-Path $PWD 'build\windows\x64\runner\Release'
+          $exe = Join-Path $releaseDir 'salonmanager.exe'
+          if (-not (Test-Path $exe)) {
+            throw "Windows release executable not found: $exe"
+          }
+
+          $smokeAppData = Join-Path $env:RUNNER_TEMP 'salonmanager-smoke-appdata'
+          New-Item -ItemType Directory -Force -Path $smokeAppData | Out-Null
+          $env:APPDATA = $smokeAppData
+
+          $process = Start-Process -FilePath $exe -WorkingDirectory $releaseDir -PassThru
+          Start-Sleep -Seconds 10
+
+          if ($process.HasExited) {
+            throw "salonmanager.exe exited during startup smoke with code $($process.ExitCode)"
+          }
+
+          Stop-Process -Id $process.Id -Force
+          Write-Host 'Windows release startup smoke passed.'
