@@ -167,6 +167,10 @@ class SqliteServicesRepository
     final existing = existingId == null
         ? null
         : await _findById(database, existingId);
+    if (existingId != null && existing == null) {
+      throw StateError('Service $existingId not found');
+    }
+
     final now = DateTime.now();
     final service = ServiceCatalogItem.fromUpsertInput(
       id: existing?.id ?? EntityId.create('service'),
@@ -174,12 +178,25 @@ class SqliteServicesRepository
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
+    final row = ServiceMapper.toDatabase(service);
 
-    await database.insert(
-      'services',
-      ServiceMapper.toDatabase(service),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    if (existing == null) {
+      await database.insert(
+        'services',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    } else {
+      final updatedCount = await database.update(
+        'services',
+        row,
+        where: 'id = ?',
+        whereArgs: [existing.id],
+      );
+      if (updatedCount != 1) {
+        throw StateError('Service ${existing.id} disappeared during edit');
+      }
+    }
 
     return service;
   }

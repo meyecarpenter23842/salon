@@ -124,6 +124,10 @@ class SqliteEmployeesRepository
     final existing = existingId == null
         ? null
         : await _findById(database, existingId);
+    if (existingId != null && existing == null) {
+      throw StateError('Employee $existingId not found');
+    }
+
     final now = DateTime.now().toIso8601String();
     final id = existing?['id']?.toString() ?? EntityId.create('emp');
 
@@ -148,11 +152,23 @@ class SqliteEmployeesRepository
       'updated_at': now,
     };
 
-    await database.insert(
-      'employees',
-      row,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    if (existing == null) {
+      await database.insert(
+        'employees',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    } else {
+      final updatedCount = await database.update(
+        'employees',
+        row,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (updatedCount != 1) {
+        throw StateError('Employee $id disappeared during edit');
+      }
+    }
     return _toViewRow(row);
   }
 
