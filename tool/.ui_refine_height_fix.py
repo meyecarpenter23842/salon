@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Temporary validation helper; final branch will keep only generated source/test changes.
 path = Path('lib/features/employees/presentation/pages/employees_page.dart')
 text = path.read_text()
 
