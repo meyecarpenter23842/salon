@@ -19,10 +19,11 @@ class AppointmentEntry {
     required this.slotLabel,
     required this.note,
     required this.startsAt,
-    required this.dateLabel,
+    required String dateLabel,
     required this.createdAt,
     required this.updatedAt,
-  });
+    this.isPaid = false,
+  }) : _storedDateLabel = dateLabel;
 
   final String id;
   final String customerId;
@@ -38,11 +39,24 @@ class AppointmentEntry {
   final String slotLabel;
   final String note;
   final DateTime startsAt;
-  final String dateLabel;
+  final String _storedDateLabel;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isPaid;
 
   String get timeLabel => _timeFormatter.format(startsAt);
+
+  String get dateKey => _dateKeyFormatter.format(startsAt);
+
+  String get dateLabel {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final appointmentDay = DateTime(startsAt.year, startsAt.month, startsAt.day);
+    final difference = appointmentDay.difference(today).inDays;
+    if (difference == 0) return 'Hôm nay';
+    if (difference == 1) return 'Ngày mai';
+    return _dateDisplayFormatter.format(startsAt);
+  }
 
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
 
@@ -76,6 +90,7 @@ class AppointmentEntry {
     String? dateLabel,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isPaid,
   }) {
     return AppointmentEntry(
       id: id ?? this.id,
@@ -92,9 +107,10 @@ class AppointmentEntry {
       slotLabel: slotLabel ?? this.slotLabel,
       note: note ?? this.note,
       startsAt: startsAt ?? this.startsAt,
-      dateLabel: dateLabel ?? this.dateLabel,
+      dateLabel: dateLabel ?? _storedDateLabel,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isPaid: isPaid ?? this.isPaid,
     );
   }
 
@@ -127,4 +143,6 @@ class AppointmentEntry {
   }
 
   static final DateFormat _timeFormatter = DateFormat('HH:mm');
+  static final DateFormat _dateKeyFormatter = DateFormat('yyyy-MM-dd');
+  static final DateFormat _dateDisplayFormatter = DateFormat('dd/MM/yyyy');
 }

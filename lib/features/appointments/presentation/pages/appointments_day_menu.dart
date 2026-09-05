@@ -3,6 +3,18 @@ part of 'appointments_page.dart';
 List<PopupMenuEntry<_AppointmentMenuAction>> _appointmentMenuItems(
   AppointmentEntry appointment,
 ) {
+  if (appointment.isPaid) {
+    return const [
+      PopupMenuItem<_AppointmentMenuAction>(
+        enabled: false,
+        child: _PopupActionRow(
+          icon: Icons.lock_outline_rounded,
+          label: 'Đã khóa sau thanh toán',
+        ),
+      ),
+    ];
+  }
+
   final items = <PopupMenuEntry<_AppointmentMenuAction>>[];
   final actionLabel = _statusActionLabel(appointment.status);
   if (actionLabel != null) {
