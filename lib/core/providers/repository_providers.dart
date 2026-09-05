@@ -15,6 +15,7 @@ import 'data_backend_provider.dart';
 import '../repositories/fake_repositories.dart';
 import '../repositories/guarded_salon_repositories.dart';
 import '../repositories/invoice_line_actions_repository.dart';
+import '../repositories/reporting_overview_repository.dart';
 import '../repositories/repository_contracts.dart';
 import '../repositories/sqlite_appointments_repository.dart';
 import '../repositories/sqlite_customers_repository.dart';
@@ -42,9 +43,12 @@ final overviewRepositoryProvider = Provider<OverviewRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return GuardedOverviewRepository(
+      return ReportingOverviewRepository(
         SalonDatabase.instance,
-        SqliteOverviewRepository(SalonDatabase.instance, fakeDataSource),
+        GuardedOverviewRepository(
+          SalonDatabase.instance,
+          SqliteOverviewRepository(SalonDatabase.instance, fakeDataSource),
+        ),
       );
     case AppDataBackend.fake:
       return FakeOverviewRepository(fakeDataSource);

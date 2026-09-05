@@ -214,8 +214,9 @@ class _ReportStats extends StatelessWidget {
       ),
       PremiumStatCard(
         icon: Icons.event_available_outlined,
-        label: 'Tỷ lệ kín lịch',
-        value: summary['fillRate'].toString(),
+        label: 'Tỷ lệ hoàn thành',
+        value:
+            summary['completionRate']?.toString() ?? summary['fillRate'].toString(),
         tone: AppColors.copper,
       ),
     ];
@@ -860,7 +861,7 @@ Future<void> _exportReportsCsv(
       'Tong_quan,Doanh_thu,${summary['revenue']}',
       'Tong_quan,Top_dich_vu,${summary['topService']}',
       'Tong_quan,Top_nhan_su,${summary['topEmployee']}',
-      'Tong_quan,Ty_le_kin_lich,${summary['fillRate']}',
+      'Tong_quan,Ty_le_hoan_thanh,${summary['completionRate'] ?? summary['fillRate']}',
       '',
       'Xu_huong_doanh_thu,Nhan,So_tien',
       ...revenueTrend.map(

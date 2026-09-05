@@ -7,6 +7,7 @@ import '../database/salon_database_seed.dart';
 import '../models/employee_upsert_input.dart';
 import '../models/entity_id.dart';
 import 'employee_profile_repository.dart';
+import 'invoice_revenue_allocation.dart';
 import 'repository_contracts.dart';
 
 class SqliteEmployeesRepository
@@ -68,18 +69,13 @@ class SqliteEmployeesRepository
       limit: 12,
     );
     final history = await _fetchServiceHistory(database, employeeId, limit: 30);
-    final monthMetrics = await _fetchMonthMetrics(
+    final monthLines = await loadAllocatedInvoiceLines(
       database,
-      employeeId,
-      startMonth,
-      startNextMonth,
+      start: startMonth,
+      end: startNextMonth,
     );
-    final topServices = await _fetchTopServices(
-      database,
-      employeeId,
-      startMonth,
-      startNextMonth,
-    );
+    final monthMetrics = _buildMonthMetrics(monthLines, employeeId);
+    final topServices = _buildTopServices(monthLines, employeeId);
 
     final revenue = _toInt(monthMetrics['revenue']);
     final serviceCount = _toInt(monthMetrics['service_count']);
@@ -110,7 +106,7 @@ class SqliteEmployeesRepository
           ? 'Chưa có lịch sắp tới'
           : '${nextAppointment['timeRange']} · ${nextAppointment['customerName']}',
       'dataNote':
-          'Doanh thu và hoa hồng lấy từ các dòng dịch vụ đã thanh toán; không dùng số liệu nhập tay.',
+          'Doanh thu tháng và hoa hồng dùng phần doanh thu dịch vụ sau khi phân bổ giảm giá toàn hóa đơn; không dùng số liệu nhập tay.',
     };
   }
 
@@ -293,56 +289,62 @@ class SqliteEmployeesRepository
     }).toList(growable: false);
   }
 
-  Future<Map<String, Object?>> _fetchMonthMetrics(
-    Database database,
+  Map<String, Object?> _buildMonthMetrics(
+    List<AllocatedInvoiceLine> lines,
     String employeeId,
-    DateTime start,
-    DateTime end,
-  ) async {
-    final rows = await database.rawQuery(
-      'SELECT COALESCE(SUM(ii.total_price), 0) AS revenue, '
-      'COALESCE(SUM(ii.quantity), 0) AS service_count, '
-      'COUNT(DISTINCT i.customer_id) AS customer_count '
-      'FROM invoice_items ii '
-      'JOIN invoices i ON i.id = ii.invoice_id '
-      "WHERE ii.employee_id = ? AND ii.item_type = 'service' "
-      'AND i.paid_at IS NOT NULL AND i.paid_at >= ? AND i.paid_at < ?',
-      [employeeId, start.toIso8601String(), end.toIso8601String()],
-    );
-    return rows.isEmpty
-        ? const <String, Object?>{}
-        : Map<String, Object?>.from(rows.first);
+  ) {
+    var revenue = 0;
+    var serviceCount = 0;
+    final customerIds = <String>{};
+
+    for (final line in lines) {
+      if (line.itemType != 'service' || line.employeeId != employeeId) continue;
+      revenue += line.netRevenue;
+      serviceCount += line.quantity;
+      if (line.customerId.isNotEmpty) customerIds.add(line.customerId);
+    }
+
+    return <String, Object?>{
+      'revenue': revenue,
+      'service_count': serviceCount,
+      'customer_count': customerIds.length,
+    };
   }
 
-  Future<List<Map<String, Object?>>> _fetchTopServices(
-    Database database,
+  List<Map<String, Object?>> _buildTopServices(
+    List<AllocatedInvoiceLine> lines,
     String employeeId,
-    DateTime start,
-    DateTime end,
-  ) async {
-    final rows = await database.rawQuery(
-      'SELECT ii.title, COALESCE(SUM(ii.quantity), 0) AS quantity, '
-      'COALESCE(SUM(ii.total_price), 0) AS revenue '
-      'FROM invoice_items ii '
-      'JOIN invoices i ON i.id = ii.invoice_id '
-      "WHERE ii.employee_id = ? AND ii.item_type = 'service' "
-      'AND i.paid_at IS NOT NULL AND i.paid_at >= ? AND i.paid_at < ? '
-      'GROUP BY ii.title '
-      'ORDER BY revenue DESC, quantity DESC '
-      'LIMIT 5',
-      [employeeId, start.toIso8601String(), end.toIso8601String()],
-    );
+  ) {
+    final aggregates = <String, _EmployeeServiceAggregate>{};
+    for (final line in lines) {
+      if (line.itemType != 'service' || line.employeeId != employeeId) continue;
+      final title = line.title.trim().isEmpty ? 'Dịch vụ' : line.title.trim();
+      final aggregate = aggregates.putIfAbsent(
+        title,
+        () => _EmployeeServiceAggregate(title),
+      );
+      aggregate.quantity += line.quantity;
+      aggregate.revenue += line.netRevenue;
+    }
 
-    return rows
-        .map(
-          (row) => <String, Object?>{
-            'title': row['title']?.toString() ?? 'Dịch vụ',
-            'quantity': _toInt(row['quantity']),
-            'revenue': _toInt(row['revenue']),
-            'revenueLabel': _currency(_toInt(row['revenue'])),
-          },
-        )
-        .toList(growable: false);
+    final ordered = aggregates.values.toList()
+      ..sort((left, right) {
+        final revenueCompare = right.revenue.compareTo(left.revenue);
+        if (revenueCompare != 0) return revenueCompare;
+        final quantityCompare = right.quantity.compareTo(left.quantity);
+        return quantityCompare != 0
+            ? quantityCompare
+            : left.title.compareTo(right.title);
+      });
+
+    return ordered.take(5).map((aggregate) {
+      return <String, Object?>{
+        'title': aggregate.title,
+        'quantity': aggregate.quantity,
+        'revenue': aggregate.revenue,
+        'revenueLabel': _currency(aggregate.revenue),
+      };
+    }).toList(growable: false);
   }
 
   Future<Map<String, Object?>?> _findById(
@@ -431,4 +433,12 @@ class SqliteEmployeesRepository
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
+}
+
+class _EmployeeServiceAggregate {
+  _EmployeeServiceAggregate(this.title);
+
+  final String title;
+  int quantity = 0;
+  int revenue = 0;
 }
