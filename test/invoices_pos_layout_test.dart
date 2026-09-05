@@ -13,11 +13,7 @@ void main() {
   testWidgets('billing POS stays viewport-bound with three operation zones', (
     WidgetTester tester,
   ) async {
-    const sizes = [
-      Size(1724, 908),
-      Size(1366, 768),
-      Size(1024, 768),
-    ];
+    const sizes = [Size(1724, 908), Size(1366, 768), Size(1024, 768)];
 
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -36,10 +32,7 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.build(SalonThemeTemplate.salonNoirGold),
             home: const Scaffold(
-              body: Padding(
-                padding: EdgeInsets.all(16),
-                child: InvoicesPage(),
-              ),
+              body: Padding(padding: EdgeInsets.all(16), child: InvoicesPage()),
             ),
           ),
         ),
@@ -56,6 +49,11 @@ void main() {
       expect(find.text('Bill'), findsOneWidget);
       expect(find.text('Dịch vụ / Sản phẩm'), findsOneWidget);
       expect(find.text('Khách + Thanh toán'), findsOneWidget);
+      expect(find.text('Tính tiền'), findsNothing);
+      expect(
+        find.byKey(const Key('billing-pos-total-summary')),
+        findsOneWidget,
+      );
       expect(
         tester.takeException(),
         isNull,

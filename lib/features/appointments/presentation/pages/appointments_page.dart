@@ -27,43 +27,50 @@ part 'appointments_invoice_summary.dart';
 part 'appointment_editor_form.dart';
 part 'appointment_helpers.dart';
 
-final appointmentStatusFilterProvider =
-    StateProvider<String>((ref) => 'Tất cả');
-final appointmentDayFilterProvider =
-    StateProvider<String>((ref) => 'Hôm nay');
+final appointmentStatusFilterProvider = StateProvider<String>(
+  (ref) => 'Tất cả',
+);
+final appointmentDayFilterProvider = StateProvider<String>((ref) => 'Hôm nay');
 final appointmentSearchQueryProvider = StateProvider<String>((ref) => '');
 final appointmentBoardFilterProvider = StateProvider<String>((ref) => 'Ngày');
 final appointmentEmployeeFilterProvider = StateProvider<String>((ref) => 'all');
 final selectedAppointmentIndexProvider = StateProvider<int>((ref) => 0);
 final appointmentDetailVisibleProvider = StateProvider<bool>((ref) => true);
 
-final appointmentEmployeesProvider =
-    FutureProvider<List<Map<String, Object?>>>((ref) {
-  return ref.watch(employeesRepositoryProvider).fetchEmployeesView();
-});
+final appointmentEmployeesProvider = FutureProvider<List<Map<String, Object?>>>(
+  (ref) {
+    return ref.watch(employeesRepositoryProvider).fetchEmployeesView();
+  },
+);
 
-final filteredAppointmentsProvider =
-    FutureProvider<List<AppointmentEntry>>((ref) async {
-  final allItems =
-      await ref.watch(appointmentsRepositoryProvider).fetchAppointmentsView();
+final filteredAppointmentsProvider = FutureProvider<List<AppointmentEntry>>((
+  ref,
+) async {
+  final allItems = await ref
+      .watch(appointmentsRepositoryProvider)
+      .fetchAppointmentsView();
   final status = ref.watch(appointmentStatusFilterProvider);
   final day = ref.watch(appointmentDayFilterProvider);
   final query = ref.watch(appointmentSearchQueryProvider).trim().toLowerCase();
   final employeeId = ref.watch(appointmentEmployeeFilterProvider);
 
-  return allItems.where((item) {
-    final matchesStatus = status == 'Tất cả' || item.status == status;
-    final matchesDay = day == 'Tất cả' || item.dateLabel == day;
-    final matchesEmployee = employeeId == 'all' || item.employeeId == employeeId;
-    final matchesQuery = query.isEmpty ||
-        [
-          item.customerName,
-          item.serviceName,
-          item.staffName,
-          item.customerPhone,
-        ].any((value) => value.toLowerCase().contains(query));
-    return matchesStatus && matchesDay && matchesEmployee && matchesQuery;
-  }).toList(growable: false);
+  return allItems
+      .where((item) {
+        final matchesStatus = status == 'Tất cả' || item.status == status;
+        final matchesDay = day == 'Tất cả' || item.dateLabel == day;
+        final matchesEmployee =
+            employeeId == 'all' || item.employeeId == employeeId;
+        final matchesQuery =
+            query.isEmpty ||
+            [
+              item.customerName,
+              item.serviceName,
+              item.staffName,
+              item.customerPhone,
+            ].any((value) => value.toLowerCase().contains(query));
+        return matchesStatus && matchesDay && matchesEmployee && matchesQuery;
+      })
+      .toList(growable: false);
 });
 
 Future<void> _openAppointmentEditor(
@@ -74,12 +81,15 @@ Future<void> _openAppointmentEditor(
   String? initialTimeLabel,
   String? initialDayLabel,
 }) async {
-  final customers =
-      await ref.read(customersRepositoryProvider).fetchCustomersView();
-  final services =
-      await ref.read(servicesRepositoryProvider).fetchServicesView();
-  final employees =
-      await ref.read(employeesRepositoryProvider).fetchEmployeesView();
+  final customers = await ref
+      .read(customersRepositoryProvider)
+      .fetchCustomersView();
+  final services = await ref
+      .read(servicesRepositoryProvider)
+      .fetchServicesView();
+  final employees = await ref
+      .read(employeesRepositoryProvider)
+      .fetchEmployeesView();
   if (!context.mounted) return;
 
   final input = await showDialog<AppointmentUpsertInput>(
@@ -304,8 +314,9 @@ class _AppointmentsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = ref.watch(selectedAppointmentIndexProvider);
-    final effectiveIndex =
-        items.isEmpty ? 0 : selectedIndex.clamp(0, items.length - 1);
+    final effectiveIndex = items.isEmpty
+        ? 0
+        : selectedIndex.clamp(0, items.length - 1);
     final selected = items.isEmpty ? null : items[effectiveIndex];
     final status = ref.watch(appointmentStatusFilterProvider);
     final day = ref.watch(appointmentDayFilterProvider);
@@ -341,18 +352,13 @@ class _AppointmentsView extends ConsumerWidget {
             _AppointmentCommandBar(
               key: const Key('appointments-premium-header'),
               day: day,
-              onCreate: () => _openAppointmentEditor(context, ref),
-            ),
-            const SizedBox(height: 10),
-            _AppointmentStatsStrip(items: items),
-            const SizedBox(height: 10),
-            _AppointmentToolbar(
-              status: status,
-              day: day,
               board: board,
               employees: employees,
+              onCreate: () => _openAppointmentEditor(context, ref),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
+            _AppointmentToolbar(status: status, day: day),
+            const SizedBox(height: 8),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -381,8 +387,11 @@ class _AppointmentsView extends ConsumerWidget {
                         appointment: selected,
                         onClose: () {
                           ref
-                              .read(appointmentDetailVisibleProvider.notifier)
-                              .state = false;
+                                  .read(
+                                    appointmentDetailVisibleProvider.notifier,
+                                  )
+                                  .state =
+                              false;
                         },
                       ),
                     ),

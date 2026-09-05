@@ -3,14 +3,12 @@ part of 'invoices_pos_page.dart';
 class _CheckoutPanel extends ConsumerWidget {
   const _CheckoutPanel({
     required this.draft,
-    required this.history,
     required this.customers,
     required this.selectedCustomer,
     required this.dense,
   });
 
   final InvoiceDraft draft;
-  final List<InvoiceDraft> history;
   final List<CustomerProfile> customers;
   final CustomerProfile? selectedCustomer;
   final bool dense;
@@ -39,90 +37,76 @@ class _CheckoutPanel extends ConsumerWidget {
           color: AppColors.textMuted,
         ),
       ),
-      child: SingleChildScrollView(
-        primary: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _CustomerSummaryCard(
-              customer: selectedCustomer,
-              locked: customerLocked,
-              onChange: customerLocked
-                  ? null
-                  : () => _showCustomerPickerDialog(
-                        context,
-                        ref,
-                        customers,
-                        draft.customerId,
-                      ),
-            ),
-            SizedBox(height: dense ? 10 : 12),
-            _TotalHero(draft: draft, dense: dense),
-            SizedBox(height: dense ? 10 : 12),
-            _AmountLine(label: 'Tạm tính', value: _currency(draft.subtotal)),
-            const SizedBox(height: 6),
-            _AmountLine(
-              label: 'Giảm giá',
-              value: _currency(draft.discountAmount),
-              actionTooltip: 'Sửa giảm giá toàn bill',
-              action: draft.isPaid
-                  ? null
-                  : () => _openDiscountEditor(context, ref, draft),
-            ),
-            SizedBox(height: dense ? 10 : 12),
-            Text(
-              'Phương thức thanh toán',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w700,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CustomerSummaryCard(
+            customer: selectedCustomer,
+            locked: customerLocked,
+            onChange: customerLocked
+                ? null
+                : () => _showCustomerPickerDialog(
+                    context,
+                    ref,
+                    customers,
+                    draft.customerId,
                   ),
+          ),
+          SizedBox(height: dense ? 6 : 11),
+          _CheckoutAmountSummary(draft: draft),
+          SizedBox(height: dense ? 6 : 11),
+          Text(
+            'Phương thức thanh toán',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textMuted,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 7),
-            _PaymentMethodSelector(
-              selected: draft.paymentMethod,
-              locked: draft.isPaid,
-              onSelected: (method) =>
-                  _updateInvoicePaymentMethod(context, ref, method),
-            ),
-            if (draft.paidAt != null) ...[
-              const SizedBox(height: 10),
-              PremiumStatusPill(
-                label:
-                    'Đã thanh toán ${draft.paidAt!.hour.toString().padLeft(2, '0')}:'
-                    '${draft.paidAt!.minute.toString().padLeft(2, '0')}',
-                tone: AppColors.success,
-              ),
-            ],
-            SizedBox(height: dense ? 10 : 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: draft.isPaid || draft.lines.isEmpty
-                    ? null
-                    : () => _checkoutInvoice(context, ref, draft),
-                icon: Icon(
-                  draft.isPaid
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.payments_outlined,
-                ),
-                label: Text(
-                  draft.isPaid
-                      ? 'Đã thanh toán'
-                      : 'Thanh toán ${_currency(draft.totalAmount)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _CheckoutQuickActions(
-              draft: draft,
-              history: history,
-              customers: customers,
-              selectedCustomer: selectedCustomer,
+          ),
+          SizedBox(height: dense ? 4 : 7),
+          _PaymentMethodSelector(
+            selected: draft.paymentMethod,
+            locked: draft.isPaid,
+            onSelected: (method) =>
+                _updateInvoicePaymentMethod(context, ref, method),
+          ),
+          if (draft.paidAt != null) ...[
+            const SizedBox(height: 9),
+            PremiumStatusPill(
+              label:
+                  'Đã thanh toán ${draft.paidAt!.hour.toString().padLeft(2, '0')}:'
+                  '${draft.paidAt!.minute.toString().padLeft(2, '0')}',
+              tone: AppColors.success,
             ),
           ],
-        ),
+          SizedBox(height: dense ? 4 : 12),
+          SizedBox(
+            width: double.infinity,
+            height: dense ? 38 : 44,
+            child: FilledButton.icon(
+              onPressed: draft.isPaid || draft.lines.isEmpty
+                  ? null
+                  : () => _checkoutInvoice(context, ref, draft),
+              icon: Icon(
+                draft.isPaid
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.payments_outlined,
+              ),
+              label: Text(
+                draft.isPaid
+                    ? 'Đã thanh toán'
+                    : 'Thanh toán ${_currency(draft.totalAmount)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          _CheckoutQuickActions(
+            draft: draft,
+            selectedCustomer: selectedCustomer,
+            dense: dense,
+          ),
+        ],
       ),
     );
   }
@@ -211,50 +195,64 @@ class _CustomerSummaryCard extends StatelessWidget {
   }
 }
 
-class _TotalHero extends StatelessWidget {
-  const _TotalHero({required this.draft, required this.dense});
+class _CheckoutAmountSummary extends ConsumerWidget {
+  const _CheckoutAmountSummary({required this.draft});
 
   final InvoiceDraft draft;
-  final bool dense;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(dense ? 12 : 14),
+      key: const Key('billing-pos-total-summary'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.selectedSurface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: AppColors.copper.withValues(alpha: 0.28)),
+        color: AppColors.featureSurface,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'THÀNH TIỀN',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.copper,
-                  letterSpacing: 0.9,
-                  fontWeight: FontWeight.w800,
+          _AmountLine(label: 'Tạm tính', value: _currency(draft.subtotal)),
+          const SizedBox(height: 4),
+          _AmountLine(
+            label: 'Giảm giá',
+            value: _currency(draft.discountAmount),
+          ),
+          const SizedBox(height: 6),
+          const PremiumDivider(),
+          const SizedBox(height: 7),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Tổng cộng',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                 ),
-          ),
-          const SizedBox(height: 3),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _currency(draft.totalAmount),
-              style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    fontSize: dense ? 26 : 30,
-                    color: AppColors.copper,
-                    fontWeight: FontWeight.w800,
+              ),
+              Text(
+                _currency(draft.totalAmount),
+                style: TextStyle(
+                  color: AppColors.copper,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (!draft.isPaid) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: 'Sửa giảm giá toàn bill',
+                  child: IconButton(
+                    onPressed: () => _openDiscountEditor(context, ref, draft),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.edit_outlined, size: 14),
                   ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '${draft.lines.length} mục · ${draft.paymentMethod}',
-            style: TextStyle(fontSize: 10.5, color: AppColors.textMuted),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -263,17 +261,10 @@ class _TotalHero extends StatelessWidget {
 }
 
 class _AmountLine extends StatelessWidget {
-  const _AmountLine({
-    required this.label,
-    required this.value,
-    this.action,
-    this.actionTooltip,
-  });
+  const _AmountLine({required this.label, required this.value});
 
   final String label;
   final String value;
-  final VoidCallback? action;
-  final String? actionTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -282,32 +273,13 @@ class _AmountLine extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 11.5,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
           ),
         ),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-          ),
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
         ),
-        if (action != null) ...[
-          const SizedBox(width: 3),
-          Tooltip(
-            message: actionTooltip ?? 'Chỉnh sửa',
-            child: IconButton(
-              onPressed: action,
-              visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.edit_outlined, size: 15),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -330,6 +302,7 @@ class _PaymentMethodSelector extends StatelessWidget {
       builder: (context, constraints) {
         const gap = 6.0;
         final width = (constraints.maxWidth - gap * 2) / 3;
+        final compactLabels = constraints.maxWidth < 280;
         return Row(
           children: [
             SizedBox(
@@ -343,10 +316,13 @@ class _PaymentMethodSelector extends StatelessWidget {
             const SizedBox(width: gap),
             SizedBox(
               width: width,
-              child: AppChoiceButton(
-                label: 'Chuyển khoản',
-                selected: selected == 'Chuyển khoản',
-                onTap: locked ? null : () => onSelected('Chuyển khoản'),
+              child: Tooltip(
+                message: 'Chuyển khoản',
+                child: AppChoiceButton(
+                  label: compactLabels ? 'CK' : 'Chuyển khoản',
+                  selected: selected == 'Chuyển khoản',
+                  onTap: locked ? null : () => onSelected('Chuyển khoản'),
+                ),
               ),
             ),
             const SizedBox(width: gap),
@@ -368,15 +344,13 @@ class _PaymentMethodSelector extends StatelessWidget {
 class _CheckoutQuickActions extends StatelessWidget {
   const _CheckoutQuickActions({
     required this.draft,
-    required this.history,
-    required this.customers,
     required this.selectedCustomer,
+    required this.dense,
   });
 
   final InvoiceDraft draft;
-  final List<InvoiceDraft> history;
-  final List<CustomerProfile> customers;
   final CustomerProfile? selectedCustomer;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -395,6 +369,12 @@ class _CheckoutQuickActions extends StatelessWidget {
             onPressed: enabled
                 ? () => _showPaymentQrDialog(context, draft, selectedCustomer)
                 : null,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(
+              width: dense ? 30 : 40,
+              height: dense ? 30 : 40,
+            ),
             icon: const Icon(Icons.qr_code_2_outlined, size: 18),
           ),
         ),
@@ -404,15 +384,13 @@ class _CheckoutQuickActions extends StatelessWidget {
             onPressed: enabled
                 ? () => _exportInvoicePdf(context, draft, selectedCustomer)
                 : null,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(
+              width: dense ? 30 : 40,
+              height: dense ? 30 : 40,
+            ),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-          ),
-        ),
-        Tooltip(
-          message: 'Hóa đơn gần đây',
-          child: IconButton(
-            onPressed: () =>
-                _showInvoiceHistoryDialog(context, history, customers),
-            icon: const Icon(Icons.history_rounded, size: 18),
           ),
         ),
       ],
@@ -453,9 +431,9 @@ Future<void> _showInvoiceHistoryDialog(
                   final time = paidAt == null
                       ? ''
                       : '${paidAt.day.toString().padLeft(2, '0')}/'
-                          '${paidAt.month.toString().padLeft(2, '0')} '
-                          '${paidAt.hour.toString().padLeft(2, '0')}:'
-                          '${paidAt.minute.toString().padLeft(2, '0')}';
+                            '${paidAt.month.toString().padLeft(2, '0')} '
+                            '${paidAt.hour.toString().padLeft(2, '0')}:'
+                            '${paidAt.minute.toString().padLeft(2, '0')}';
                   return ListTile(
                     leading: const PremiumIconBadge(
                       icon: Icons.receipt_long_outlined,

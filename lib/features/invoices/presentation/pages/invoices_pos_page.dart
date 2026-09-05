@@ -64,9 +64,9 @@ Future<void> _addInvoiceService(
   await ref.read(invoicesRepositoryProvider).addInvoiceService(service.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Đã thêm ${service.name} vào bill')),
-  );
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text('Đã thêm ${service.name} vào bill')));
 }
 
 Future<void> _addInvoiceProduct(
@@ -77,9 +77,9 @@ Future<void> _addInvoiceProduct(
   await ref.read(invoicesRepositoryProvider).addInvoiceProduct(product.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Đã thêm ${product.name} vào bill')),
-  );
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text('Đã thêm ${product.name} vào bill')));
 }
 
 Future<void> _updateInvoiceLineQuantity(
@@ -103,9 +103,8 @@ Future<void> _removeInvoiceLine(
   await ref.read(invoicesRepositoryProvider).removeInvoiceLine(line.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Đã xóa ${line.title} khỏi bill')),
-  );
+  ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text('Đã xóa ${line.title} khỏi bill')));
 }
 
 Future<void> _openDiscountEditor(
@@ -185,20 +184,14 @@ Future<RetailProductItem?> _openRetailProductEditor(
   );
 }
 
-Future<void> _createProductAndAdd(
-  BuildContext context,
-  WidgetRef ref,
-) async {
+Future<void> _createProductAndAdd(BuildContext context, WidgetRef ref) async {
   final product = await _openRetailProductEditor(context, ref);
   if (product == null || !context.mounted) return;
   ref.invalidate(retailProductsViewProvider);
   await _addInvoiceProduct(context, ref, product);
 }
 
-String _buildPaymentQrPayload(
-  InvoiceDraft draft,
-  CustomerProfile? customer,
-) {
+String _buildPaymentQrPayload(InvoiceDraft draft, CustomerProfile? customer) {
   final customerName = customer?.fullName ?? draft.customerId;
   final timestamp = DateTime.now().millisecondsSinceEpoch;
   return 'SALONPAY|invoice=${draft.id}|customer=$customerName|amount=${draft.totalAmount}|method=${draft.paymentMethod}|ts=$timestamp';
@@ -241,9 +234,7 @@ Future<void> _showPaymentQrDialog(
             const SizedBox(height: 14),
             Text(
               _currency(draft.totalAmount),
-              style: Theme.of(dialogContext)
-                  .textTheme
-                  .displayMedium
+              style: Theme.of(dialogContext).textTheme.displayMedium
                   ?.copyWith(color: AppColors.copper),
             ),
             const SizedBox(height: 6),
@@ -357,14 +348,13 @@ Future<void> _exportInvoicePdf(
       mode: ProcessStartMode.detached,
     );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đã xuất PDF hóa đơn: $filePath')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Đã xuất PDF hóa đơn: $filePath')));
   } catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Xuất PDF thất bại: $error')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Xuất PDF thất bại: $error')));
   }
 }
 
@@ -442,13 +432,19 @@ class _BillingView extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final dense = constraints.maxWidth < 1180 || constraints.maxHeight < 720;
+        final dense =
+            constraints.maxWidth < 1180 || constraints.maxHeight < 720;
         final gap = dense ? 10.0 : 14.0;
 
         return Column(
           key: const Key('billing-premium-workspace'),
           children: [
-            _PosHeader(draft: draft, dense: dense),
+            _PosHeader(
+              draft: draft,
+              history: history,
+              customers: customers,
+              dense: dense,
+            ),
             SizedBox(height: gap),
             Expanded(
               child: Row(
@@ -473,7 +469,6 @@ class _BillingView extends StatelessWidget {
                     flex: 5,
                     child: _CheckoutPanel(
                       draft: draft,
-                      history: history,
                       customers: customers,
                       selectedCustomer: selectedCustomer,
                       dense: dense,
@@ -490,112 +485,58 @@ class _BillingView extends StatelessWidget {
 }
 
 class _PosHeader extends StatelessWidget {
-  const _PosHeader({required this.draft, required this.dense});
+  const _PosHeader({
+    required this.draft,
+    required this.history,
+    required this.customers,
+    required this.dense,
+  });
 
   final InvoiceDraft draft;
+  final List<InvoiceDraft> history;
+  final List<CustomerProfile> customers;
   final bool dense;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       key: const Key('billing-premium-header'),
-      padding: EdgeInsets.symmetric(
-        horizontal: dense ? 14 : 18,
-        vertical: dense ? 10 : 12,
-      ),
-      decoration: BoxDecoration(
-        gradient: AppColors.cardGradient,
-        borderRadius: BorderRadius.circular(AppColors.cardRadius),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
+      height: 42,
       child: Row(
         children: [
-          PremiumIconBadge(
-            icon: Icons.point_of_sale_outlined,
-            size: dense ? 38 : 42,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Tính tiền',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    PremiumStatusPill(
-                      label: draft.isPaid ? 'Đã thanh toán' : 'Đang lập bill',
-                      tone: draft.isPaid ? AppColors.success : AppColors.copper,
-                    ),
-                  ],
-                ),
-                if (!dense) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    'Bill bên trái · chọn dịch vụ ở giữa · khách và thanh toán bên phải',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textMuted,
-                        ),
-                  ),
-                ],
-              ],
-            ),
+          PremiumStatusPill(
+            label: draft.isPaid ? 'Đã thanh toán' : 'Đang lập bill',
+            tone: draft.isPaid ? AppColors.success : AppColors.copper,
           ),
           const SizedBox(width: 10),
-          _HeaderMetric(label: 'Mục', value: '${draft.lines.length}'),
-          const SizedBox(width: 8),
-          _HeaderMetric(label: 'Tạm tính', value: _currency(draft.subtotal)),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderMetric extends StatelessWidget {
-  const _HeaderMetric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 82),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.panelRaised,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.controlBorder),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textMuted,
-                ),
+          Flexible(
+            child: Text(
+              '${draft.lines.length} mục · ${_currency(draft.subtotal)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-          const SizedBox(height: 1),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          if (!dense) ...[
+            const SizedBox(width: 8),
+            Text(
+              '• ${draft.id}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+            ),
+          ],
+          const Spacer(),
+          OutlinedButton.icon(
+            key: const Key('billing-history-action'),
+            onPressed: () =>
+                _showInvoiceHistoryDialog(context, history, customers),
+            icon: const Icon(Icons.history_rounded, size: 17),
+            label: const Text('Lịch sử hóa đơn'),
           ),
         ],
       ),

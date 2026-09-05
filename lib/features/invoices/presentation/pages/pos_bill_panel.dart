@@ -29,9 +29,9 @@ Future<void> _editInvoiceLineUnitPriceAction(
     );
   } catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Không sửa được giá bán: $error')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Không sửa được giá bán: $error')));
   }
 }
 
@@ -56,9 +56,8 @@ Future<void> _splitInvoiceLineAction(
     );
   } catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Không tách được dòng: $error')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Không tách được dòng: $error')));
   }
 }
 
@@ -67,6 +66,23 @@ String _lineDiscountSummary(InvoiceDraftLine line) {
     return 'Quà tặng · CK 100%';
   }
   return 'Giảm ${_currency(line.discountAmount)}';
+}
+
+Future<void> _clearInvoiceDraft(
+  BuildContext context,
+  WidgetRef ref,
+  InvoiceDraft draft,
+) async {
+  if (draft.isPaid || draft.lines.isEmpty) return;
+  final repository = ref.read(invoicesRepositoryProvider);
+  for (final line in List<InvoiceDraftLine>.from(draft.lines)) {
+    await repository.removeInvoiceLine(line.id);
+  }
+  if (!context.mounted) return;
+  ref.invalidate(invoiceDraftProvider);
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(const SnackBar(content: Text('Đã xóa toàn bộ mục khỏi bill')));
 }
 
 class _InvoiceDraftPanel extends ConsumerWidget {
@@ -85,16 +101,26 @@ class _InvoiceDraftPanel extends ConsumerWidget {
           ? '${draft.lines.length} mục · đã khóa'
           : '${draft.lines.length} mục · chỉnh trực tiếp',
       padding: EdgeInsets.all(dense ? 12 : 14),
-      trailing: Tooltip(
-        message: draft.isPaid
-            ? 'Hóa đơn đã thanh toán'
-            : 'Thêm dịch vụ hoặc sản phẩm ở cột giữa',
-        child: Icon(
-          draft.isPaid ? Icons.lock_outline_rounded : Icons.touch_app_outlined,
-          size: 18,
-          color: AppColors.textMuted,
-        ),
-      ),
+      trailing: draft.isPaid
+          ? Tooltip(
+              message: 'Hóa đơn đã thanh toán',
+              child: Icon(
+                Icons.lock_outline_rounded,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
+            )
+          : draft.lines.isEmpty
+          ? null
+          : TextButton.icon(
+              onPressed: () => _clearInvoiceDraft(context, ref, draft),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.danger,
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+              label: const Text('Xóa tất cả'),
+            ),
       child: draft.lines.isEmpty
           ? const PremiumEmptyState(
               icon: Icons.receipt_long_outlined,
@@ -132,10 +158,8 @@ class _InvoiceTableHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 470) return const SizedBox.shrink();
-        final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textMuted,
-              fontWeight: FontWeight.w700,
-            );
+        final style = Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w700);
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Row(
@@ -221,11 +245,11 @@ class _InvoiceLineRow extends ConsumerWidget {
                       onMinus: line.quantity <= 1
                           ? null
                           : () => _updateInvoiceLineQuantity(
-                                context,
-                                ref,
-                                line,
-                                line.quantity - 1,
-                              ),
+                              context,
+                              ref,
+                              line,
+                              line.quantity - 1,
+                            ),
                       onPlus: () => _updateInvoiceLineQuantity(
                         context,
                         ref,
@@ -316,11 +340,11 @@ class _InvoiceLineRow extends ConsumerWidget {
                     onMinus: line.quantity <= 1
                         ? null
                         : () => _updateInvoiceLineQuantity(
-                              context,
-                              ref,
-                              line,
-                              line.quantity - 1,
-                            ),
+                            context,
+                            ref,
+                            line,
+                            line.quantity - 1,
+                          ),
                     onPlus: () => _updateInvoiceLineQuantity(
                       context,
                       ref,
@@ -371,11 +395,7 @@ class _InvoiceLineMenu extends ConsumerWidget {
       enabled: !isLocked,
       tooltip: isLocked ? 'Hóa đơn đã khóa' : 'Thao tác dòng',
       padding: EdgeInsets.zero,
-      icon: Icon(
-        Icons.more_vert_rounded,
-        size: 18,
-        color: AppColors.textMuted,
-      ),
+      icon: Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textMuted),
       onSelected: (value) {
         if (value == 'price') {
           _editInvoiceLineUnitPriceAction(context, ref, line);
@@ -438,7 +458,8 @@ class _InvoiceLinePriceDialog extends StatefulWidget {
   final InvoiceDraftLine line;
 
   @override
-  State<_InvoiceLinePriceDialog> createState() => _InvoiceLinePriceDialogState();
+  State<_InvoiceLinePriceDialog> createState() =>
+      _InvoiceLinePriceDialogState();
 }
 
 class _InvoiceLinePriceDialogState extends State<_InvoiceLinePriceDialog> {
@@ -474,9 +495,9 @@ class _InvoiceLinePriceDialogState extends State<_InvoiceLinePriceDialog> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -493,7 +514,8 @@ class _InvoiceLinePriceDialogState extends State<_InvoiceLinePriceDialog> {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Giá bán trên bill (đ)',
-              helperText: 'Chỉ đổi dòng này; giá gốc trong catalog không thay đổi.',
+              helperText:
+                  'Chỉ đổi dòng này; giá gốc trong catalog không thay đổi.',
               prefixIcon: Icon(Icons.sell_outlined),
             ),
             validator: (value) {
@@ -566,7 +588,10 @@ class _QuantityControl extends StatelessWidget {
             child: Text(
               '$quantity',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           _QtyIcon(
