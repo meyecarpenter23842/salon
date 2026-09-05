@@ -32,11 +32,12 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
     final servicesState = ref.watch(servicesViewProvider);
     final productsState = ref.watch(retailProductsViewProvider);
     final draftState = ref.watch(invoiceDraftProvider);
-    final appointments = appointmentsState.valueOrNull ?? const <AppointmentEntry>[];
+    final appointments =
+        appointmentsState.valueOrNull ?? const <AppointmentEntry>[];
     final draftLabel = draftState.when(
       data: (draft) => _staffDraftLabel(draft, appointments),
       loading: () => 'Đang đọc bill…',
-      error: (_, __) => 'Không đọc được bill hiện tại',
+      error: (_, _) => 'Không đọc được bill hiện tại',
     );
     final hasActiveDraft = draftState.valueOrNull != null &&
         _staffHasDraftWork(draftState.valueOrNull!);
@@ -99,7 +100,8 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
                       error: (error, _) => _StaffError(
-                        message: 'Không tải được bàn thao tác nhân viên: $error',
+                        message:
+                            'Không tải được bàn thao tác nhân viên: $error',
                       ),
                     ),
                     loading: () =>
@@ -122,7 +124,10 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
     );
 
     if (widget.standalone) return Scaffold(body: content);
-    return Dialog.fullscreen(backgroundColor: Colors.transparent, child: content);
+    return Dialog.fullscreen(
+      backgroundColor: Colors.transparent,
+      child: content,
+    );
   }
 
   Future<void> _closeWindow() async {
@@ -178,17 +183,19 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
   Future<void> _checkoutAppointment(AppointmentEntry appointment) async {
     if (_isProcessing || appointment.isPaid) return;
     setState(() => _isProcessing = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final draft = await _prepareDraftForAppointment(appointment);
       if (draft == null) return;
       if (widget.standalone) {
         await _openStandaloneBilling();
       } else {
-        ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
+        ref.read(desktopSectionProvider.notifier).state =
+            DesktopSection.invoices;
       }
       if (!mounted) return;
       if (!widget.standalone) await _closeWindow();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Đã mở tính tiền cho ${appointment.customerName}'),
         ),
@@ -237,7 +244,9 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
       _closeWindow();
     }
     messenger.showSnackBar(
-      const SnackBar(content: Text('Mở bàn tính tiền để xuất phiếu cho khách.')),
+      const SnackBar(
+        content: Text('Mở bàn tính tiền để xuất phiếu cho khách.'),
+      ),
     );
   }
 
@@ -255,7 +264,8 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
       if (widget.standalone) {
         await _openStandaloneBilling();
       } else {
-        ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
+        ref.read(desktopSectionProvider.notifier).state =
+            DesktopSection.invoices;
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -288,7 +298,8 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
       if (widget.standalone) {
         await _openStandaloneBilling();
       } else {
-        ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
+        ref.read(desktopSectionProvider.notifier).state =
+            DesktopSection.invoices;
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,8 +352,9 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
     InvoiceDraft draft,
   ) async {
     if (!mounted) return;
-    final appointments =
-        ref.read(appointmentsViewProvider).valueOrNull ?? const <AppointmentEntry>[];
+    setState(() => _isProcessing = false);
+    final appointments = ref.read(appointmentsViewProvider).valueOrNull ??
+        const <AppointmentEntry>[];
     final owner = _staffDraftOwner(draft, appointments);
     final openBill = await showDialog<bool>(
       context: context,
@@ -735,8 +747,8 @@ class _StaffAppointmentCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   color: AppColors.iconSurface,
                   borderRadius: BorderRadius.circular(14),
@@ -839,7 +851,8 @@ class _StaffAppointmentCard extends StatelessWidget {
                 ),
               if (canComplete)
                 OutlinedButton.icon(
-                  onPressed: isProcessing ? null : () => onComplete(appointment),
+                  onPressed:
+                      isProcessing ? null : () => onComplete(appointment),
                   icon: const Icon(Icons.task_alt_outlined),
                   label: const Text('Hoàn thành'),
                 ),
@@ -1175,7 +1188,11 @@ int _staffOperationalPriority(AppointmentEntry appointment) {
   }
 }
 
-bool _staffHasDraftWork(InvoiceDraft draft) => draft.lines.isNotEmpty;
+bool _staffHasDraftWork(InvoiceDraft draft) {
+  return draft.lines.isNotEmpty ||
+      draft.customerId.trim().isNotEmpty ||
+      (draft.appointmentId?.trim().isNotEmpty ?? false);
+}
 
 String _staffDraftLabel(
   InvoiceDraft draft,
