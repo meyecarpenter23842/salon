@@ -91,6 +91,8 @@ void main() {
     await tester.tap(find.byKey(const Key('staff-rail-services-more')));
     await tester.pumpAndSettle();
 
+    final dialog = find.byKey(const Key('staff-service-picker-dialog'));
+    expect(dialog, findsOneWidget);
     expect(find.byKey(const Key('staff-service-picker-search')), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('staff-service-picker-search')),
@@ -98,9 +100,18 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Massage vai gáy'), findsOneWidget);
-    expect(find.text('Hấp phục hồi'), findsNothing);
-    expect(find.text('Ủ tóc collagen'), findsNothing);
+    expect(
+      find.descendant(of: dialog, matching: find.text('Massage vai gáy')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('Hấp phục hồi')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('Ủ tóc collagen')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -131,6 +142,8 @@ void main() {
     await tester.tap(find.byKey(const Key('staff-rail-products-more')));
     await tester.pumpAndSettle();
 
+    final dialog = find.byKey(const Key('staff-product-picker-dialog'));
+    expect(dialog, findsOneWidget);
     expect(find.byKey(const Key('staff-product-picker-search')), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('staff-product-picker-search')),
@@ -138,8 +151,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Dầu gội phục hồi'), findsOneWidget);
-    expect(find.text('Serum dưỡng tóc'), findsNothing);
+    expect(
+      find.descendant(of: dialog, matching: find.text('Dầu gội phục hồi')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('Serum dưỡng tóc')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 

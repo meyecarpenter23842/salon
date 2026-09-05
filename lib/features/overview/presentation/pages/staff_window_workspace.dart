@@ -163,7 +163,7 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
+      builder: (_) => Dialog(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460, maxHeight: 720),
           child: Padding(
@@ -222,7 +222,7 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
       if (draft == null) return;
       await _openBilling();
     } on StateError catch (error) {
-      await _showBusinessError(error.message.toString());
+      await _showBusinessError(_friendlyInvoiceError(error));
     } finally {
       if (mounted) setState(() => _isRailProcessing = false);
     }
@@ -239,13 +239,12 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
       _refreshWorkspace();
       return prepared;
     }
-
     if (draft.appointmentId == appointment.id) return draft;
 
-    final canReuseEmptyCustomerSelection = draft.lines.isEmpty &&
+    final canReuseCustomer = draft.lines.isEmpty &&
         draft.appointmentId == null &&
         draft.customerId == appointment.customerId;
-    if (canReuseEmptyCustomerSelection) {
+    if (canReuseCustomer) {
       final prepared = await repository.prefillDraftFromAppointment(appointment);
       _refreshWorkspace();
       return prepared;
@@ -292,7 +291,7 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
       _refreshWorkspace();
       _notify('Đã thêm phát sinh ${service.name} vào bill đang làm.');
     } on StateError catch (error) {
-      await _showBusinessError(error.message.toString());
+      await _showBusinessError(_friendlyInvoiceError(error));
     } finally {
       if (mounted) setState(() => _isRailProcessing = false);
     }
@@ -309,7 +308,7 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
       _refreshWorkspace();
       _notify('Đã thêm ${product.name} vào bill đang làm.');
     } on StateError catch (error) {
-      await _showBusinessError(error.message.toString());
+      await _showBusinessError(_friendlyInvoiceError(error));
     } finally {
       if (mounted) setState(() => _isRailProcessing = false);
     }
@@ -431,11 +430,12 @@ class _StaffQuickRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reminders = _buildReminders(
-      appointments,
-      DateTime.now(),
-    ).take(3).toList(growable: false);
-    final quickBillReady = draft != null && _hasDraftWork(draft);
+    final reminders = _buildReminders(appointments, DateTime.now())
+        .take(3)
+        .toList(growable: false);
+    final currentDraft = draft;
+    final quickBillReady =
+        currentDraft != null && _hasDraftWork(currentDraft);
 
     return Container(
       key: const Key('staff-quick-rail'),
@@ -631,7 +631,7 @@ class _RailSection extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (trailing != null) trailing!,
+                trailing?,
               ],
             ),
           ),
@@ -748,11 +748,7 @@ class _QuickCatalogGrid<T> extends StatelessWidget {
   final bool billReady;
   final String emptyLabel;
   final String billHint;
-  final Widget Function(
-    BuildContext context,
-    T item,
-    bool enabled,
-  ) itemBuilder;
+  final Widget Function(BuildContext context, T item, bool enabled) itemBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -825,54 +821,6 @@ class _QuickCatalogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.controlBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: enabled ? AppColors.copper : AppColors.textMuted,
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: enabled
-                        ? AppColors.textPrimary
-                        : AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
     return Tooltip(
       message: enabled ? tooltip : 'Cần có bill đang làm',
       child: Material(
@@ -880,7 +828,53 @@ class _QuickCatalogTile extends StatelessWidget {
         child: InkWell(
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(10),
-          child: content,
+          child: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.controlBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: enabled ? AppColors.copper : AppColors.textMuted,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: enabled
+                              ? AppColors.textPrimary
+                              : AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -916,6 +910,7 @@ class _ServicePickerDialogState extends State<_ServicePickerDialog> {
     }).toList(growable: false);
 
     return AlertDialog(
+      key: const Key('staff-service-picker-dialog'),
       title: const Text('Thêm phát sinh vào bill'),
       content: SizedBox(
         width: 560,
@@ -1013,6 +1008,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
     }).toList(growable: false);
 
     return AlertDialog(
+      key: const Key('staff-product-picker-dialog'),
       title: const Text('Thêm sản phẩm vào bill'),
       content: SizedBox(
         width: 560,
@@ -1147,13 +1143,12 @@ List<_StaffReminder> _buildReminders(
         break;
       case _QuickState.waitingConfirmation:
         if (minutesUntil > 30) break;
-        final confirmationOverdue =
-            now.isAfter(start) ? now.difference(start).inMinutes : 0;
+        final overdue = now.isAfter(start) ? now.difference(start).inMinutes : 0;
         reminders.add(
           _StaffReminder(
             appointment: appointment,
-            message: confirmationOverdue > 0
-                ? 'Quá giờ xác nhận $confirmationOverdue phút'
+            message: overdue > 0
+                ? 'Quá giờ xác nhận $overdue phút'
                 : 'Còn ${minutesUntil < 1 ? 1 : minutesUntil} phút · chờ xác nhận',
             actionLabel: 'Xác nhận',
             tone: AppColors.copper,
@@ -1162,32 +1157,30 @@ List<_StaffReminder> _buildReminders(
         );
         break;
       case _QuickState.active:
-        final activeOverdue =
-            now.isAfter(end) ? now.difference(end).inMinutes : 0;
+        final overdue = now.isAfter(end) ? now.difference(end).inMinutes : 0;
         reminders.add(
           _StaffReminder(
             appointment: appointment,
-            message: activeOverdue > 0
-                ? 'Đang làm · quá giờ $activeOverdue phút'
+            message: overdue > 0
+                ? 'Đang làm · quá giờ $overdue phút'
                 : 'Đang trong khung phục vụ',
             actionLabel: 'Hoàn thành',
-            tone: activeOverdue > 0 ? AppColors.warning : AppColors.success,
+            tone: overdue > 0 ? AppColors.warning : AppColors.success,
             priority: 2,
           ),
         );
         break;
       case _QuickState.booked:
         if (minutesUntil > 30) break;
-        final bookedOverdue =
-            now.isAfter(start) ? now.difference(start).inMinutes : 0;
+        final overdue = now.isAfter(start) ? now.difference(start).inMinutes : 0;
         reminders.add(
           _StaffReminder(
             appointment: appointment,
-            message: bookedOverdue > 0
-                ? 'Đã tới giờ $bookedOverdue phút · chưa bắt đầu'
+            message: overdue > 0
+                ? 'Đã tới giờ $overdue phút · chưa bắt đầu'
                 : 'Còn ${minutesUntil < 1 ? 1 : minutesUntil} phút · đã đặt',
             actionLabel: 'Bắt đầu',
-            tone: bookedOverdue > 0 ? AppColors.warning : AppColors.info,
+            tone: overdue > 0 ? AppColors.warning : AppColors.info,
             priority: 3,
           ),
         );
@@ -1243,4 +1236,12 @@ String _draftOwner(
     }
   }
   return 'Khách đã chọn';
+}
+
+String _friendlyInvoiceError(StateError error) {
+  final message = error.message.toString();
+  if (message.contains('Bill đang làm đã có dữ liệu')) {
+    return 'Đang có bill khác chưa hoàn tất. Hãy mở bill hiện tại để hoàn tất hoặc xóa bill trước khi tiếp tục.';
+  }
+  return message;
 }
