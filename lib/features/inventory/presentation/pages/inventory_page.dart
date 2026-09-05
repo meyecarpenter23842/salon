@@ -204,7 +204,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
           note: input.note,
         );
       }
-      if (!mounted) return;
+      if (!context.mounted) return;
       ref.read(inventoryRefreshNonceProvider.notifier).state++;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -216,7 +216,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
         ),
       );
     } catch (error) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Không cập nhật được tồn kho: $error')),
       );
