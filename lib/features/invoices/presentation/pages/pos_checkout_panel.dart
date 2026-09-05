@@ -1011,70 +1011,8 @@ Future<File> _createInvoicePdfFile(
   InvoiceDraft invoice,
   CustomerProfile? customer,
 ) async {
-  final fonts = await _loadReceiptPdfFonts();
-  final document = pw.Document();
-  final paidAt = invoice.paidAt ?? invoice.updatedAt;
-  final theme = pw.ThemeData.withFont(base: fonts.regular, bold: fonts.bold);
-
-  document.addPage(
-    pw.MultiPage(
-      theme: theme,
-      margin: const pw.EdgeInsets.all(32),
-      build: (_) => [
-        pw.Text(
-          'PHIẾU THANH TOÁN',
-          style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 10),
-        pw.Text('Mã hóa đơn: ${invoice.id}'),
-        pw.Text('Khách hàng: ${customer?.fullName ?? invoice.customerId}'),
-        pw.Text('SĐT: ${customer?.phone ?? '-'}'),
-        pw.Text('Thanh toán: ${invoice.paymentMethod}'),
-        pw.Text('Thời gian: ${_invoiceTimeLabel(paidAt)}'),
-        pw.SizedBox(height: 18),
-        pw.TableHelper.fromTextArray(
-          headers: const ['Hạng mục', 'SL', 'Đơn giá', 'Thành tiền'],
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          cellStyle: const pw.TextStyle(fontSize: 10.5),
-          data: invoice.lines
-              .map(
-                (line) => [
-                  line.title,
-                  '${line.quantity}',
-                  _currency(line.unitPrice),
-                  _currency(line.totalPrice),
-                ],
-              )
-              .toList(growable: false),
-        ),
-        pw.SizedBox(height: 18),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.end,
-          children: [pw.Text('Tạm tính: ${_currency(invoice.subtotal)}')],
-        ),
-        pw.SizedBox(height: 4),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.end,
-          children: [
-            pw.Text('Giảm giá: ${_currency(invoice.discountAmount)}'),
-          ],
-        ),
-        pw.SizedBox(height: 6),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.end,
-          children: [
-            pw.Text(
-              'TỔNG CỘNG: ${_currency(invoice.totalAmount)}',
-              style: pw.TextStyle(
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
+  final config = await ReceiptTemplateStore.instance.load();
+  final bytes = await _buildReceiptPdfBytes(invoice, customer, config);
 
   final docsDir = await getApplicationDocumentsDirectory();
   final invoicesDir = Directory(
@@ -1085,7 +1023,7 @@ Future<File> _createInvoicePdfFile(
   }
   final safeId = invoice.id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
   final file = File(path.join(invoicesDir.path, '$safeId.pdf'));
-  await file.writeAsBytes(await document.save());
+  await file.writeAsBytes(bytes);
   return file;
 }
 
@@ -1121,11 +1059,12 @@ Future<void> _printPaidInvoice(
   CustomerProfile? customer,
 ) async {
   try {
-    final file = await _createInvoicePdfFile(invoice, customer);
-    final bytes = await file.readAsBytes();
-    final printed = await Printing.layoutPdf(
-      name: 'Phiếu thanh toán ${invoice.id}',
-      onLayout: (_) async => bytes,
+    final config = await ReceiptTemplateStore.instance.load();
+    final bytes = await _buildReceiptPdfBytes(invoice, customer, config);
+    final printed = await _sendReceiptToPrinter(
+      bytes: bytes,
+      config: config,
+      jobName: 'Phiếu thanh toán ${invoice.id}',
     );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
