@@ -6,7 +6,9 @@ import '../../../../core/repositories/catalog_detail_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 
-final productDetailRepositoryProvider = Provider<ProductDetailRepository?>((ref) {
+final productDetailRepositoryProvider = Provider<ProductDetailRepository?>((
+  ref,
+) {
   final repository = ref.watch(retailProductsRepositoryProvider);
   return repository is ProductDetailRepository
       ? repository as ProductDetailRepository
@@ -15,10 +17,10 @@ final productDetailRepositoryProvider = Provider<ProductDetailRepository?>((ref)
 
 final productDetailProvider = FutureProvider.autoDispose
     .family<Map<String, Object?>?, String>((ref, productId) async {
-  final repository = ref.watch(productDetailRepositoryProvider);
-  if (repository == null) return null;
-  return repository.fetchProductDetail(productId);
-});
+      final repository = ref.watch(productDetailRepositoryProvider);
+      if (repository == null) return null;
+      return repository.fetchProductDetail(productId);
+    });
 
 class ProductPerformancePanel extends ConsumerWidget {
   const ProductPerformancePanel({super.key, required this.productId});
@@ -31,17 +33,16 @@ class ProductPerformancePanel extends ConsumerWidget {
     return Container(
       key: const Key('product-detail-performance'),
       width: double.infinity,
-      padding: const EdgeInsets.all(13),
+      height: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
       decoration: BoxDecoration(
         color: AppColors.featureSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
       child: state.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: LinearProgressIndicator(minHeight: 2),
-        ),
+        loading: () =>
+            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         error: (error, _) => _DetailMessage(
           icon: Icons.error_outline_rounded,
           title: 'Không tải được hiệu suất sản phẩm',
@@ -53,7 +54,8 @@ class ProductPerformancePanel extends ConsumerWidget {
             return const _DetailMessage(
               icon: Icons.query_stats_outlined,
               title: 'Hiệu suất giao dịch',
-              message: 'Backend demo không có lịch sử giao dịch thật cho sản phẩm.',
+              message:
+                  'Backend demo không có lịch sử giao dịch thật cho sản phẩm.',
             );
           }
           return _ProductPerformanceBody(detail: detail);
@@ -70,9 +72,10 @@ class _ProductPerformanceBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final history = _mapList(detail['history']).take(6).toList(growable: false);
+    final allHistory = _mapList(detail['history']);
+    final history = allHistory.take(3).toList(growable: false);
     final metrics = [
-      ('Doanh thu dòng', detail['monthRevenue']?.toString() ?? '0đ'),
+      ('Doanh thu tháng', detail['monthRevenue']?.toString() ?? '0đ'),
       ('SL bán tháng', '${_toInt(detail['monthQuantity'])}'),
       ('Khách tháng', '${_toInt(detail['monthCustomerCount'])}'),
       ('CK dòng', detail['monthLineDiscount']?.toString() ?? '0đ'),
@@ -92,69 +95,104 @@ class _ProductPerformanceBody extends StatelessWidget {
             PremiumStatusPill(label: 'Dữ liệu thật', tone: AppColors.success),
           ],
         ),
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const gap = 8.0;
-            final width = (constraints.maxWidth - gap) / 2;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                for (final metric in metrics)
-                  SizedBox(
-                    width: width,
-                    child: _MetricTile(label: metric.$1, value: metric.$2),
-                  ),
-              ],
-            );
-          },
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (var index = 0; index < metrics.length; index++) ...[
+              Expanded(
+                child: _MetricInline(
+                  label: metrics[index].$1,
+                  value: metrics[index].$2,
+                ),
+              ),
+              if (index < metrics.length - 1)
+                Container(width: 1, height: 34, color: AppColors.cardBorder),
+            ],
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         const PremiumDivider(),
-        const SizedBox(height: 10),
-        Text(
-          'Lịch sử bán gần đây',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w800,
-          ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Icon(Icons.history_rounded, size: 17, color: AppColors.copper),
+            const SizedBox(width: 7),
+            const Expanded(
+              child: Text(
+                'Bán gần đây',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            TextButton(
+              onPressed: allHistory.isEmpty
+                  ? null
+                  : () => _showHistory(context, allHistory),
+              child: Text('Xem tất cả (${allHistory.length})'),
+            ),
+          ],
         ),
-        const SizedBox(height: 7),
         if (history.isEmpty)
           Text(
             'Chưa có sản phẩm đã thanh toán.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+            style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
           )
         else
           for (var index = 0; index < history.length; index++) ...[
             _HistoryRow(row: history[index]),
-            if (index < history.length - 1) const SizedBox(height: 6),
+            if (index < history.length - 1) const PremiumDivider(),
           ],
-        const SizedBox(height: 10),
+        const Spacer(),
         Text(
           detail['dataNote']?.toString() ?? '',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 9.5, height: 1.35),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: AppColors.textMuted, fontSize: 9),
         ),
       ],
     );
   }
+
+  Future<void> _showHistory(
+    BuildContext context,
+    List<Map<String, Object?>> history,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lịch sử bán sản phẩm'),
+        content: SizedBox(
+          width: 760,
+          height: 480,
+          child: ListView.separated(
+            itemCount: history.length,
+            separatorBuilder: (_, _) => const PremiumDivider(),
+            itemBuilder: (_, index) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: _HistoryRow(row: history[index]),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value});
+class _MetricInline extends StatelessWidget {
+  const _MetricInline({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(10),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -165,7 +203,12 @@ class _MetricTile extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(color: AppColors.textMuted, fontSize: 9.5)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 9),
+          ),
         ],
       ),
     );
@@ -179,54 +222,38 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(10),
-      ),
+    return SizedBox(
+      height: 34,
       child: Row(
         children: [
           SizedBox(
-            width: 68,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row['dateLabel']?.toString() ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10),
-                ),
-                Text(
-                  row['timeLabel']?.toString() ?? '',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 9),
-                ),
-              ],
+            width: 92,
+            child: Text(
+              '${row['dateLabel'] ?? ''} ${row['timeLabel'] ?? ''}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row['customerName']?.toString() ?? 'Khách',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10.5),
-                ),
-                Text(
-                  'x${_toInt(row['quantity'])} · giá ${row['unitPrice'] ?? '0đ'}${_toInt(row['discountValue']) > 0 ? ' · CK ${row['discount']}' : ''}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
-                ),
-              ],
+            child: Text(
+              '${row['customerName'] ?? 'Khách'} • x${_toInt(row['quantity'])}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 10.5,
+              ),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             row['total']?.toString() ?? '0đ',
-            style: TextStyle(color: AppColors.copper, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: AppColors.copper,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -260,7 +287,10 @@ class _DetailMessage extends StatelessWidget {
             children: [
               Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 3),
-              Text(message, style: TextStyle(color: AppColors.textMuted, fontSize: 10.5)),
+              Text(
+                message,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+              ),
             ],
           ),
         ),

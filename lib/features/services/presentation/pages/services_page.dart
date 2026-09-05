@@ -393,7 +393,7 @@ class _ServiceDetail extends ConsumerWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
             child: Row(
               children: [
                 const PremiumIconBadge(
@@ -421,86 +421,122 @@ class _ServiceDetail extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
                 PremiumStatusPill(label: item.statusLabel, tone: tone),
+                const SizedBox(width: 6),
+                IconButton.outlined(
+                  tooltip: 'Sửa dịch vụ',
+                  onPressed: () =>
+                      _openServiceEditor(context, ref, service: item),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                const SizedBox(width: 4),
+                IconButton.outlined(
+                  tooltip: 'Định lượng',
+                  onPressed: () => _showFormula(context, item),
+                  icon: const Icon(Icons.science_outlined),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Thêm thao tác',
+                  onSelected: (value) {
+                    if (value == 'toggle') {
+                      _toggleService(context, ref, item);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'toggle',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(
+                          item.isActive
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        title: Text(item.isActive ? 'Tạm ẩn' : 'Bật lại'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
           const PremiumDivider(),
           Expanded(
-            child: SingleChildScrollView(
-              primary: false,
-              padding: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
               child: Column(
                 children: [
                   _MetricStrip(item: item),
-                  const SizedBox(height: 12),
-                  ServicePerformancePanel(serviceId: item.id),
-                  const SizedBox(height: 12),
-                  PremiumInfoRow(
-                    icon: Icons.payments_outlined,
-                    label: 'Giá dịch vụ',
-                    value: item.priceLabel,
+                  const SizedBox(height: 10),
+                  Expanded(child: ServicePerformancePanel(serviceId: item.id)),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.featureSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.notes_outlined,
+                          size: 17,
+                          color: AppColors.copper,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.description.trim().isEmpty
+                                ? 'Chưa có mô tả dịch vụ.'
+                                : item.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () => _showFormula(context, item),
+                          icon: const Icon(Icons.science_outlined, size: 17),
+                          label: const Text('Định lượng'),
+                        ),
+                      ],
+                    ),
                   ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.schedule_outlined,
-                    label: 'Thời lượng',
-                    value: item.durationLabel,
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.notes_outlined,
-                    label: 'Mô tả',
-                    value: item.description,
-                  ),
-                  const SizedBox(height: 14),
-                  _FormulaPanel(service: item),
                 ],
               ),
             ),
           ),
-          const PremiumDivider(),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final editButton = FilledButton.icon(
-                  onPressed: () =>
-                      _openServiceEditor(context, ref, service: item),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Sửa dịch vụ'),
-                );
-                final toggleButton = OutlinedButton.icon(
-                  onPressed: () => _toggleService(context, ref, item),
-                  icon: Icon(
-                    item.isActive
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                  ),
-                  label: Text(item.isActive ? 'Tạm ẩn' : 'Bật lại'),
-                );
+        ],
+      ),
+    );
+  }
 
-                if (constraints.maxWidth < 370) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      editButton,
-                      const SizedBox(height: 8),
-                      toggleButton,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: editButton),
-                    const SizedBox(width: 8),
-                    Expanded(child: toggleButton),
-                  ],
-                );
-              },
-            ),
+  Future<void> _showFormula(BuildContext context, ServiceCatalogItem item) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Định lượng • ${item.name}'),
+        content: SizedBox(
+          width: 760,
+          height: 520,
+          child: SingleChildScrollView(
+            primary: false,
+            child: _FormulaPanel(service: item),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
           ),
         ],
       ),
@@ -796,9 +832,8 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                     final duplicate = widget.existingServices.any(
                       (item) =>
                           item.id != widget.service?.id &&
-                          ServiceUpsertInput.normalizeName(
-                                item.name,
-                              ).toLowerCase() ==
+                          ServiceUpsertInput.normalizeName(item.name)
+                                  .toLowerCase() ==
                               normalized.toLowerCase(),
                     );
                     return duplicate ? 'Tên dịch vụ đã tồn tại' : null;

@@ -101,9 +101,8 @@ Future<CustomerProfile?> _openCustomerEditor(
     return saved;
   } catch (error) {
     if (!context.mounted) return null;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_friendlyError(error))));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(_friendlyError(error))));
     return null;
   }
 }
@@ -184,9 +183,8 @@ Future<void> _openCustomerAppointment(
     );
   } catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_friendlyError(error))));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(_friendlyError(error))));
   }
 }
 
@@ -639,133 +637,426 @@ class _CustomerDetail extends ConsumerWidget {
 
     final history = ref.watch(customerInvoiceHistoryProvider(current.id));
     final vip = current.tier.contains('VIP');
+    final invoices = history.valueOrNull ?? const <InvoiceDraft>[];
 
     return PremiumSectionCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                PremiumIconBadge(
-                  icon: vip
-                      ? Icons.workspace_premium_outlined
-                      : Icons.person_outline_rounded,
-                  size: 48,
-                  tone: vip ? AppColors.warning : AppColors.copper,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        current.fullName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        current.phone,
-                        style: TextStyle(color: AppColors.textMuted),
-                      ),
-                      const SizedBox(height: 6),
-                      _TierBadge(tier: current.tier),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const PremiumDivider(),
-          Expanded(
-            child: SingleChildScrollView(
-              primary: false,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _CustomerMetricStrip(customer: current),
-                  const SizedBox(height: 8),
-                  PremiumInfoRow(
-                    icon: Icons.content_cut_rounded,
-                    label: 'Dịch vụ yêu thích',
-                    value: current.favoriteService.isEmpty
-                        ? 'Chưa ghi nhận'
-                        : current.favoriteService,
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.history_rounded,
-                    label: 'Lần ghé gần nhất',
-                    value: current.lastVisitLabel,
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.auto_awesome_outlined,
-                    label: 'Hồ sơ tóc',
-                    value: current.hairProfile.isEmpty
-                        ? 'Chưa có hồ sơ tóc'
-                        : current.hairProfile,
-                  ),
-                  const PremiumDivider(indent: 42),
-                  PremiumInfoRow(
-                    icon: Icons.sticky_note_2_outlined,
-                    label: 'Ghi chú salon',
-                    value: current.note.isEmpty
-                        ? 'Chưa có ghi chú'
-                        : current.note,
-                  ),
-                  const SizedBox(height: 14),
-                  _InvoiceHistory(history: history, limit: 3),
-                ],
-              ),
-            ),
-          ),
-          const PremiumDivider(),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FilledButton.icon(
-                  key: const Key('customer-open-full-profile'),
-                  onPressed: () {
-                    ref.read(customerProfileTabProvider.notifier).state = 0;
-                    ref.read(customerProfileDetailIdProvider.notifier).state =
-                        current.id;
-                  },
-                  icon: const Icon(Icons.contact_page_outlined),
-                  label: const Text('Xem hồ sơ đầy đủ'),
-                ),
-                const SizedBox(height: 8),
-                Row(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final identity = Row(
                   children: [
+                    PremiumIconBadge(
+                      icon: vip
+                          ? Icons.workspace_premium_outlined
+                          : Icons.person_outline_rounded,
+                      size: 46,
+                      tone: vip ? AppColors.warning : AppColors.copper,
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 5,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                current.fullName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              _TierBadge(tier: current.tier),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            [
+                              current.phone,
+                              if ((current.email ?? '').trim().isNotEmpty)
+                                current.email!,
+                            ].join(' • '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+
+                final compact = constraints.maxWidth < 720;
+                final actions = Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    if (compact)
+                      IconButton.filledTonal(
+                        tooltip: 'Đặt lịch',
+                        onPressed: () =>
+                            _openCustomerAppointment(context, ref, current),
+                        icon: const Icon(Icons.calendar_month_outlined),
+                      )
+                    else
+                      FilledButton.icon(
+                        onPressed: () =>
+                            _openCustomerAppointment(context, ref, current),
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: const Text('Đặt lịch'),
+                      ),
+                    if (compact)
+                      IconButton.outlined(
+                        tooltip: 'Tính tiền',
+                        onPressed: () =>
+                            _openCustomerBilling(context, ref, current),
+                        icon: const Icon(Icons.point_of_sale_outlined),
+                      )
+                    else
+                      OutlinedButton.icon(
                         onPressed: () =>
                             _openCustomerBilling(context, ref, current),
                         icon: const Icon(Icons.point_of_sale_outlined),
                         label: const Text('Tính tiền'),
                       ),
+                    IconButton.outlined(
+                      tooltip: 'Sửa hồ sơ',
+                      onPressed: () =>
+                          _openCustomerEditor(context, ref, customer: current),
+                      icon: const Icon(Icons.edit_outlined),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _openCustomerEditor(
-                          context,
-                          ref,
-                          customer: current,
-                        ),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Sửa'),
-                      ),
+                    IconButton.outlined(
+                      key: const Key('customer-open-full-profile'),
+                      tooltip: 'Hồ sơ đầy đủ',
+                      onPressed: () {
+                        ref.read(customerProfileTabProvider.notifier).state = 0;
+                        ref
+                                .read(customerProfileDetailIdProvider.notifier)
+                                .state =
+                            current.id;
+                      },
+                      icon: const Icon(Icons.contact_page_outlined),
                     ),
                   ],
+                );
+
+                if (compact) {
+                  return Column(
+                    children: [
+                      identity,
+                      const SizedBox(height: 10),
+                      Align(alignment: Alignment.centerRight, child: actions),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: identity),
+                    const SizedBox(width: 12),
+                    actions,
+                  ],
+                );
+              },
+            ),
+          ),
+          const PremiumDivider(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _metric(
+                          icon: Icons.account_balance_wallet_outlined,
+                          label: 'Tổng chi',
+                          value: current.spentLabel,
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          icon: Icons.refresh_rounded,
+                          label: 'Lần ghé',
+                          value: '${current.visitCount}',
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          icon: Icons.stars_outlined,
+                          label: 'Điểm',
+                          value: '${current.loyaltyPoints}',
+                        ),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          icon: Icons.history_rounded,
+                          label: 'Gần nhất',
+                          value: current.lastVisitLabel,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.featureSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _compactInfo(
+                            icon: Icons.content_cut_rounded,
+                            label: 'Dịch vụ yêu thích',
+                            value: current.favoriteService.isEmpty
+                                ? 'Chưa ghi nhận'
+                                : current.favoriteService,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _compactInfo(
+                            icon: Icons.auto_awesome_outlined,
+                            label: 'Hồ sơ tóc',
+                            value: current.hairProfile.isEmpty
+                                ? 'Chưa có hồ sơ tóc'
+                                : current.hairProfile,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _compactInfo(
+                            icon: Icons.sticky_note_2_outlined,
+                            label: 'Ghi chú',
+                            value: current.note.isEmpty
+                                ? 'Chưa có ghi chú'
+                                : current.note,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.featureSurface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 18,
+                                color: AppColors.copper,
+                              ),
+                              const SizedBox(width: 7),
+                              const Expanded(
+                                child: Text(
+                                  'Lịch sử gần đây',
+                                  style: TextStyle(fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: invoices.isEmpty
+                                    ? null
+                                    : () => _showHistory(context, invoices),
+                                child: Text('Xem tất cả (${invoices.length})'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Expanded(child: _historyPreview(history)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.copper),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactInfo({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.copper),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 9.5),
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _historyPreview(AsyncValue<List<InvoiceDraft>> history) {
+    return history.when(
+      loading: () =>
+          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      error: (error, _) => Align(
+        alignment: Alignment.topLeft,
+        child: Text(
+          'Không tải được lịch sử: $error',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+        ),
+      ),
+      data: (invoices) {
+        final rows = invoices.take(2).toList(growable: false);
+        if (rows.isEmpty) {
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Text(
+              'Chưa có lịch sử thanh toán.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
+            ),
+          );
+        }
+        return Column(
+          children: [
+            for (var index = 0; index < rows.length; index++) ...[
+              Expanded(child: _invoiceRow(rows[index])),
+              if (index < rows.length - 1) const PremiumDivider(),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _invoiceRow(InvoiceDraft invoice) {
+    final when = invoice.paidAt ?? invoice.updatedAt;
+    final title = invoice.lines.isEmpty
+        ? 'Hóa đơn'
+        : invoice.lines.take(2).map((line) => line.title).join(' • ');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 104,
+            child: Text(
+              _dateTime(when),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 10),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _currency(invoice.totalAmount),
+            style: TextStyle(
+              color: AppColors.copper,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showHistory(BuildContext context, List<InvoiceDraft> invoices) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lịch sử khách hàng'),
+        content: SizedBox(
+          width: 760,
+          height: 480,
+          child: ListView.separated(
+            itemCount: invoices.length,
+            separatorBuilder: (_, _) => const PremiumDivider(),
+            itemBuilder: (_, index) =>
+                SizedBox(height: 54, child: _invoiceRow(invoices[index])),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
           ),
         ],
       ),
@@ -1293,61 +1584,6 @@ class _PaymentsTab extends StatelessWidget {
   }
 }
 
-class _CustomerMetricStrip extends StatelessWidget {
-  const _CustomerMetricStrip({required this.customer});
-
-  final CustomerProfile customer;
-
-  @override
-  Widget build(BuildContext context) {
-    final metrics = [
-      ('Số lần ghé', '${customer.visitCount}'),
-      ('Tổng chi', customer.spentLabel),
-      ('Điểm', '${customer.loyaltyPoints}'),
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.featureSurface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          for (var index = 0; index < metrics.length; index++) ...[
-            Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    metrics[index].$1,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    metrics[index].$2,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ],
-              ),
-            ),
-            if (index < metrics.length - 1)
-              Container(
-                width: 1,
-                height: 32,
-                color: AppColors.workspaceDivider,
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _InvoiceHistory extends StatelessWidget {
   const _InvoiceHistory({required this.history, this.limit});
 
@@ -1490,8 +1726,7 @@ class _MissingCustomerProfile extends StatelessWidget {
           const PremiumEmptyState(
             icon: Icons.person_off_outlined,
             title: 'Không còn tìm thấy hồ sơ khách',
-            message:
-                'Hồ sơ có thể đã thay đổi. Quay lại danh sách để chọn lại khách.',
+            message: 'Hồ sơ có thể đã thay đổi. Quay lại danh sách để chọn lại khách.',
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -1770,9 +2005,8 @@ class _CustomerAppointmentDialogState
                 const SizedBox(height: 16),
                 Text(
                   'Dịch vụ',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: AppColors.textMuted),
+                  style: Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(color: AppColors.textMuted),
                 ),
                 const SizedBox(height: 7),
                 FormField<List<String>>(
