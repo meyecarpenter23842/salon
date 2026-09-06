@@ -30,9 +30,11 @@ function Resolve-MakeNsis {
   if ($command) { return $command.Source }
 
   $candidates = @(
-    (Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'),
-    (Join-Path $env:ProgramFiles 'NSIS\makensis.exe')
-  ) | Where-Object { $_ -and (Test-Path $_) }
+    @(
+      (Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe')
+      (Join-Path $env:ProgramFiles 'NSIS\makensis.exe')
+    ) | Where-Object { $_ -and (Test-Path $_) }
+  )
 
   if ($candidates.Count -gt 0) { return $candidates[0] }
   throw 'Không tìm thấy makensis.exe. Hãy cài NSIS trước khi package installer.'
