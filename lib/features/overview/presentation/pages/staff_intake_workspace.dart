@@ -40,6 +40,7 @@ class StaffIntakeWorkspace extends ConsumerWidget {
                   openAppointmentEditor(
                     context,
                     ref,
+                    mode: AppointmentEditorMode.receive,
                     initialDayLabel: 'Hôm nay',
                     initialTimeLabel: DateFormat('HH:mm').format(now),
                   );
