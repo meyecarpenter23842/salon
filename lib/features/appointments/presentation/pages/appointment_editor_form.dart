@@ -5,19 +5,24 @@ class _AppointmentEditorDialog extends StatefulWidget {
     required this.customers,
     required this.services,
     required this.employees,
+    required this.onCreateCustomer,
     this.appointment,
     this.initialEmployeeId,
     this.initialTimeLabel,
     this.initialDayLabel,
+    this.mode = AppointmentEditorMode.appointment,
   });
 
   final AppointmentEntry? appointment;
   final List<CustomerProfile> customers;
   final List<ServiceCatalogItem> services;
   final List<Map<String, Object?>> employees;
+  final Future<CustomerProfile> Function(CustomerUpsertInput input)
+      onCreateCustomer;
   final String? initialEmployeeId;
   final String? initialTimeLabel;
   final String? initialDayLabel;
+  final AppointmentEditorMode mode;
 
   @override
   State<_AppointmentEditorDialog> createState() =>
@@ -41,6 +46,7 @@ class _AppointmentEditorDialogState
   late final TextEditingController _slotController;
   late final TextEditingController _timeController;
   late final TextEditingController _noteController;
+  late List<CustomerProfile> _customers;
   String? _selectedCustomerId;
   late List<String> _selectedServiceIds;
   String? _selectedEmployeeId;
@@ -48,10 +54,14 @@ class _AppointmentEditorDialogState
   late String _dayLabel;
   bool _isSubmitting = false;
 
+  bool get _isReceive =>
+      widget.mode == AppointmentEditorMode.receive && widget.appointment == null;
+
   @override
   void initState() {
     super.initState();
     final appointment = widget.appointment;
+    _customers = List<CustomerProfile>.of(widget.customers);
     _selectedServiceIds = _resolveInitialServiceIds(appointment);
     _selectedEmployeeId =
         _resolveInitialEmployeeId(appointment) ?? widget.initialEmployeeId;
@@ -67,13 +77,18 @@ class _AppointmentEditorDialogState
     );
     _noteController =
         TextEditingController(text: appointment?.note ?? '');
-    _status = _statusOptions.contains(appointment?.status)
-        ? appointment!.status
-        : 'Chờ xác nhận';
+    _status = _isReceive
+        ? 'Đã đặt'
+        : _statusOptions.contains(appointment?.status)
+            ? appointment!.status
+            : 'Chờ xác nhận';
     final requestedDay =
         appointment?.dateLabel ?? widget.initialDayLabel ?? 'Hôm nay';
-    _dayLabel =
-        _dayOptions.contains(requestedDay) ? requestedDay : 'Hôm nay';
+    _dayLabel = _isReceive
+        ? 'Hôm nay'
+        : _dayOptions.contains(requestedDay)
+            ? requestedDay
+            : 'Hôm nay';
   }
 
   @override
@@ -91,20 +106,26 @@ class _AppointmentEditorDialogState
     final selectedCustomer = _selectedCustomer;
     final selectedEmployee = _selectedEmployee;
     final selectedServices = _selectedServices;
+    final title = isEditing
+        ? 'Sửa lịch hẹn'
+        : _isReceive
+            ? 'Nhận khách'
+            : 'Tạo lịch hẹn';
 
     return AlertDialog(
+      key: const Key('appointment-editor-dialog'),
       title: Row(
         children: [
           PremiumIconBadge(
             icon: isEditing
                 ? Icons.edit_calendar_outlined
-                : Icons.add_task_rounded,
+                : _isReceive
+                    ? Icons.person_add_alt_1_outlined
+                    : Icons.add_task_rounded,
             size: 38,
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(isEditing ? 'Sửa lịch hẹn' : 'Tạo lịch hẹn'),
-          ),
+          Expanded(child: Text(title)),
         ],
       ),
       content: SizedBox(
@@ -122,28 +143,54 @@ class _AppointmentEditorDialogState
                       ),
                 ),
                 const SizedBox(height: 7),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCustomerId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                  items: widget.customers
-                      .map(
-                        (customer) => DropdownMenuItem(
-                          value: customer.id,
-                          child: Text(
-                            '${customer.fullName} • ${customer.phone}',
-                            overflow: TextOverflow.ellipsis,
+                KeyedSubtree(
+                  key: const Key('appointment-customer-field'),
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(
+                      'appointment-customer-${_selectedCustomerId ?? 'none'}',
+                    ),
+                    initialValue: _selectedCustomerId,
+                    isExpanded: true,
+                    hint: const Text('Chọn khách hàng'),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    items: _customers
+                        .map(
+                          (customer) => DropdownMenuItem(
+                            value: customer.id,
+                            child: Text(
+                              '${customer.fullName} • ${customer.phone}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'Chọn khách hàng có sẵn'
-                      : null,
-                  onChanged: (value) =>
-                      setState(() => _selectedCustomerId = value),
+                        )
+                        .toList(),
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Chọn khách hàng'
+                        : null,
+                    onChanged: (value) =>
+                        setState(() => _selectedCustomerId = value),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const Key('appointment-customer-search-action'),
+                      onPressed: _isSubmitting ? null : _searchCustomer,
+                      icon: const Icon(Icons.search_rounded, size: 17),
+                      label: const Text('Tìm khách'),
+                    ),
+                    TextButton.icon(
+                      key: const Key('appointment-customer-new-action'),
+                      onPressed: _isSubmitting ? null : _createCustomer,
+                      icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
+                      label: const Text('Khách mới'),
+                    ),
+                  ],
                 ),
                 if (selectedCustomer != null) ...[
                   const SizedBox(height: 8),
@@ -301,31 +348,41 @@ class _AppointmentEditorDialogState
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final stacked = constraints.maxWidth < 500;
-                    final dateField = DropdownButtonFormField<String>(
-                      initialValue: _dayLabel,
-                      decoration:
-                          const InputDecoration(labelText: 'Ngày hẹn'),
-                      items: _dayOptions
-                          .map(
-                            (item) => DropdownMenuItem(
-                              value: item,
-                              child: Text(item),
-                            ),
+                    final Widget dateField = _isReceive
+                        ? InputDecorator(
+                            key: const Key('appointment-receive-day'),
+                            decoration:
+                                const InputDecoration(labelText: 'Ngày'),
+                            child: const Text('Hôm nay'),
                           )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _dayLabel = value);
-                        }
-                      },
-                    );
+                        : DropdownButtonFormField<String>(
+                            initialValue: _dayLabel,
+                            decoration: const InputDecoration(
+                              labelText: 'Ngày hẹn',
+                            ),
+                            items: _dayOptions
+                                .map(
+                                  (item) => DropdownMenuItem(
+                                    value: item,
+                                    child: Text(item),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() => _dayLabel = value);
+                              }
+                            },
+                          );
                     final timeField = TextFormField(
+                      key: const Key('appointment-time-field'),
                       controller: _timeController,
-                      decoration:
-                          const InputDecoration(labelText: 'Giờ hẹn'),
+                      decoration: InputDecoration(
+                        labelText: _isReceive ? 'Giờ vào' : 'Giờ hẹn',
+                      ),
                       validator: (value) {
                         final text = value?.trim() ?? '';
-                        if (text.isEmpty) return 'Nhập giờ hẹn';
+                        if (text.isEmpty) return 'Nhập giờ';
                         if (!RegExp(r'^\d{2}:\d{2}$').hasMatch(text)) {
                           return 'Dùng HH:mm';
                         }
@@ -390,23 +447,26 @@ class _AppointmentEditorDialogState
                     );
                   },
                 ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: _status,
-                  decoration:
-                      const InputDecoration(labelText: 'Trạng thái'),
-                  items: _statusOptions
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) setState(() => _status = value);
-                  },
-                ),
+                if (!_isReceive) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    key: const Key('appointment-status-field'),
+                    initialValue: _status,
+                    decoration:
+                        const InputDecoration(labelText: 'Trạng thái'),
+                    items: _statusOptions
+                        .map(
+                          (item) => DropdownMenuItem(
+                            value: item,
+                            child: Text(item),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) setState(() => _status = value);
+                    },
+                  ),
+                ],
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: _noteController,
@@ -431,10 +491,122 @@ class _AppointmentEditorDialogState
         FilledButton.icon(
           onPressed: _isSubmitting ? null : _submit,
           icon: const Icon(Icons.check_rounded),
-          label: Text(isEditing ? 'Lưu lịch' : 'Tạo lịch'),
+          label: Text(
+            isEditing
+                ? 'Lưu lịch'
+                : _isReceive
+                    ? 'Nhận khách'
+                    : 'Tạo lịch',
+          ),
         ),
       ],
     );
+  }
+
+  Future<void> _searchCustomer() async {
+    final controller = TextEditingController();
+    var query = '';
+    final selected = await showDialog<CustomerProfile>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final normalized = query.trim().toLowerCase();
+          final filtered = _customers.where((customer) {
+            if (normalized.isEmpty) return true;
+            return customer.fullName.toLowerCase().contains(normalized) ||
+                customer.phone.toLowerCase().contains(normalized);
+          }).toList(growable: false);
+
+          return AlertDialog(
+            title: const Text('Tìm khách'),
+            content: SizedBox(
+              width: 520,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    key: const Key('appointment-customer-search-field'),
+                    controller: controller,
+                    autofocus: true,
+                    onChanged: (value) {
+                      setDialogState(() => query = value);
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập tên hoặc số điện thoại',
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(child: Text('Không tìm thấy khách'))
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) =>
+                                const PremiumDivider(indent: 42),
+                            itemBuilder: (context, index) {
+                              final customer = filtered[index];
+                              return ListTile(
+                                onTap: () =>
+                                    Navigator.of(dialogContext).pop(customer),
+                                leading: const Icon(Icons.person_outline),
+                                title: Text(customer.fullName),
+                                subtitle: Text(customer.phone),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Đóng'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    controller.dispose();
+    if (selected == null || !mounted) return;
+    setState(() => _selectedCustomerId = selected.id);
+  }
+
+  Future<void> _createCustomer() async {
+    final input = await showDialog<CustomerUpsertInput>(
+      context: context,
+      builder: (_) => const _AppointmentQuickCustomerDialog(),
+    );
+    if (input == null || !mounted) return;
+
+    try {
+      final saved = await widget.onCreateCustomer(input);
+      if (!mounted) return;
+      setState(() {
+        _customers = [
+          ..._customers.where((customer) => customer.id != saved.id),
+          saved,
+        ];
+        _selectedCustomerId = saved.id;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Không thể thêm khách'),
+          content: Text(_appointmentSaveErrorMessage(error)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Đã hiểu'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _submit() {
@@ -467,13 +639,11 @@ class _AppointmentEditorDialogState
   }
 
   String? _resolveInitialCustomerId(AppointmentEntry? appointment) {
-    if (appointment == null) {
-      return widget.customers.isEmpty ? null : widget.customers.first.id;
-    }
+    if (appointment == null) return null;
     for (final customer in widget.customers) {
       if (customer.id == appointment.customerId) return customer.id;
     }
-    return widget.customers.isEmpty ? null : widget.customers.first.id;
+    return null;
   }
 
   List<String> _resolveInitialServiceIds(AppointmentEntry? appointment) {
@@ -512,7 +682,7 @@ class _AppointmentEditorDialogState
   CustomerProfile? get _selectedCustomer {
     final id = _selectedCustomerId;
     if (id == null) return null;
-    for (final customer in widget.customers) {
+    for (final customer in _customers) {
       if (customer.id == id) return customer;
     }
     return null;
@@ -549,5 +719,91 @@ class _AppointmentEditorDialogState
       if (employee['id']?.toString() == id) return employee;
     }
     return null;
+  }
+}
+
+class _AppointmentQuickCustomerDialog extends StatefulWidget {
+  const _AppointmentQuickCustomerDialog();
+
+  @override
+  State<_AppointmentQuickCustomerDialog> createState() =>
+      _AppointmentQuickCustomerDialogState();
+}
+
+class _AppointmentQuickCustomerDialogState
+    extends State<_AppointmentQuickCustomerDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const Key('appointment-quick-customer-dialog'),
+      title: const Text('Thêm khách mới'),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const Key('appointment-quick-customer-name'),
+                controller: _nameController,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Họ và tên'),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Nhập họ và tên khách hàng'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('appointment-quick-customer-phone'),
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration:
+                    const InputDecoration(labelText: 'Số điện thoại'),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Nhập số điện thoại'
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton.icon(
+          key: const Key('appointment-quick-customer-save'),
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.of(context).pop(
+              CustomerUpsertInput(
+                fullName: _nameController.text.trim(),
+                phone: _phoneController.text.trim(),
+                email: '',
+                tier: 'Member',
+                favoriteService: '',
+                hairProfile: '',
+                note: '',
+              ),
+            );
+          },
+          icon: const Icon(Icons.check_rounded),
+          label: const Text('Lưu khách'),
+        ),
+      ],
+    );
   }
 }

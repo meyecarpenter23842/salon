@@ -10,6 +10,7 @@ import '../../../../app/navigation/flow_navigation.dart';
 import '../../../../core/models/appointment_entry.dart';
 import '../../../../core/models/appointment_upsert_input.dart';
 import '../../../../core/models/customer_profile.dart';
+import '../../../../core/models/customer_upsert_input.dart';
 import '../../../../core/models/invoice_draft.dart';
 import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/providers/repository_providers.dart';
@@ -27,6 +28,8 @@ part 'appointments_detail_sheet.dart';
 part 'appointments_invoice_summary.dart';
 part 'appointment_editor_form.dart';
 part 'appointment_helpers.dart';
+
+enum AppointmentEditorMode { appointment, receive }
 
 final appointmentStatusFilterProvider = StateProvider<String>(
   (ref) => 'Tất cả',
@@ -105,6 +108,7 @@ Future<void> openAppointmentEditor(
   String? initialEmployeeId,
   String? initialTimeLabel,
   String? initialDayLabel,
+  AppointmentEditorMode mode = AppointmentEditorMode.appointment,
 }) {
   return _openAppointmentEditor(
     context,
@@ -113,6 +117,7 @@ Future<void> openAppointmentEditor(
     initialEmployeeId: initialEmployeeId,
     initialTimeLabel: initialTimeLabel,
     initialDayLabel: initialDayLabel,
+    mode: mode,
   );
 }
 
@@ -123,6 +128,7 @@ Future<void> _openAppointmentEditor(
   String? initialEmployeeId,
   String? initialTimeLabel,
   String? initialDayLabel,
+  AppointmentEditorMode mode = AppointmentEditorMode.appointment,
 }) async {
   if (_blockPaidAppointment(context, appointment)) return;
 
@@ -147,6 +153,14 @@ Future<void> _openAppointmentEditor(
       initialEmployeeId: initialEmployeeId,
       initialTimeLabel: initialTimeLabel,
       initialDayLabel: initialDayLabel,
+      mode: mode,
+      onCreateCustomer: (customerInput) async {
+        final saved = await ref
+            .read(customersRepositoryProvider)
+            .saveCustomer(customerInput);
+        ref.invalidate(customersViewProvider);
+        return saved;
+      },
     ),
   );
   if (input == null || !context.mounted) return;
@@ -191,9 +205,11 @@ Future<void> _openAppointmentEditor(
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
-        appointment == null
-            ? 'Đã tạo lịch cho ${savedAppointment.customerName}'
-            : 'Đã cập nhật lịch cho ${savedAppointment.customerName}',
+        appointment == null && mode == AppointmentEditorMode.receive
+            ? 'Đã nhận ${savedAppointment.customerName}'
+            : appointment == null
+                ? 'Đã tạo lịch cho ${savedAppointment.customerName}'
+                : 'Đã cập nhật lịch cho ${savedAppointment.customerName}',
       ),
     ),
   );
