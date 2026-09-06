@@ -16,6 +16,7 @@
 - Doanh thu Reports/hiệu suất nhân viên dùng cùng cơ sở doanh thu thực thu sau giảm giá toàn bill; phần giảm toàn bill được phân bổ xuống dòng theo quy tắc deterministic.
 - Đã có tab Bán hàng để quản lý sản phẩm bán lẻ và cấu hình ẩn/hiện cho cửa sổ nhân viên.
 - Backup/Restore dữ liệu SQLite đã được tích hợp trong màn hình Cài đặt.
+- Windows release dùng NSIS installer và updater online qua public Cloudflare R2 feed.
 
 ## Dữ liệu local và Backup/Restore
 
@@ -53,10 +54,12 @@ Thư mục chứa bản sao lưu (Windows): `%APPDATA%\HairSpaManager\data\backu
 
 ## Công nghệ
 
-- Flutter
+- Flutter Windows native
 - Riverpod
 - SQLite với `sqflite` và `sqflite_common_ffi`
 - SharedPreferences cho thiết lập cục bộ
+- NSIS cho Windows installer
+- Cloudflare R2 public feed cho updater
 
 ## Chạy ứng dụng ở môi trường dev
 
@@ -79,17 +82,38 @@ flutter analyze
 flutter test
 ```
 
-PR vào `main` còn có gate Windows tự động: chạy toàn bộ `flutter test` trên `windows-latest`, build `flutter build windows --release`, sau đó mở `salonmanager.exe` từ output Release và xác nhận process khởi động ổn định trước khi đóng.
+PR vào `main` còn có gate Windows tự động: chạy toàn bộ `flutter test` trên `windows-latest`, build `flutter build windows --release`, smoke main + Staff process, đóng gói NSIS để verify và kiểm tra contract updater. CI không publish/upload release.
 
 ## Build phát hành Windows
+
+Build Flutter thuần:
 
 ```bash
 flutter build windows --release
 ```
 
-Output phát hành nằm dưới:
+Output Flutter nằm dưới:
 
 - `build/windows/x64/runner/Release/`
+
+Tạo installer NSIS có thể chọn ổ/thư mục:
+
+```powershell
+npm run package:installer
+```
+
+Tạo installer + metadata updater:
+
+```powershell
+npm run package:update
+```
+
+Output release local:
+
+- `dist/windows-release/Salon-Setup-x.x.x.exe`
+- `dist/windows-release/latest.json`
+
+Hướng dẫn đầy đủ: `WINDOWS_RELEASE.md`.
 
 ## Dữ liệu cục bộ và backup
 
@@ -106,6 +130,8 @@ Khuyến nghị vận hành:
 Lưu ý:
 
 - Trên Windows, đường dẫn database không phụ thuộc thư mục chạy exe vì app resolve theo APPDATA.
+- Installer/update chỉ thay application payload trong thư mục cài đặt; không xóa/migrate runtime data AppData.
+- Không có logic scan/copy/adopt data từ portable hoặc ứng dụng cũ bên ngoài.
 - Thiết lập cục bộ như tên salon, tiền tệ, nhắc lịch đang lưu qua SharedPreferences trên máy người dùng.
 
 ## Trạng thái dữ liệu thật và dữ liệu demo
@@ -136,22 +162,36 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 4. Sửa tên salon, tiền tệ, nhắc lịch trong Thiết lập và mở lại app để xác nhận persistence.
 5. Mở Overview và Reports để xác nhận số liệu thay đổi theo dữ liệu runtime trên máy.
 6. Xác nhận PR CI xanh cả **Analyze and test** và **Windows regression smoke** trên đúng head SHA.
-7. Trước publish thực tế vẫn chạy một lượt tương tác Windows thủ công cho PDF/CSV/backup-restore và các đường dẫn local phụ thuộc OS.
+7. Chạy `package:update`, verify installer/updater artifact và test upgrade thực tế qua R2 trước khi phát hành cho máy salon.
+8. Trước publish thực tế vẫn chạy một lượt tương tác Windows thủ công cho PDF/CSV/backup-restore và các đường dẫn local phụ thuộc OS.
 
 ## Hạn chế còn lại
 
 - Chưa có refund/void paid invoice đầy đủ.
 - Chưa tự trừ kho khi checkout hoặc chặn bán khi hết tồn.
 - Chưa có payroll/chấm công hoàn chỉnh.
-- README này mô tả publish nội bộ trên Windows, chưa bao gồm code signing hay installer chuyên biệt.
+- Installer hiện chưa code-sign; Windows SmartScreen có thể cảnh báo ở lần phát hành đầu.
 
-## Phương án update offline đã chốt
+## Windows auto update qua R2
 
-- Kênh update ưu tiên hiện tại là offline nội bộ, không phụ thuộc cloud.
-- Admin publish một `version.json` và file installer `.exe` vào thư mục update chung.
-- App ở phase tiếp theo chỉ cần đọc manifest này để hiện thông báo có bản mới và mở installer.
+Public feed:
 
-Tham khảo chi tiết tại:
+```text
+https://pub-3f0aad8b18e146eb9eb09b9529063295.r2.dev
+```
 
-- `offline_update/README.md`
-- `offline_update/version.json.example`
+App chỉ chứa public URL. Không chứa Account ID, S3 endpoint, Access Key hay Secret.
+
+Luồng UI:
+
+```text
+Kiểm tra cập nhật
+→ phát hiện bản mới
+→ tải và hiện %
+→ xác minh SHA-256
+→ Khởi động lại & cập nhật
+→ app mở lại
+→ chỉ báo thành công nếu version sau restart đúng target
+```
+
+Release được build local. Upload R2 thủ công theo thứ tự installer trước và `latest.json` cuối cùng. Xem `WINDOWS_RELEASE.md` để biết quy trình chi tiết.

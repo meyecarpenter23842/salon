@@ -1,0 +1,15 @@
+{
+  "name": "salonmanager-windows-tooling",
+  "version": "1.8.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "flutter analyze",
+    "unit": "flutter test",
+    "build": "flutter build windows --release",
+    "smoke:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/smoke-windows.ps1",
+    "package:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/package-installer.ps1",
+    "package:update": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/package-update.ps1",
+    "verify:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/verify-installer.ps1",
+    "verify:updater": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/verify-updater.ps1"
+  }
+}

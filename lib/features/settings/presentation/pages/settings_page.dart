@@ -7,11 +7,11 @@ import '../../../../core/models/offline_update_summary.dart';
 import '../../../../core/models/settings_upsert_input.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/services/backup_service.dart';
-import '../../../../core/services/offline_update_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/salon_theme_template.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
+import 'windows_update_panel.dart';
 
 Future<void> _openLocalSettingsEditor(
   BuildContext context,
@@ -112,7 +112,6 @@ class _SettingsView extends ConsumerWidget {
         offlineUpdateSummary.valueOrNull?.currentVersion ?? 'Đang kiểm tra';
     final latestVersion =
         offlineUpdateSummary.valueOrNull?.manifest?.latestVersion ?? 'Chưa có';
-    final licenseKey = (summary['licenseKey'] ?? '').toString().trim();
 
     final hubItems = [
       _SettingsHubItem(
@@ -163,17 +162,17 @@ class _SettingsView extends ConsumerWidget {
       _SettingsHubItem(
         keyName: 'update',
         icon: Icons.system_update_alt_outlined,
-        title: 'Update & License',
-        subtitle: 'Nguồn update offline, entitlement theo máy và bộ cài mới.',
+        title: 'Cập nhật Salon',
+        subtitle: 'Kiểm tra và cập nhật bản Windows mới từ kênh Cloudflare R2.',
         metrics: [
           'Current $currentVersion',
-          licenseKey.isEmpty ? 'Chưa có license' : _maskLicenseKey(licenseKey),
+          'R2 public feed',
         ],
         onTap: () => _showSettingsHubDialog(
           context,
           icon: Icons.system_update_alt_outlined,
-          title: 'Update & License',
-          child: _UpdatePanel(summary: summary),
+          title: 'Cập nhật Salon',
+          child: const _UpdatePanel(),
         ),
       ),
       _SettingsHubItem(
@@ -686,10 +685,6 @@ class _LocalSettingsPanel extends ConsumerWidget {
           const PremiumDivider(indent: 42),
           _SettingInfoRow(icon: Icons.notifications_active_outlined, label: 'Nhắc lịch', value: summary['appointmentReminder'].toString()),
           const PremiumDivider(indent: 42),
-          _SettingInfoRow(icon: Icons.folder_outlined, label: 'Nguồn update offline', value: _displayPath(summary['offlineUpdatePath'])),
-          const PremiumDivider(indent: 42),
-          _SettingInfoRow(icon: Icons.key_outlined, label: 'License key update', value: _displayLicense(summary['licenseKey'])),
-          const PremiumDivider(indent: 42),
           _SettingInfoRow(icon: Icons.fingerprint_outlined, label: 'Mã máy', value: _displayPath(summary['deviceId'])),
           const PremiumDivider(indent: 42),
           _SettingInfoRow(icon: Icons.computer_outlined, label: 'Tên máy', value: _displayPath(summary['deviceName'])),
@@ -750,17 +745,15 @@ class _PaymentConfigPanel extends ConsumerWidget {
 }
 
 class _UpdatePanel extends StatelessWidget {
-  const _UpdatePanel({required this.summary});
-
-  final Map<String, Object?> summary;
+  const _UpdatePanel();
 
   @override
   Widget build(BuildContext context) {
-    return PremiumSectionCard(
+    return const PremiumSectionCard(
       icon: Icons.system_update_alt_outlined,
-      title: 'Update offline & license',
-      subtitle: 'Kiểm tra manifest thủ công, entitlement theo máy và mở bộ cài khi được phép.',
-      child: _OfflineUpdateStatusBlock(summary: summary),
+      title: 'Cập nhật Salon',
+      subtitle: 'Kênh cập nhật Windows công khai qua Cloudflare R2. Không dùng credential trong app.',
+      child: WindowsUpdatePanel(),
     );
   }
 }
@@ -794,15 +787,11 @@ class _LocalSettingsEditorDialog extends StatefulWidget {
 class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> {
   static const _currencyOptions = ['VND'];
   static const _reminderOptions = ['Bật', 'Tắt'];
-  static const _autoCheckOptions = ['Tắt'];
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _salonNameController;
-  late final TextEditingController _offlineUpdatePathController;
-  late final TextEditingController _licenseKeyController;
   late String _currency;
   late String _appointmentReminder;
-  late String _autoCheckOfflineUpdate;
 
   @override
   void initState() {
@@ -810,26 +799,17 @@ class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> 
     _salonNameController = TextEditingController(
       text: widget.summary['salonName']?.toString() ?? '',
     );
-    _offlineUpdatePathController = TextEditingController(
-      text: widget.summary['offlineUpdatePath']?.toString() ?? '',
-    );
-    _licenseKeyController = TextEditingController(
-      text: widget.summary['licenseKey']?.toString() ?? '',
-    );
     _currency = _currencyOptions.contains(widget.summary['currency'])
         ? widget.summary['currency'].toString()
         : _currencyOptions.first;
     _appointmentReminder = _reminderOptions.contains(widget.summary['appointmentReminder'])
         ? widget.summary['appointmentReminder'].toString()
         : _reminderOptions.first;
-    _autoCheckOfflineUpdate = _autoCheckOptions.first;
   }
 
   @override
   void dispose() {
     _salonNameController.dispose();
-    _offlineUpdatePathController.dispose();
-    _licenseKeyController.dispose();
     super.dispose();
   }
 
@@ -855,28 +835,9 @@ class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> 
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  controller: _offlineUpdatePathController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nguồn update offline',
-                    hintText: '\\SERVER-PC\\salon-update hoặc https://.../manifest',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _licenseKeyController,
-                  decoration: const InputDecoration(
-                    labelText: 'License key updater',
-                    hintText: 'Nhập key được cấp để kiểm tra quyền update',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
                   initialValue: widget.summary['deviceId']?.toString() ?? '',
                   readOnly: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Mã máy',
-                    helperText: 'App tự sinh và dùng để ràng buộc quyền update theo máy.',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Mã máy'),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -907,15 +868,6 @@ class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> 
                     if (value != null) setState(() => _appointmentReminder = value);
                   },
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _autoCheckOfflineUpdate,
-                  decoration: const InputDecoration(labelText: 'Tự kiểm tra update offline'),
-                  items: _autoCheckOptions
-                      .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-                      .toList(),
-                  onChanged: null,
-                ),
               ],
             ),
           ),
@@ -935,9 +887,9 @@ class _LocalSettingsEditorDialogState extends State<_LocalSettingsEditorDialog> 
         salonName: _salonNameController.text.trim(),
         currency: _currency,
         appointmentReminder: _appointmentReminder,
-        offlineUpdatePath: _offlineUpdatePathController.text.trim(),
-        autoCheckOfflineUpdate: _autoCheckOfflineUpdate,
-        licenseKey: _licenseKeyController.text.trim(),
+        offlineUpdatePath: widget.summary['offlineUpdatePath']?.toString() ?? '',
+        autoCheckOfflineUpdate: widget.summary['autoCheckOfflineUpdate']?.toString() ?? 'Tắt',
+        licenseKey: widget.summary['licenseKey']?.toString() ?? '',
         bankName: '',
         accountNumber: '',
         accountHolder: '',
@@ -1063,178 +1015,6 @@ class _PaymentConfigEditorDialogState extends State<_PaymentConfigEditorDialog> 
         qrMode: _qrMode,
         transferContentTemplate: _transferTemplateController.text.trim(),
       ),
-    );
-  }
-}
-
-class _OfflineUpdateStatusBlock extends ConsumerStatefulWidget {
-  const _OfflineUpdateStatusBlock({required this.summary});
-
-  final Map<String, Object?> summary;
-
-  @override
-  ConsumerState<_OfflineUpdateStatusBlock> createState() => _OfflineUpdateStatusBlockState();
-}
-
-class _OfflineUpdateStatusBlockState extends ConsumerState<_OfflineUpdateStatusBlock> {
-  bool _isChecking = false;
-  bool _isInstalling = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final updateState = ref.watch(offlineUpdateSummaryProvider);
-
-    return updateState.when(
-      data: (item) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              PremiumStatusPill(
-                label: item.statusLabel,
-                tone: item.hasUpdate ? AppColors.warning : AppColors.success,
-              ),
-              if (!item.currentVersionSupported)
-                PremiumStatusPill(label: 'Update bắt buộc', tone: AppColors.warning),
-              if (item.updateAllowed)
-                PremiumStatusPill(label: 'Được phép cài', tone: AppColors.success),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            item.statusDetail,
-            style: TextStyle(color: AppColors.textSecondary, height: 1.45),
-          ),
-          const SizedBox(height: 10),
-          _SettingInfoRow(icon: Icons.description_outlined, label: 'Manifest đang đọc', value: _displayPath(item.manifestPath)),
-          const PremiumDivider(indent: 42),
-          _SettingInfoRow(icon: Icons.desktop_windows_outlined, label: 'Phiên bản app', value: item.currentVersion),
-          const PremiumDivider(indent: 42),
-          _SettingInfoRow(icon: Icons.new_releases_outlined, label: 'Bản mới nhất', value: item.manifest?.latestVersion ?? 'Chưa có manifest hợp lệ'),
-          const PremiumDivider(indent: 42),
-          _SettingInfoRow(
-            icon: Icons.verified_user_outlined,
-            label: 'Trạng thái tương thích',
-            value: item.currentVersionSupported ? 'Version hiện tại còn được hỗ trợ' : 'Cần update bắt buộc',
-          ),
-          const PremiumDivider(indent: 42),
-          _SettingInfoRow(
-            icon: Icons.lock_open_outlined,
-            label: 'Quyền mở bộ cài',
-            value: item.updateAllowed ? 'Được phép' : 'Chưa được phép',
-          ),
-          if ((item.entitlementMessage ?? '').isNotEmpty) ...[
-            const PremiumDivider(indent: 42),
-            _SettingInfoRow(icon: Icons.key_outlined, label: 'Entitlement', value: item.entitlementMessage!),
-          ],
-          if ((item.manifest?.message ?? '').isNotEmpty) ...[
-            const PremiumDivider(indent: 42),
-            _SettingInfoRow(icon: Icons.campaign_outlined, label: 'Thông báo phát hành', value: item.manifest!.message),
-          ],
-          if ((item.errorMessage ?? '').isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                item.errorMessage!,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.45),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              FilledButton.icon(
-                onPressed: _isChecking ? null : _checkForUpdate,
-                icon: _isChecking
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.system_update_alt_outlined),
-                label: Text(_isChecking ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _isInstalling || !item.hasUpdate || !item.updateAllowed
-                    ? null
-                    : () => _downloadAndInstall(item),
-                icon: _isInstalling
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.download_outlined),
-                label: Text(_isInstalling ? 'Đang tải bộ cài...' : 'Tải và cài đặt'),
-              ),
-            ],
-          ),
-        ],
-      ),
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 10),
-        child: LinearProgressIndicator(minHeight: 2),
-      ),
-      error: (error, _) => PremiumEmptyState(
-        icon: Icons.system_update_alt_outlined,
-        title: 'Không đọc được updater',
-        message: '$error',
-      ),
-    );
-  }
-
-  Future<void> _checkForUpdate() async {
-    final configuredPath = (widget.summary['offlineUpdatePath'] ?? '').toString().trim();
-    if (configuredPath.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hãy cấu hình nguồn update offline trước khi kiểm tra.')),
-      );
-      return;
-    }
-
-    setState(() => _isChecking = true);
-    final summary = await const OfflineUpdateService().buildSummary(
-      configuredPath: configuredPath,
-      autoCheckEnabled: false,
-      performCheck: true,
-      licenseKey: (widget.summary['licenseKey'] ?? '').toString().trim(),
-      deviceId: (widget.summary['deviceId'] ?? '').toString().trim(),
-      deviceName: (widget.summary['deviceName'] ?? '').toString().trim(),
-    );
-
-    ref.read(offlineUpdateLastResultProvider.notifier).state = summary;
-    ref.read(offlineUpdateManualCheckNonceProvider.notifier).state++;
-    ref.invalidate(offlineUpdateSummaryProvider);
-    if (!mounted) return;
-
-    setState(() => _isChecking = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(summary.statusLabel)),
-    );
-  }
-
-  Future<void> _downloadAndInstall(OfflineUpdateSummary summary) async {
-    final downloadPath = summary.manifest?.downloadPath ?? '';
-    if (downloadPath.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Manifest chưa có đường dẫn bộ cài hợp lệ.')),
-      );
-      return;
-    }
-
-    setState(() => _isInstalling = true);
-    final result = await const OfflineUpdateService().downloadAndLaunchInstaller(
-      installerPath: downloadPath,
-      targetVersion: summary.manifest?.latestVersion ?? '',
-      expectedSha256: summary.manifest?.sha256 ?? '',
-    );
-    if (!mounted) return;
-
-    setState(() => _isInstalling = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.detail)),
     );
   }
 }
@@ -1544,16 +1324,6 @@ class _RestoreBackupDialogState extends State<_RestoreBackupDialog> {
 String _displayPath(Object? value) {
   final text = value?.toString().trim() ?? '';
   return text.isEmpty ? 'Chưa cấu hình' : text;
-}
-
-String _displayLicense(Object? value) {
-  final text = value?.toString().trim() ?? '';
-  return text.isEmpty ? 'Chưa nhập' : _maskLicenseKey(text);
-}
-
-String _maskLicenseKey(String value) {
-  if (value.length <= 8) return value;
-  return '${value.substring(0, 4)}...${value.substring(value.length - 4)}';
 }
 
 String _configuredOrFallback(Object? value, String fallback) {

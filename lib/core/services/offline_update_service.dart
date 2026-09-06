@@ -8,8 +8,17 @@ import 'package:path/path.dart' as path;
 import '../models/offline_update_manifest.dart';
 import '../models/offline_update_summary.dart';
 
+const salonUpdateFeedBaseUrl =
+    'https://pub-3f0aad8b18e146eb9eb09b9529063295.r2.dev';
+const salonUpdateManifestUrl = '$salonUpdateFeedBaseUrl/latest.json';
+
+typedef UpdateDownloadProgress = void Function(double percent);
+
 class OfflineUpdateService {
   const OfflineUpdateService();
+
+  static const feedBaseUrl = salonUpdateFeedBaseUrl;
+  static const manifestUrl = salonUpdateManifestUrl;
 
   Future<OfflineUpdateSummary> buildSummary({
     required String configuredPath,
@@ -19,79 +28,43 @@ class OfflineUpdateService {
     String deviceId = '',
     String deviceName = '',
   }) async {
-    await _UpdateAuditLogger.instance.log(
-      action: 'check_start',
-      outcome: 'info',
-      detail: 'Bắt đầu kiểm tra cập nhật offline.',
-      context: {'configuredPath': configuredPath},
-    );
-
+    // The old arguments stay in the method signature so current providers and
+    // stored settings remain source-compatible. The Windows updater itself now
+    // uses one fixed public R2 feed and never sends local identifiers/secrets.
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version.trim().isEmpty
         ? '0.0.0'
         : packageInfo.version.trim();
-    final normalizedPath = configuredPath.trim();
-
-    if (normalizedPath.isEmpty) {
-      await _UpdateAuditLogger.instance.log(
-        action: 'check_skip',
-        outcome: 'no_config',
-        detail: 'Chưa cấu hình nguồn update.',
-      );
-      return OfflineUpdateSummary(
-        currentVersion: currentVersion,
-        configuredPath: normalizedPath,
-        manifestPath: '',
-        autoCheckEnabled: autoCheckEnabled,
-        statusLabel: 'Chưa cấu hình nguồn update',
-        statusDetail:
-            'Hãy nhập đường dẫn thư mục chứa version.json hoặc URL manifest update.',
-        hasUpdate: false,
-        currentVersionSupported: true,
-        updateAllowed: true,
-      );
-    }
 
     if (!performCheck) {
-      await _UpdateAuditLogger.instance.log(
-        action: 'check_skip',
-        outcome: 'manual_mode',
-        detail: 'Đang ở chế độ kiểm tra thủ công.',
-      );
       return OfflineUpdateSummary(
         currentVersion: currentVersion,
-        configuredPath: normalizedPath,
-        manifestPath: _resolveManifestPath(
-          normalizedPath,
-          licenseKey: licenseKey,
-          deviceId: deviceId,
-          deviceName: deviceName,
-          currentVersion: currentVersion,
-        ),
-        autoCheckEnabled: autoCheckEnabled,
-        statusLabel: 'Sẵn sàng kiểm tra thủ công',
+        configuredPath: feedBaseUrl,
+        manifestPath: manifestUrl,
+        autoCheckEnabled: false,
+        statusLabel: 'Sẵn sàng kiểm tra cập nhật',
         statusDetail:
-            'Nhấn "Kiểm tra cập nhật" trong Cài đặt để lấy thông tin bản mới.',
+            'Nhấn "Kiểm tra cập nhật" để đọc bản phát hành mới nhất từ R2.',
         hasUpdate: false,
         currentVersionSupported: true,
         updateAllowed: true,
       );
     }
 
-    final manifestPath = _resolveManifestPath(
-      normalizedPath,
-      licenseKey: licenseKey,
-      deviceId: deviceId,
-      deviceName: deviceName,
-      currentVersion: currentVersion,
+    await _UpdateAuditLogger.instance.log(
+      action: 'check_start',
+      outcome: 'info',
+      detail: 'Bắt đầu kiểm tra cập nhật online.',
+      context: {'manifestUrl': manifestUrl},
     );
 
     try {
-      final resolved = await _readManifest(manifestPath);
-      final manifest = resolved.manifest;
+      final manifest = await _readManifest(manifestUrl);
       final hasUpdate =
-          _compareVersions(manifest.latestVersion, currentVersion) > 0;
-      final currentVersionSupported = resolved.currentVersionSupported;
+          compareSalonVersions(manifest.latestVersion, currentVersion) > 0;
+      final minimum = manifest.minimumSupportedVersion.trim();
+      final currentVersionSupported = minimum.isEmpty ||
+          compareSalonVersions(currentVersion, minimum) >= 0;
 
       await _UpdateAuditLogger.instance.log(
         action: 'check_done',
@@ -102,43 +75,41 @@ class OfflineUpdateService {
         context: {
           'currentVersion': currentVersion,
           'latestVersion': manifest.latestVersion,
-          'manifestPath': manifestPath,
+          'manifestUrl': manifestUrl,
         },
       );
 
       return OfflineUpdateSummary(
         currentVersion: currentVersion,
-        configuredPath: normalizedPath,
-        manifestPath: manifestPath,
-        autoCheckEnabled: autoCheckEnabled,
+        configuredPath: feedBaseUrl,
+        manifestPath: manifestUrl,
+        autoCheckEnabled: false,
         statusLabel: hasUpdate
             ? 'Có bản cập nhật mới'
-            : 'Đã đồng bộ manifest update',
+            : 'Salon đang là bản mới nhất',
         statusDetail: hasUpdate
-            ? 'Đã phát hiện bản ${manifest.latestVersion}. App hiện tại đang ở $currentVersion.'
-            : 'Manifest hợp lệ. Chưa có bản mới hơn $currentVersion.',
+            ? 'Đã phát hiện Salon ${manifest.latestVersion}. Bản đang chạy là $currentVersion.'
+            : 'Không có bản mới hơn $currentVersion trên kênh cập nhật công khai.',
         hasUpdate: hasUpdate,
         currentVersionSupported: currentVersionSupported,
-        updateAllowed: resolved.updateAllowed,
+        updateAllowed: true,
         manifest: manifest,
-        entitlementReason: resolved.entitlementReason,
-        entitlementMessage: resolved.entitlementMessage,
       );
     } catch (error) {
       await _UpdateAuditLogger.instance.log(
         action: 'check_error',
         outcome: 'error',
         detail: error.toString(),
-        context: {'manifestPath': manifestPath},
+        context: {'manifestUrl': manifestUrl},
       );
       return OfflineUpdateSummary(
         currentVersion: currentVersion,
-        configuredPath: normalizedPath,
-        manifestPath: manifestPath,
-        autoCheckEnabled: autoCheckEnabled,
-        statusLabel: 'Không đọc được manifest update',
+        configuredPath: feedBaseUrl,
+        manifestPath: manifestUrl,
+        autoCheckEnabled: false,
+        statusLabel: 'Không kiểm tra được cập nhật',
         statusDetail:
-            'Nguồn update đã cấu hình nhưng app chưa đọc được version.json.',
+            'Không đọc được latest.json từ kênh cập nhật công khai. Dữ liệu Salon không bị ảnh hưởng.',
         hasUpdate: false,
         currentVersionSupported: true,
         updateAllowed: false,
@@ -147,21 +118,26 @@ class OfflineUpdateService {
     }
   }
 
-  Future<OfflineUpdateInstallResult> downloadAndLaunchInstaller({
+  Future<OfflineUpdateInstallResult> downloadInstaller({
     required String installerPath,
     required String targetVersion,
-    String expectedSha256 = '',
+    required String expectedSha256,
+    UpdateDownloadProgress? onProgress,
   }) async {
     final normalizedPath = installerPath.trim();
-    if (normalizedPath.isEmpty) {
-      await _UpdateAuditLogger.instance.log(
-        action: 'install_blocked',
-        outcome: 'invalid_manifest',
-        detail: 'Manifest thiếu đường dẫn bộ cài.',
-      );
+    final normalizedExpectedHash = expectedSha256.trim().toLowerCase();
+
+    if (!_isSecureRemotePath(normalizedPath)) {
       return const OfflineUpdateInstallResult(
         success: false,
-        detail: 'Manifest chưa có đường dẫn bộ cài hợp lệ.',
+        detail: 'Đường dẫn bộ cài phải là HTTPS hợp lệ.',
+      );
+    }
+    if (normalizedExpectedHash.isEmpty) {
+      return const OfflineUpdateInstallResult(
+        success: false,
+        detail:
+            'Manifest thiếu SHA-256. Salon sẽ không cài gói cập nhật chưa được xác minh.',
       );
     }
 
@@ -173,301 +149,248 @@ class OfflineUpdateService {
         context: {'source': normalizedPath, 'targetVersion': targetVersion},
       );
 
-      final cacheDir = Directory(
-        path.join(Directory.systemTemp.path, 'hair_spa_manager', 'updates'),
-      );
-      if (!await cacheDir.exists()) {
-        await cacheDir.create(recursive: true);
-      }
-
+      final cacheDir = await _resolveUpdateCacheDirectory();
       final sourceName = _resolveInstallerFileName(normalizedPath);
-      final targetPath = path.join(
-        cacheDir.path,
-        '${DateTime.now().millisecondsSinceEpoch}_$sourceName',
+      final targetFile = File(
+        path.join(cacheDir.path, '${targetVersion}_$sourceName'),
       );
-      final targetFile = File(targetPath);
-
-      if (_isRemotePath(normalizedPath)) {
-        await _downloadRemoteFile(normalizedPath, targetFile);
-      } else {
-        final sourceFile = File(normalizedPath);
-        if (!await sourceFile.exists()) {
-          return OfflineUpdateInstallResult(
-            success: false,
-            detail: 'Không tìm thấy bộ cài tại $normalizedPath',
-          );
-        }
-        await sourceFile.copy(targetPath);
+      if (await targetFile.exists()) {
+        await targetFile.delete();
       }
 
-      final normalizedExpectedHash = expectedSha256.trim().toLowerCase();
-      if (normalizedExpectedHash.isNotEmpty) {
-        final actualHash = await _computeFileSha256(targetFile);
-        if (actualHash != normalizedExpectedHash) {
-          await _UpdateAuditLogger.instance.log(
-            action: 'verify_hash',
-            outcome: 'mismatch',
-            detail: 'SHA-256 không khớp, hủy mở installer.',
-            context: {
-              'expectedSha256': normalizedExpectedHash,
-              'actualSha256': actualHash,
-              'file': targetPath,
-            },
-          );
-          if (await targetFile.exists()) {
-            await targetFile.delete();
-          }
-          return const OfflineUpdateInstallResult(
-            success: false,
-            detail:
-                'Gói cập nhật không hợp lệ (SHA-256 mismatch). Vui lòng tải lại hoặc kiểm tra nguồn phát hành.',
-          );
-        }
+      await _downloadRemoteFile(
+        normalizedPath,
+        targetFile,
+        onProgress: onProgress,
+      );
 
+      final actualHash = await _computeFileSha256(targetFile);
+      if (actualHash != normalizedExpectedHash) {
         await _UpdateAuditLogger.instance.log(
           action: 'verify_hash',
-          outcome: 'ok',
-          detail: 'SHA-256 hợp lệ.',
-          context: {'file': targetPath, 'sha256': actualHash},
+          outcome: 'mismatch',
+          detail: 'SHA-256 không khớp, hủy gói cập nhật.',
+          context: {
+            'expectedSha256': normalizedExpectedHash,
+            'actualSha256': actualHash,
+            'file': targetFile.path,
+          },
         );
-      } else {
-        await _UpdateAuditLogger.instance.log(
-          action: 'verify_hash',
-          outcome: 'skipped',
-          detail: 'Manifest không cung cấp SHA-256, bỏ qua bước xác minh.',
-          context: {'file': targetPath},
+        await targetFile.delete();
+        return const OfflineUpdateInstallResult(
+          success: false,
+          detail:
+              'Gói cập nhật không hợp lệ (SHA-256 mismatch). Vui lòng tải lại.',
         );
       }
-
-      await Process.start(
-        'cmd',
-        ['/c', 'start', '', targetPath],
-        runInShell: true,
-        mode: ProcessStartMode.detached,
-      );
 
       await _UpdateAuditLogger.instance.log(
-        action: 'install_launch',
-        outcome: 'success',
-        detail: 'Đã mở installer thành công.',
-        context: {'file': targetPath, 'targetVersion': targetVersion},
+        action: 'verify_hash',
+        outcome: 'ok',
+        detail: 'SHA-256 hợp lệ.',
+        context: {'file': targetFile.path, 'sha256': actualHash},
       );
+      onProgress?.call(100);
 
       return OfflineUpdateInstallResult(
         success: true,
-        localInstallerPath: targetPath,
+        localInstallerPath: targetFile.path,
         detail:
-            'Đã tải và mở bộ cài $targetVersion. Hãy đóng app để hoàn tất cập nhật.',
+            'Đã tải Salon $targetVersion. Sẵn sàng khởi động lại và cập nhật.',
       );
     } catch (error) {
       await _UpdateAuditLogger.instance.log(
-        action: 'install_error',
+        action: 'download_error',
         outcome: 'error',
         detail: error.toString(),
         context: {'source': normalizedPath, 'targetVersion': targetVersion},
       );
       return OfflineUpdateInstallResult(
         success: false,
-        detail: 'Không thể tải/cài đặt bản update: $error',
+        detail: 'Không thể tải bản cập nhật: $error',
       );
     }
   }
 
-  Future<String> _computeFileSha256(File file) async {
-    final bytes = await file.readAsBytes();
-    return sha256.convert(bytes).toString().toLowerCase();
-  }
-
-  String _resolveManifestPath(
-    String rawPath, {
-    required String licenseKey,
-    required String deviceId,
-    required String deviceName,
-    required String currentVersion,
-  }) {
-    if (_isRemotePath(rawPath) ||
-        rawPath.toLowerCase().endsWith('version.json')) {
-      if (!_isRemotePath(rawPath)) {
-        return rawPath;
-      }
-
-      final uri = Uri.parse(rawPath);
-      final nextQuery = Map<String, String>.from(uri.queryParameters);
-      nextQuery['appVersion'] = currentVersion;
-      if (licenseKey.trim().isNotEmpty) {
-        nextQuery['licenseKey'] = licenseKey.trim();
-      }
-      if (deviceId.trim().isNotEmpty) {
-        nextQuery['deviceId'] = deviceId.trim();
-      }
-      if (deviceName.trim().isNotEmpty) {
-        nextQuery['deviceName'] = deviceName.trim();
-      }
-      return uri.replace(queryParameters: nextQuery).toString();
+  Future<OfflineUpdateInstallResult> installDownloadedUpdate({
+    required String localInstallerPath,
+    required String fromVersion,
+    required String targetVersion,
+  }) async {
+    if (!Platform.isWindows) {
+      return const OfflineUpdateInstallResult(
+        success: false,
+        detail: 'Cập nhật tự động hiện chỉ hỗ trợ Windows.',
+      );
     }
 
-    return path.join(rawPath, 'version.json');
+    final installer = File(localInstallerPath.trim());
+    if (!await installer.exists()) {
+      return const OfflineUpdateInstallResult(
+        success: false,
+        detail: 'Không tìm thấy bộ cài đã tải. Hãy tải lại bản cập nhật.',
+      );
+    }
+
+    try {
+      await _writePendingMarker(
+        fromVersion: fromVersion,
+        targetVersion: targetVersion,
+      );
+
+      final installDir = path.dirname(Platform.resolvedExecutable);
+      await Process.start(
+        installer.path,
+        [
+          '/S',
+          '/D=$installDir',
+        ],
+        mode: ProcessStartMode.detached,
+      );
+
+      await _UpdateAuditLogger.instance.log(
+        action: 'install_launch',
+        outcome: 'success',
+        detail: 'Đã chạy installer silent để cập nhật tại thư mục hiện tại.',
+        context: {
+          'file': installer.path,
+          'fromVersion': fromVersion,
+          'targetVersion': targetVersion,
+          'installDir': installDir,
+        },
+      );
+
+      return OfflineUpdateInstallResult(
+        success: true,
+        localInstallerPath: installer.path,
+        detail:
+            'Salon sẽ đóng, cập nhật tại thư mục đang cài và tự mở lại.',
+      );
+    } catch (error) {
+      await _clearPendingMarker();
+      await _UpdateAuditLogger.instance.log(
+        action: 'install_error',
+        outcome: 'error',
+        detail: error.toString(),
+        context: {'targetVersion': targetVersion},
+      );
+      return OfflineUpdateInstallResult(
+        success: false,
+        detail: 'Không thể khởi động trình cập nhật: $error',
+      );
+    }
   }
 
-  Future<_ResolvedOfflineUpdateSummary> _readManifest(
-    String manifestPath,
-  ) async {
-    final raw = _isRemotePath(manifestPath)
-        ? await _readRemoteText(manifestPath)
-        : await _readLocalText(manifestPath);
+  // Compatibility wrapper for any older caller. New UI intentionally uses the
+  // two-step downloadInstaller -> installDownloadedUpdate flow.
+  Future<OfflineUpdateInstallResult> downloadAndLaunchInstaller({
+    required String installerPath,
+    required String targetVersion,
+    String expectedSha256 = '',
+  }) {
+    return downloadInstaller(
+      installerPath: installerPath,
+      targetVersion: targetVersion,
+      expectedSha256: expectedSha256,
+    );
+  }
+
+  Future<UpdateRestartResult?> consumePostRestartResult() async {
+    final markerFile = await _resolvePendingMarkerFile();
+    if (!await markerFile.exists()) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(await markerFile.readAsString());
+      if (decoded is! Map<String, dynamic>) {
+        await markerFile.delete();
+        return null;
+      }
+      final fromVersion = decoded['fromVersion']?.toString() ?? '';
+      final targetVersion = decoded['targetVersion']?.toString() ?? '';
+      final currentVersion = (await PackageInfo.fromPlatform()).version.trim();
+      await markerFile.delete();
+
+      final completed = isExpectedInstalledVersion(
+        currentVersion: currentVersion,
+        fromVersion: fromVersion,
+        targetVersion: targetVersion,
+      );
+
+      if (completed) {
+        await _UpdateAuditLogger.instance.log(
+          action: 'post_restart',
+          outcome: 'success',
+          detail: 'Xác nhận app đã restart sang version mới.',
+          context: {
+            'fromVersion': fromVersion,
+            'targetVersion': targetVersion,
+            'currentVersion': currentVersion,
+          },
+        );
+        return UpdateRestartResult(
+          success: true,
+          fromVersion: fromVersion,
+          targetVersion: targetVersion,
+          currentVersion: currentVersion,
+          message:
+              'Đã cập nhật thành công từ $fromVersion lên $currentVersion.',
+        );
+      }
+
+      await _UpdateAuditLogger.instance.log(
+        action: 'post_restart',
+        outcome: 'not_completed',
+        detail: 'Version sau restart không khớp target update.',
+        context: {
+          'fromVersion': fromVersion,
+          'targetVersion': targetVersion,
+          'currentVersion': currentVersion,
+        },
+      );
+      return UpdateRestartResult(
+        success: false,
+        fromVersion: fromVersion,
+        targetVersion: targetVersion,
+        currentVersion: currentVersion,
+        message:
+            'Lần cập nhật trước chưa hoàn tất. App vẫn đang ở $currentVersion.',
+      );
+    } catch (_) {
+      await _clearPendingMarker();
+      return null;
+    }
+  }
+
+  Future<OfflineUpdateManifest> _readManifest(String manifestUrl) async {
+    final raw = await _readRemoteText(manifestUrl);
     final decoded = jsonDecode(raw);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException(
-        'Manifest update phải là JSON object hợp lệ.',
-      );
+      throw const FormatException('latest.json phải là JSON object hợp lệ.');
     }
-
-    final resolved = _resolveManifestEnvelope(decoded, manifestPath);
-    final manifest = resolved.manifest;
-    if (manifest.latestVersion.isEmpty || manifest.downloadPath.isEmpty) {
-      throw const FormatException(
-        'Manifest thiếu latestVersion hoặc downloadPath.',
-      );
-    }
-
-    return resolved;
-  }
-
-  Future<String> _readLocalText(String manifestPath) async {
-    final file = File(manifestPath);
-    if (!await file.exists()) {
-      throw FileSystemException(
-        'Không tìm thấy file manifest update.',
-        manifestPath,
-      );
-    }
-
-    return file.readAsString();
-  }
-
-  Future<String> _readRemoteText(String manifestUrl) async {
-    final client = HttpClient();
-    try {
-      final request = await client.getUrl(Uri.parse(manifestUrl));
-      final response = await request.close();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException(
-          'Tải manifest update thất bại với mã ${response.statusCode}.',
-          uri: Uri.parse(manifestUrl),
-        );
-      }
-
-      return utf8.decode(
-        await response.fold<List<int>>(<int>[], (buffer, data) {
-          buffer.addAll(data);
-          return buffer;
-        }),
-      );
-    } finally {
-      client.close(force: true);
-    }
-  }
-
-  bool _isRemotePath(String value) {
-    return value.startsWith('http://') || value.startsWith('https://');
-  }
-
-  String _resolveInstallerFileName(String rawPath) {
-    if (_isRemotePath(rawPath)) {
-      final uri = Uri.tryParse(rawPath);
-      final candidate = uri == null ? '' : path.basename(uri.path);
-      if (candidate.trim().isNotEmpty) {
-        return candidate;
-      }
-      return 'salonmanager_update.exe';
-    }
-    return path.basename(rawPath);
-  }
-
-  Future<void> _downloadRemoteFile(String sourceUrl, File targetFile) async {
-    final client = HttpClient();
-    try {
-      final request = await client.getUrl(Uri.parse(sourceUrl));
-      final response = await request.close();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException(
-          'Tải bộ cài thất bại với mã ${response.statusCode}.',
-          uri: Uri.parse(sourceUrl),
-        );
-      }
-
-      final sink = targetFile.openWrite();
-      await response.forEach(sink.add);
-      await sink.flush();
-      await sink.close();
-    } finally {
-      client.close(force: true);
-    }
-  }
-
-  _ResolvedOfflineUpdateSummary _resolveManifestEnvelope(
-    Map<String, dynamic> json,
-    String sourcePath,
-  ) {
-    final dataNode = json['data'];
-    final manifestNode = dataNode is Map<String, dynamic>
-        ? dataNode['manifest']
-        : null;
-    final entitlementNode = dataNode is Map<String, dynamic>
-        ? dataNode['updateEntitlement']
-        : null;
-    final manifestJson = manifestNode is Map<String, dynamic>
-        ? manifestNode
-        : json;
-    final sourceUri = _isRemotePath(sourcePath)
-        ? Uri.tryParse(sourcePath)
-        : null;
 
     final manifest = _normalizeManifestPaths(
-      OfflineUpdateManifest.fromJson(manifestJson),
-      sourceUri,
+      OfflineUpdateManifest.fromJson(decoded),
+      Uri.parse(manifestUrl),
     );
-
-    final entitlement = entitlementNode is Map<String, dynamic>
-        ? entitlementNode
-        : const <String, dynamic>{};
-    final updateAllowed = entitlement['updateAllowed'] != false;
-    final currentVersionAllowed = entitlement['currentVersionAllowed'];
-    final currentVersionSupported = currentVersionAllowed is bool
-        ? currentVersionAllowed
-        : true;
-    final reason = entitlement['reason']?.toString();
-
-    String? message;
-    if (updateAllowed == false) {
-      if (reason == 'update_not_entitled') {
-        message = 'Key hiện tại không còn quyền nhận bản cập nhật này.';
-      } else if (reason == 'missing_license') {
-        message = 'Manifest này yêu cầu key hợp lệ để mở cập nhật.';
-      } else if (reason == 'device_mismatch') {
-        message = 'Key đang gắn với thiết bị khác.';
-      } else if (reason == 'invalid_license') {
-        message = 'Key không hợp lệ hoặc đã bị thu hồi.';
-      }
+    if (manifest.latestVersion.trim().isEmpty ||
+        manifest.downloadPath.trim().isEmpty ||
+        manifest.sha256.trim().isEmpty) {
+      throw const FormatException(
+        'latest.json thiếu latestVersion, downloadPath hoặc sha256.',
+      );
     }
-
-    return _ResolvedOfflineUpdateSummary(
-      manifest: manifest,
-      updateAllowed: updateAllowed,
-      currentVersionSupported: currentVersionSupported,
-      entitlementReason: reason,
-      entitlementMessage: message,
-    );
+    if (!_isSecureRemotePath(manifest.downloadPath)) {
+      throw const FormatException('downloadPath của updater phải dùng HTTPS.');
+    }
+    return manifest;
   }
 
   OfflineUpdateManifest _normalizeManifestPaths(
     OfflineUpdateManifest manifest,
-    Uri? sourceUri,
+    Uri sourceUri,
   ) {
-    if (sourceUri == null) {
-      return manifest;
-    }
-
     return OfflineUpdateManifest(
       latestVersion: manifest.latestVersion,
       minimumSupportedVersion: manifest.minimumSupportedVersion,
@@ -487,50 +410,182 @@ class OfflineUpdateService {
 
   String _resolveRemoteAssetPath(String value, Uri sourceUri) {
     final trimmed = value.trim();
-    if (trimmed.isEmpty || _isRemotePath(trimmed)) {
-      return trimmed;
-    }
+    if (trimmed.isEmpty) return trimmed;
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed != null && parsed.hasScheme) return parsed.toString();
     return sourceUri.resolve(trimmed).toString();
   }
 
-  int _compareVersions(String left, String right) {
-    final a = _parseVersion(left);
-    final b = _parseVersion(right);
-    final maxLength = a.length > b.length ? a.length : b.length;
-
-    for (var index = 0; index < maxLength; index++) {
-      final aPart = index < a.length ? a[index] : 0;
-      final bPart = index < b.length ? b[index] : 0;
-      if (aPart != bPart) {
-        return aPart.compareTo(bPart);
+  Future<String> _readRemoteText(String manifestUrl) async {
+    final uri = Uri.parse(manifestUrl);
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(uri);
+      request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Tải manifest thất bại với mã ${response.statusCode}.',
+          uri: uri,
+        );
       }
+      return utf8.decode(await response.fold<List<int>>(<int>[], (all, chunk) {
+        all.addAll(chunk);
+        return all;
+      }));
+    } finally {
+      client.close(force: true);
     }
-
-    return 0;
   }
 
-  List<int> _parseVersion(String value) {
-    return value
-        .split('.')
-        .map((part) => int.tryParse(part.trim()) ?? 0)
-        .toList(growable: false);
+  Future<void> _downloadRemoteFile(
+    String sourceUrl,
+    File targetFile, {
+    UpdateDownloadProgress? onProgress,
+  }) async {
+    final uri = Uri.parse(sourceUrl);
+    final client = HttpClient();
+    IOSink? sink;
+    try {
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Tải bộ cài thất bại với mã ${response.statusCode}.',
+          uri: uri,
+        );
+      }
+
+      sink = targetFile.openWrite();
+      final total = response.contentLength;
+      var transferred = 0;
+      await for (final chunk in response) {
+        sink.add(chunk);
+        transferred += chunk.length;
+        if (total > 0) {
+          onProgress?.call(
+            (transferred * 100 / total).clamp(0, 100).toDouble(),
+          );
+        }
+      }
+      await sink.flush();
+    } finally {
+      await sink?.close();
+      client.close(force: true);
+    }
+  }
+
+  Future<String> _computeFileSha256(File file) async {
+    final digest = await sha256.bind(file.openRead()).first;
+    return digest.toString().toLowerCase();
+  }
+
+  Future<Directory> _resolveUpdateCacheDirectory() async {
+    final base = Platform.environment['LOCALAPPDATA']?.trim();
+    final directory = Directory(
+      base != null && base.isNotEmpty
+          ? path.join(base, 'HairSpaManager', 'updates', 'downloads')
+          : path.join(Directory.systemTemp.path, 'hair_spa_manager', 'updates'),
+    );
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    return directory;
+  }
+
+  Future<File> _resolvePendingMarkerFile() async {
+    final appData = Platform.environment['APPDATA']?.trim();
+    final directory = Directory(
+      appData != null && appData.isNotEmpty
+          ? path.join(appData, 'HairSpaManager', 'updates')
+          : path.join(Directory.systemTemp.path, 'hair_spa_manager', 'updates'),
+    );
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    return File(path.join(directory.path, 'pending_update.json'));
+  }
+
+  Future<void> _writePendingMarker({
+    required String fromVersion,
+    required String targetVersion,
+  }) async {
+    final file = await _resolvePendingMarkerFile();
+    await file.writeAsString(
+      jsonEncode({
+        'fromVersion': fromVersion,
+        'targetVersion': targetVersion,
+        'requestedAt': DateTime.now().toUtc().toIso8601String(),
+      }),
+      flush: true,
+    );
+  }
+
+  Future<void> _clearPendingMarker() async {
+    final file = await _resolvePendingMarkerFile();
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  bool _isSecureRemotePath(String value) {
+    final uri = Uri.tryParse(value.trim());
+    return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+  }
+
+  String _resolveInstallerFileName(String rawPath) {
+    final uri = Uri.tryParse(rawPath);
+    final candidate = uri == null ? '' : path.basename(uri.path);
+    return candidate.trim().isEmpty ? 'Salon-Setup.exe' : candidate;
   }
 }
 
-class _ResolvedOfflineUpdateSummary {
-  const _ResolvedOfflineUpdateSummary({
-    required this.manifest,
-    required this.updateAllowed,
-    required this.currentVersionSupported,
-    this.entitlementReason,
-    this.entitlementMessage,
+int compareSalonVersions(String left, String right) {
+  final a = _parseSalonVersion(left);
+  final b = _parseSalonVersion(right);
+  final maxLength = a.length > b.length ? a.length : b.length;
+
+  for (var index = 0; index < maxLength; index++) {
+    final aPart = index < a.length ? a[index] : 0;
+    final bPart = index < b.length ? b[index] : 0;
+    if (aPart != bPart) {
+      return aPart.compareTo(bPart);
+    }
+  }
+  return 0;
+}
+
+List<int> _parseSalonVersion(String value) {
+  final clean = value.split('+').first.trim();
+  return clean
+      .split('.')
+      .map((part) => int.tryParse(part.trim()) ?? 0)
+      .toList(growable: false);
+}
+
+bool isExpectedInstalledVersion({
+  required String currentVersion,
+  required String fromVersion,
+  required String targetVersion,
+}) {
+  return currentVersion.trim() == targetVersion.trim() &&
+      currentVersion.trim() != fromVersion.trim();
+}
+
+class UpdateRestartResult {
+  const UpdateRestartResult({
+    required this.success,
+    required this.fromVersion,
+    required this.targetVersion,
+    required this.currentVersion,
+    required this.message,
   });
 
-  final OfflineUpdateManifest manifest;
-  final bool updateAllowed;
-  final bool currentVersionSupported;
-  final String? entitlementReason;
-  final String? entitlementMessage;
+  final bool success;
+  final String fromVersion;
+  final String targetVersion;
+  final String currentVersion;
+  final String message;
 }
 
 class OfflineUpdateInstallResult {
@@ -557,15 +612,13 @@ class _UpdateAuditLogger {
     Map<String, String>? context,
   }) async {
     try {
-      final now = DateTime.now().toUtc().toIso8601String();
       final payload = <String, Object?>{
-        'timestampUtc': now,
+        'timestampUtc': DateTime.now().toUtc().toIso8601String(),
         'action': action,
         'outcome': outcome,
         'detail': detail,
         if (context != null && context.isNotEmpty) 'context': context,
       };
-
       final file = await _resolveLogFile();
       await file.writeAsString(
         '${jsonEncode(payload)}\n',
@@ -573,17 +626,17 @@ class _UpdateAuditLogger {
         flush: true,
       );
     } catch (_) {
-      // Không làm gián đoạn luồng update nếu ghi log thất bại.
+      // Logging must never block the updater.
     }
   }
 
   Future<File> _resolveLogFile() async {
     final appData = Platform.environment['APPDATA']?.trim();
-    final baseDir = appData != null && appData.isNotEmpty
-        ? Directory(path.join(appData, 'HairSpaManager', 'logs'))
-        : Directory(
-            path.join(Directory.systemTemp.path, 'hair_spa_manager', 'logs'),
-          );
+    final baseDir = Directory(
+      appData != null && appData.isNotEmpty
+          ? path.join(appData, 'HairSpaManager', 'logs')
+          : path.join(Directory.systemTemp.path, 'hair_spa_manager', 'logs'),
+    );
     if (!await baseDir.exists()) {
       await baseDir.create(recursive: true);
     }
