@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../core/theme/theme_controller.dart';
 import '../features/overview/presentation/pages/staff_intake_workspace.dart';
 import '../features/overview/presentation/pages/staff_window_workspace.dart';
 import 'desktop_shell_page.dart';
+import 'main_cross_process_refresh.dart';
 
 class SalonManagerApp extends ConsumerWidget {
   const SalonManagerApp({super.key});
@@ -26,7 +29,11 @@ class SalonManagerApp extends ConsumerWidget {
         ).copyWith(textScaler: const TextScaler.linear(1.0)),
         child: child!,
       ),
-      home: const DesktopShellPage(),
+      home: MainCrossProcessRefreshGate(
+        enabled: Platform.isWindows &&
+            !Platform.environment.containsKey('FLUTTER_TEST'),
+        child: const DesktopShellPage(),
+      ),
     );
   }
 }
