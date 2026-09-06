@@ -188,40 +188,44 @@ class _AppointmentEditorDialogState
                             in widget.services.where(
                               (service) => service.isActive,
                             ))
-                          CheckboxListTile(
-                            value: _selectedServiceIds.contains(service.id),
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
-                            title: Text(
-                              service.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            subtitle: Text(
-                              '${service.category} • ${service.durationLabel} • ${service.priceLabel}',
-                            ),
-                            onChanged: (checked) {
-                              setState(() {
-                                if (checked == true) {
-                                  if (!_selectedServiceIds
-                                      .contains(service.id)) {
-                                    _selectedServiceIds = [
-                                      ..._selectedServiceIds,
-                                      service.id,
-                                    ];
+                          Material(
+                            color: Colors.transparent,
+                            child: CheckboxListTile(
+                              value: _selectedServiceIds.contains(service.id),
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity:
+                                  ListTileControlAffinity.leading,
+                              title: Text(
+                                service.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${service.category} • ${service.durationLabel} • ${service.priceLabel}',
+                              ),
+                              onChanged: (checked) {
+                                setState(() {
+                                  if (checked == true) {
+                                    if (!_selectedServiceIds
+                                        .contains(service.id)) {
+                                      _selectedServiceIds = [
+                                        ..._selectedServiceIds,
+                                        service.id,
+                                      ];
+                                    }
+                                  } else {
+                                    _selectedServiceIds = _selectedServiceIds
+                                        .where((id) => id != service.id)
+                                        .toList(growable: false);
                                   }
-                                } else {
-                                  _selectedServiceIds = _selectedServiceIds
-                                      .where((id) => id != service.id)
-                                      .toList(growable: false);
-                                }
-                                _durationController.text =
-                                    _selectedServicesDuration.toString();
-                                field.didChange(_selectedServiceIds);
-                              });
-                            },
+                                  _durationController.text =
+                                      _selectedServicesDuration.toString();
+                                  field.didChange(_selectedServiceIds);
+                                });
+                              },
+                            ),
                           ),
                         if (field.hasError)
                           Align(
