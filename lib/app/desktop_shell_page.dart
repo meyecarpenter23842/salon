@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -28,6 +27,14 @@ import '../shared/widgets/app_motion.dart';
 import 'navigation/desktop_navigation.dart';
 
 const _sidebarCollapsedPreferenceKey = 'salon_sidebar_collapsed';
+
+@visibleForTesting
+bool shouldLaunchStaffWindowSeparately({
+  required bool isWindows,
+  required bool isFlutterTest,
+}) {
+  return isWindows && !isFlutterTest;
+}
 
 final _appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
@@ -118,7 +125,12 @@ class _DesktopShellPageState extends ConsumerState<DesktopShellPage> {
   }
 
   Future<void> _openStaffWorkstation() async {
-    if (!kReleaseMode) {
+    final launchSeparately = shouldLaunchStaffWindowSeparately(
+      isWindows: Platform.isWindows,
+      isFlutterTest: Platform.environment.containsKey('FLUTTER_TEST'),
+    );
+
+    if (!launchSeparately) {
       await showAppDialog<void>(
         context: context,
         builder: (_) => const StaffWorkstationPage(),

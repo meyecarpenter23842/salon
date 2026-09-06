@@ -14,16 +14,17 @@ void main() {
     WidgetTester tester,
   ) async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final appointments = [
       _appointment(
         id: 'waiting',
-        startsAt: now.add(const Duration(minutes: 5)),
+        startsAt: today.add(const Duration(minutes: 5)),
         status: 'Chờ xác nhận',
         customerName: 'Chị Ngọc',
       ),
       _appointment(
         id: 'unpaid',
-        startsAt: now.subtract(const Duration(hours: 2)),
+        startsAt: today.add(const Duration(minutes: 10)),
         status: 'Hoàn thành',
         customerName: 'Anh Huy',
       ),
@@ -35,7 +36,11 @@ void main() {
       appointments: appointments,
       services: [
         _service(id: 'service-visible', name: 'Hấp phục hồi'),
-        _service(id: 'service-hidden', name: 'Dịch vụ tạm ẩn', isActive: false),
+        _service(
+          id: 'service-hidden',
+          name: 'Dịch vụ tạm ẩn',
+          isActive: false,
+        ),
       ],
       products: [
         _product(id: 'product-visible', name: 'Serum dưỡng tóc'),

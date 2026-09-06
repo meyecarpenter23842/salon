@@ -27,8 +27,14 @@ void main() {
     await database.delete('employees');
     await database.delete('customers');
 
-    await database.insert('customers', _customerRow('customer-a', 'Khách A', createdAt));
-    await database.insert('customers', _customerRow('customer-b', 'Khách B', createdAt));
+    await database.insert(
+      'customers',
+      _customerRow('customer-a', 'Khách A', createdAt),
+    );
+    await database.insert(
+      'customers',
+      _customerRow('customer-b', 'Khách B', createdAt),
+    );
 
     await database.insert(
       'employees',
@@ -39,13 +45,15 @@ void main() {
       _employeeRow('employee-b', 'Nam', 'NA', createdAt),
     );
 
+    // Keep every fixture inside the current calendar day. Using `now - N hours`
+    // makes this regression flaky when CI happens shortly after midnight.
     await database.insert(
       'appointments',
       _appointmentRow(
         id: 'appointment-active',
         customerId: 'customer-a',
         employeeId: 'employee-a',
-        startsAt: now.subtract(const Duration(minutes: 20)),
+        startsAt: today.add(const Duration(minutes: 1)),
         status: 'Đang làm',
         customerName: 'Khách A',
         serviceName: 'Nhuộm tóc',
@@ -56,11 +64,11 @@ void main() {
     await database.insert(
       'appointments',
       _appointmentRow(
-        id: 'appointment-overdue',
+        id: 'appointment-waiting',
         customerId: 'customer-b',
         employeeId: 'employee-b',
-        startsAt: now.subtract(const Duration(hours: 1)),
-        status: 'Đã đặt',
+        startsAt: today.add(const Duration(minutes: 2)),
+        status: 'Chờ xác nhận',
         customerName: 'Khách B',
         serviceName: 'Cắt tóc',
         staffName: 'Nam',
@@ -73,7 +81,7 @@ void main() {
         id: 'appointment-unpaid',
         customerId: 'customer-a',
         employeeId: 'employee-b',
-        startsAt: now.subtract(const Duration(hours: 2)),
+        startsAt: today.add(const Duration(minutes: 3)),
         status: 'Hoàn thành',
         customerName: 'Khách A',
         serviceName: 'Gội đầu',
@@ -138,24 +146,43 @@ void main() {
     final summary = await repository.fetchOverviewSummary();
 
     final kpis = _mapList(summary['kpis']);
-    expect(kpis.map((item) => item['title']), containsAll([
-      'Khách hôm nay',
-      'Lịch hôm nay',
-      'Doanh thu hôm nay',
-      'Bill đã thu',
-    ]));
-    expect(kpis.firstWhere((item) => item['title'] == 'Khách hôm nay')['value'], '2');
-    expect(kpis.firstWhere((item) => item['title'] == 'Lịch hôm nay')['value'], '3');
-    expect(kpis.firstWhere((item) => item['title'] == 'Bill đã thu')['value'], '2');
     expect(
-      kpis.firstWhere((item) => item['title'] == 'Doanh thu hôm nay')['value']
+      kpis.map((item) => item['title']),
+      containsAll([
+        'Khách hôm nay',
+        'Lịch hôm nay',
+        'Doanh thu hôm nay',
+        'Bill đã thu',
+      ]),
+    );
+    expect(
+      kpis.firstWhere((item) => item['title'] == 'Khách hôm nay')['value'],
+      '2',
+    );
+    expect(
+      kpis.firstWhere((item) => item['title'] == 'Lịch hôm nay')['value'],
+      '3',
+    );
+    expect(
+      kpis.firstWhere((item) => item['title'] == 'Bill đã thu')['value'],
+      '2',
+    );
+    expect(
+      kpis
+          .firstWhere((item) => item['title'] == 'Doanh thu hôm nay')['value']
           .toString(),
       contains('1.200.000'),
     );
 
     final team = _mapList(summary['teamStatus']);
-    expect(team.firstWhere((item) => item['name'] == 'Hương')['state'], 'Đang bận');
-    expect(team.firstWhere((item) => item['name'] == 'Nam')['state'], 'Sẵn sàng');
+    expect(
+      team.firstWhere((item) => item['name'] == 'Hương')['state'],
+      'Đang bận',
+    );
+    expect(
+      team.firstWhere((item) => item['name'] == 'Nam')['state'],
+      'Sẵn sàng',
+    );
 
     final topSales = _mapList(summary['topSales']);
     expect(topSales, isNotEmpty);
@@ -163,8 +190,11 @@ void main() {
     expect(topSales.first['revenue'], 800000);
 
     final alerts = _mapList(summary['operationalAlerts']);
-    expect(alerts.any((item) => item['title'] == 'Lịch đã quá giờ'), isTrue);
-    expect(alerts.any((item) => item['title'] == 'Hoàn thành chưa có bill'), isTrue);
+    expect(alerts.any((item) => item['title'] == 'Chờ xác nhận'), isTrue);
+    expect(
+      alerts.any((item) => item['title'] == 'Hoàn thành chưa có bill'),
+      isTrue,
+    );
   });
 }
 

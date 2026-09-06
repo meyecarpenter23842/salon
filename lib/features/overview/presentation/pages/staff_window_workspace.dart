@@ -75,8 +75,8 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
     final productsState = ref.watch(retailProductsViewProvider);
     final draftState = ref.watch(invoiceDraftProvider);
 
-    final appointments = appointmentsState.valueOrNull ??
-        const <AppointmentEntry>[];
+    final appointments =
+        appointmentsState.valueOrNull ?? const <AppointmentEntry>[];
     final services = (servicesState.valueOrNull ??
             const <ServiceCatalogItem>[])
         .where((service) => service.isActive)
@@ -114,46 +114,10 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
       },
       child: Focus(
         autofocus: true,
-        child: ColoredBox(
-          color: AppColors.background,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 1280) {
-                return Stack(
-                  children: [
-                    const Positioned.fill(
-                      child: StaffWorkstationPage(standalone: true),
-                    ),
-                    Positioned(
-                      right: 18,
-                      bottom: 18,
-                      child: FilledButton.icon(
-                        key: const Key('staff-quick-rail-open'),
-                        onPressed: () => _openCompactRail(rail),
-                        icon: const Icon(Icons.bolt_outlined, size: 18),
-                        label: const Text('Thao tác nhanh'),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  const Expanded(
-                    child: StaffWorkstationPage(standalone: true),
-                  ),
-                  SizedBox(
-                    width: 372,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 16, 16, 20),
-                      child: rail,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+        child: StaffWorkstationPage(
+          standalone: true,
+          sideRail: rail,
+          onOpenCompactRail: () => _openCompactRail(rail),
         ),
       ),
     );
@@ -250,8 +214,8 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
       return prepared;
     }
 
-    final appointments = ref.read(appointmentsViewProvider).valueOrNull ??
-        const <AppointmentEntry>[];
+    final appointments =
+        ref.read(appointmentsViewProvider).valueOrNull ?? const <AppointmentEntry>[];
     final owner = _draftOwner(draft, appointments);
     if (!mounted) return null;
     final openCurrent = await showDialog<bool>(
@@ -324,8 +288,8 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
 
     final appointmentId = draft.appointmentId;
     if (appointmentId != null && appointmentId.isNotEmpty) {
-      final appointments = ref.read(appointmentsViewProvider).valueOrNull ??
-          const <AppointmentEntry>[];
+      final appointments =
+          ref.read(appointmentsViewProvider).valueOrNull ?? const <AppointmentEntry>[];
       for (final appointment in appointments) {
         if (appointment.id == appointmentId && appointment.isPaid) {
           await _showBusinessError(
@@ -437,155 +401,141 @@ class _StaffQuickRail extends StatelessWidget {
     final quickBillReady =
         currentDraft != null && _hasDraftWork(currentDraft);
 
-    return Container(
+    return ListView(
       key: const Key('staff-quick-rail'),
+      primary: false,
+      padding: EdgeInsets.zero,
+      children: [
+        _RailSection(
+          key: const Key('staff-reminder-rail'),
+          icon: Icons.notifications_active_outlined,
+          title: 'Nhắc xử lý',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _RailCount(count: reminders.length),
+              const SizedBox(width: 3),
+              IconButton(
+                key: const Key('staff-rail-refresh'),
+                onPressed: isProcessing ? null : onRefresh,
+                tooltip: 'Làm mới ngay',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+              ),
+            ],
+          ),
+          child: reminders.isEmpty
+              ? const _RailEmpty(
+                  text: 'Không có việc cần nhắc ngay lúc này.',
+                )
+              : Column(
+                  children: [
+                    for (var index = 0; index < reminders.length; index++) ...[
+                      _ReminderRow(
+                        reminder: reminders[index],
+                        isProcessing: isProcessing,
+                        onAction: () => onReminderAction(
+                          reminders[index].appointment,
+                        ),
+                      ),
+                      if (index != reminders.length - 1)
+                        const PremiumDivider(),
+                    ],
+                  ],
+                ),
+        ),
+        const SizedBox(height: 14),
+        _RailSection(
+          key: const Key('staff-service-rail'),
+          icon: Icons.auto_awesome_outlined,
+          title: 'Dịch vụ phát sinh nhanh',
+          trailing: TextButton(
+            key: const Key('staff-rail-services-more'),
+            onPressed: isProcessing ? null : onPickService,
+            child: const Text('Thêm dịch vụ'),
+          ),
+          child: _QuickCatalogGrid<ServiceCatalogItem>(
+            items: services.take(6).toList(growable: false),
+            loading: servicesLoading,
+            billReady: quickBillReady,
+            emptyLabel: 'Chưa có dịch vụ đang hoạt động.',
+            billHint: 'Tính tiền một khách trước để thêm phát sinh nhanh.',
+            itemBuilder: (context, service, enabled) => _QuickCatalogTile(
+              key: Key('staff-quick-service-${service.id}'),
+              icon: Icons.spa_outlined,
+              title: service.name,
+              subtitle: service.priceLabel,
+              enabled: enabled && !isProcessing,
+              tooltip: 'Thêm phát sinh vào bill',
+              onTap: () => onQuickService(service),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _RailSection(
+          key: const Key('staff-product-rail'),
+          icon: Icons.shopping_cart_outlined,
+          title: 'Sản phẩm bán kèm',
+          trailing: TextButton(
+            key: const Key('staff-rail-products-more'),
+            onPressed: isProcessing ? null : onPickProduct,
+            child: const Text('Thêm sản phẩm'),
+          ),
+          child: _QuickCatalogGrid<RetailProductItem>(
+            items: products.take(6).toList(growable: false),
+            loading: productsLoading,
+            billReady: quickBillReady,
+            emptyLabel: 'Chưa có sản phẩm hiển thị cho nhân viên.',
+            billHint: 'Tính tiền một khách trước để thêm sản phẩm nhanh.',
+            itemBuilder: (context, product, enabled) => _QuickCatalogTile(
+              key: Key('staff-quick-product-${product.id}'),
+              icon: Icons.inventory_2_outlined,
+              title: product.name,
+              subtitle: product.salePriceLabel,
+              enabled: enabled && !isProcessing,
+              tooltip: 'Thêm sản phẩm vào bill',
+              onTap: () => onQuickProduct(product),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Ctrl+B · mở khu tính tiền',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RailCount extends StatelessWidget {
+  const _RailCount({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 25),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.panelRaised,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.controlBorder),
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 10),
-            child: Row(
-              children: [
-                PremiumIconBadge(
-                  icon: Icons.bolt_outlined,
-                  size: 34,
-                  tone: AppColors.copper,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Thao tác nhanh',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Tự làm mới dữ liệu định kỳ',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  key: const Key('staff-rail-refresh'),
-                  onPressed: isProcessing ? null : onRefresh,
-                  tooltip: 'Làm mới ngay',
-                  icon: const Icon(Icons.refresh_rounded, size: 19),
-                ),
-              ],
-            ),
-          ),
-          const PremiumDivider(),
-          Expanded(
-            child: ListView(
-              primary: false,
-              padding: const EdgeInsets.all(12),
-              children: [
-                _RailSection(
-                  key: const Key('staff-reminder-rail'),
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Nhắc xử lý',
-                  trailing: Text('${reminders.length}'),
-                  child: reminders.isEmpty
-                      ? const _RailEmpty(
-                          text: 'Không có việc cần nhắc ngay lúc này.',
-                        )
-                      : Column(
-                          children: [
-                            for (var index = 0;
-                                index < reminders.length;
-                                index++) ...[
-                              _ReminderRow(
-                                reminder: reminders[index],
-                                isProcessing: isProcessing,
-                                onAction: () => onReminderAction(
-                                  reminders[index].appointment,
-                                ),
-                              ),
-                              if (index != reminders.length - 1)
-                                const PremiumDivider(),
-                            ],
-                          ],
-                        ),
-                ),
-                const SizedBox(height: 12),
-                _RailSection(
-                  key: const Key('staff-service-rail'),
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Dịch vụ phát sinh nhanh',
-                  trailing: TextButton(
-                    key: const Key('staff-rail-services-more'),
-                    onPressed: isProcessing ? null : onPickService,
-                    child: const Text('Xem tất cả'),
-                  ),
-                  child: _QuickCatalogGrid<ServiceCatalogItem>(
-                    items: services.take(6).toList(growable: false),
-                    loading: servicesLoading,
-                    billReady: quickBillReady,
-                    emptyLabel: 'Chưa có dịch vụ đang hoạt động.',
-                    billHint:
-                        'Tính tiền một khách trước để thêm phát sinh nhanh.',
-                    itemBuilder: (context, service, enabled) => _QuickCatalogTile(
-                      key: Key('staff-quick-service-${service.id}'),
-                      icon: Icons.content_cut_rounded,
-                      title: service.name,
-                      subtitle: service.priceLabel,
-                      enabled: enabled && !isProcessing,
-                      tooltip: 'Thêm phát sinh vào bill',
-                      onTap: () => onQuickService(service),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _RailSection(
-                  key: const Key('staff-product-rail'),
-                  icon: Icons.shopping_bag_outlined,
-                  title: 'Sản phẩm bán kèm',
-                  trailing: TextButton(
-                    key: const Key('staff-rail-products-more'),
-                    onPressed: isProcessing ? null : onPickProduct,
-                    child: const Text('Xem tất cả'),
-                  ),
-                  child: _QuickCatalogGrid<RetailProductItem>(
-                    items: products.take(6).toList(growable: false),
-                    loading: productsLoading,
-                    billReady: quickBillReady,
-                    emptyLabel: 'Chưa có sản phẩm hiển thị cho nhân viên.',
-                    billHint: 'Tính tiền một khách trước để thêm sản phẩm nhanh.',
-                    itemBuilder: (context, product, enabled) => _QuickCatalogTile(
-                      key: Key('staff-quick-product-${product.id}'),
-                      icon: Icons.inventory_2_outlined,
-                      title: product.name,
-                      subtitle: product.salePriceLabel,
-                      enabled: enabled && !isProcessing,
-                      tooltip: 'Thêm sản phẩm vào bill',
-                      onTap: () => onQuickProduct(product),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Ctrl+B · mở khu tính tiền',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        '$count',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -609,25 +559,25 @@ class _RailSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.featureSurface,
-        borderRadius: BorderRadius.circular(13),
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.controlBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 9, 8, 8),
+            padding: const EdgeInsets.fromLTRB(14, 12, 9, 10),
             child: Row(
               children: [
-                Icon(icon, size: 18, color: AppColors.copper),
-                const SizedBox(width: 8),
+                Icon(icon, size: 20, color: AppColors.copper),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
                     ),
                   ),
                 ),
@@ -637,7 +587,7 @@ class _RailSection extends StatelessWidget {
           ),
           const PremiumDivider(),
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(11),
             child: child,
           ),
         ],
@@ -681,14 +631,14 @@ class _ReminderRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 9,
+            height: 9,
             decoration: BoxDecoration(
               color: reminder.tone,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,11 +648,11 @@ class _ReminderRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   reminder.message,
                   maxLines: 2,
@@ -715,11 +665,11 @@ class _ReminderRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 7),
           OutlinedButton(
             onPressed: isProcessing ? null : onAction,
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
               visualDensity: VisualDensity.compact,
             ),
             child: Text(
@@ -829,9 +779,10 @@ class _QuickCatalogTile extends StatelessWidget {
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(10),
           child: Container(
+            constraints: const BoxConstraints(minHeight: 58),
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: AppColors.panel,
+              color: AppColors.featureSurface,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.controlBorder),
             ),
@@ -839,12 +790,13 @@ class _QuickCatalogTile extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  size: 16,
+                  size: 17,
                   color: enabled ? AppColors.copper : AppColors.textMuted,
                 ),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
