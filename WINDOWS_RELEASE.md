@@ -29,7 +29,8 @@ Installer dùng NSIS dạng wizard:
 - cài theo user hiện tại;
 - tạo Desktop shortcut;
 - tạo Start Menu shortcut;
-- nhớ thư mục cài trong HKCU để lần cài thủ công sau vẫn trỏ đúng vị trí.
+- nhớ thư mục cài trong HKCU để lần cài thủ công sau vẫn trỏ đúng vị trí;
+- dùng `icon.png` ở root repo làm nguồn icon cho installer/uninstaller; script package tự tạo ICO đa kích thước trước khi chạy NSIS.
 
 Runtime data của Salon **không nằm trong thư mục cài**. Database vẫn ở `%APPDATA%\HairSpaManager\data\.salon_manager\salon_manager.db`, vì vậy update installer không xóa/move database hoặc backup.
 
@@ -116,6 +117,8 @@ Sau khi package update, verify cả artifact:
 .\tools\windows\verify-installer.ps1 -RequireArtifacts
 .\tools\windows\verify-updater.ps1 -RequireArtifacts
 ```
+
+`verify-installer -RequireArtifacts` kiểm tra cả icon shell 16x16 và 32x32 nhúng trong `Salon-Setup-x.x.x.exe` phải khớp ICO vừa sinh từ `icon.png`, để chặn NSIS quay về icon mặc định.
 
 CI chạy analyze, unit, Windows build, native smoke, build NSIS để verify và kiểm tra artifact. CI **không upload R2, không tạo release và không deploy**.
 

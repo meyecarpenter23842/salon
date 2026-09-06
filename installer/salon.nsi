@@ -15,6 +15,12 @@ Unicode true
 !ifndef OUTPUT_DIR
   !error "OUTPUT_DIR is required"
 !endif
+!ifndef APP_ICON
+  !error "APP_ICON is required"
+!endif
+
+!define MUI_ICON "${APP_ICON}"
+!define MUI_UNICON "${APP_ICON}"
 
 Name "Salon"
 OutFile "${OUTPUT_DIR}\Salon-Setup-${PRODUCT_VERSION}.exe"
