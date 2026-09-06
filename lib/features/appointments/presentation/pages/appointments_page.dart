@@ -98,6 +98,24 @@ bool _blockPaidAppointment(
   return true;
 }
 
+Future<void> openAppointmentEditor(
+  BuildContext context,
+  WidgetRef ref, {
+  AppointmentEntry? appointment,
+  String? initialEmployeeId,
+  String? initialTimeLabel,
+  String? initialDayLabel,
+}) {
+  return _openAppointmentEditor(
+    context,
+    ref,
+    appointment: appointment,
+    initialEmployeeId: initialEmployeeId,
+    initialTimeLabel: initialTimeLabel,
+    initialDayLabel: initialDayLabel,
+  );
+}
+
 Future<void> _openAppointmentEditor(
   BuildContext context,
   WidgetRef ref, {

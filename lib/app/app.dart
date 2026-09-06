@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_controller.dart';
+import '../features/overview/presentation/pages/staff_intake_workspace.dart';
 import '../features/overview/presentation/pages/staff_window_workspace.dart';
 import 'desktop_shell_page.dart';
 
@@ -48,7 +49,7 @@ class StaffWindowApp extends ConsumerWidget {
         ).copyWith(textScaler: const TextScaler.linear(1.0)),
         child: child!,
       ),
-      home: const StaffWindowWorkspace(),
+      home: const StaffIntakeWorkspace(),
     );
   }
 }
