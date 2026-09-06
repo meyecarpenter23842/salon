@@ -36,17 +36,14 @@ if ([string]::IsNullOrWhiteSpace($Message)) {
   $Message = "Salon $BuildName đã sẵn sàng cập nhật."
 }
 
-$installerArgs = @(
-  '-BuildName', $BuildName,
-  '-BuildNumber', $BuildNumber
-)
+$installerArgs = @{
+  BuildName = $BuildName
+  BuildNumber = $BuildNumber
+}
 if ($SkipFlutterBuild) {
-  $installerArgs += '-SkipFlutterBuild'
+  $installerArgs.SkipFlutterBuild = $true
 }
 & $installerScript @installerArgs | Out-Host
-if ($LASTEXITCODE -ne 0) {
-  throw 'package-installer.ps1 thất bại.'
-}
 
 $installerPath = Join-Path $outputDir "Salon-Setup-$BuildName.exe"
 if (-not (Test-Path $installerPath)) {
