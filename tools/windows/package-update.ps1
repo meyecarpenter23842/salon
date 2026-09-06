@@ -14,7 +14,7 @@ $outputDir = Join-Path $repoRoot 'dist\windows-release'
 $installerScript = Join-Path $PSScriptRoot 'package-installer.ps1'
 
 function Read-SalonVersion {
-  $raw = Get-Content -Raw -Path $pubspecPath
+  $raw = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
   $match = [regex]::Match($raw, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)\s*$')
   if (-not $match.Success) {
     throw "Không đọc được version dạng x.y.z+build trong pubspec.yaml"

@@ -15,8 +15,8 @@ function Assert-Contains([string]$Text, [string]$Needle, [string]$Message) {
   if (-not $Text.Contains($Needle)) { throw $Message }
 }
 
-$nsis = Get-Content -Raw -Path $nsisPath
-$packageScript = Get-Content -Raw -Path $packagePath
+$nsis = Get-Content -Raw -Encoding UTF8 -Path $nsisPath
+$packageScript = Get-Content -Raw -Encoding UTF8 -Path $packagePath
 
 Assert-Contains $nsis '!insertmacro MUI_PAGE_DIRECTORY' 'Installer phải có trang chọn thư mục.'
 Assert-Contains $nsis 'InstallDirRegKey HKCU "Software\HairSpaManager" "InstallDir"' 'Installer phải nhớ thư mục cài hiện tại.'
@@ -35,7 +35,7 @@ if ($nsis -match '(?i)HairSpaManager\\data') {
 }
 
 if ($RequireArtifacts) {
-  $pubspec = Get-Content -Raw -Path $pubspecPath
+  $pubspec = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
   $match = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+\s*$')
   if (-not $match.Success) { throw 'Không đọc được version pubspec.' }
   $version = $match.Groups[1].Value

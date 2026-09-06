@@ -16,9 +16,9 @@ function Assert-Contains([string]$Text, [string]$Needle, [string]$Message) {
   if (-not $Text.Contains($Needle)) { throw $Message }
 }
 
-$service = Get-Content -Raw -Path $servicePath
-$panel = Get-Content -Raw -Path $panelPath
-$packageUpdate = Get-Content -Raw -Path $packageUpdatePath
+$service = Get-Content -Raw -Encoding UTF8 -Path $servicePath
+$panel = Get-Content -Raw -Encoding UTF8 -Path $panelPath
+$packageUpdate = Get-Content -Raw -Encoding UTF8 -Path $packageUpdatePath
 $publicFeed = 'https://pub-3f0aad8b18e146eb9eb09b9529063295.r2.dev'
 
 Assert-Contains $service $publicFeed 'Updater phải dùng đúng public R2 feed của Salon.'
@@ -50,7 +50,7 @@ if ($service -match '(?i)portable.*(copy|scan|migrat|adopt)' -or
 }
 
 if ($RequireArtifacts) {
-  $pubspec = Get-Content -Raw -Path $pubspecPath
+  $pubspec = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
   $versionMatch = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+\s*$')
   if (-not $versionMatch.Success) { throw 'Không đọc được version pubspec.' }
   $version = $versionMatch.Groups[1].Value
@@ -60,7 +60,7 @@ if ($RequireArtifacts) {
   if (-not (Test-Path $installerPath)) { throw "Thiếu installer: $installerPath" }
   if (-not (Test-Path $manifestPath)) { throw "Thiếu latest.json: $manifestPath" }
 
-  $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
+  $manifest = Get-Content -Raw -Encoding UTF8 -Path $manifestPath | ConvertFrom-Json
   if ($manifest.latestVersion -ne $version) {
     throw "latest.json version $($manifest.latestVersion) không khớp $version"
   }
