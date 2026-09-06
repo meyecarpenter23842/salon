@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BuildName = '',
   [int]$BuildNumber = -1,
   [switch]$SkipFlutterBuild
@@ -14,7 +14,7 @@ $releaseDir = Join-Path $repoRoot 'build\windows\x64\runner\Release'
 $outputDir = Join-Path $repoRoot 'dist\windows-release'
 
 function Read-SalonVersion {
-  $raw = Get-Content -Raw -Path $pubspecPath
+  $raw = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
   $match = [regex]::Match($raw, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)\s*$')
   if (-not $match.Success) {
     throw "Không đọc được version dạng x.y.z+build trong pubspec.yaml"
