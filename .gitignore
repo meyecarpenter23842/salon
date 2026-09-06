@@ -19,8 +19,7 @@ migrate_working_dir/
 .idea/
 
 # The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code, so this line is commented out by default.
 #.vscode/
 
 # Flutter/Dart/Pub related
@@ -43,3 +42,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local Windows installer/update artifacts. Releases are built locally and
+# uploaded to R2 manually; generated binaries/metadata are not source files.
+/dist/windows-release/
