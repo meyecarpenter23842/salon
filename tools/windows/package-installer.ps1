@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BuildName = '',
   [int]$BuildNumber = -1,
   [switch]$SkipFlutterBuild

@@ -75,19 +75,19 @@ jobs:
         run: flutter build windows --release
 
       - name: Native Windows smoke
-        shell: pwsh
+        shell: powershell
         run: ./tools/windows/smoke-windows.ps1
 
       - name: Verify installer contract
-        shell: pwsh
+        shell: powershell
         run: ./tools/windows/verify-installer.ps1
 
       - name: Verify updater contract
-        shell: pwsh
+        shell: powershell
         run: ./tools/windows/verify-updater.ps1
 
       - name: Install NSIS for packaging verification
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue) -and
               -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
@@ -95,13 +95,13 @@ jobs:
           }
 
       - name: Build installer and update metadata locally in CI
-        shell: pwsh
+        shell: powershell
         run: ./tools/windows/package-update.ps1 -SkipFlutterBuild
 
       - name: Verify packaged installer
-        shell: pwsh
+        shell: powershell
         run: ./tools/windows/verify-installer.ps1 -RequireArtifacts
 
       - name: Verify packaged updater artifacts
-        shell: pwsh
+        shell: powershell
         run: ./tools/windows/verify-updater.ps1 -RequireArtifacts
