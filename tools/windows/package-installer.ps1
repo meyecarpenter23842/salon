@@ -85,9 +85,6 @@ if (-not (Test-Path $salonExe)) {
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 & $prepareIconScript -SourcePng $iconSourcePath -OutputIco $iconOutputPath | Out-Host
-if ($LASTEXITCODE -ne 0) {
-  throw "Tạo icon installer thất bại với exit code $LASTEXITCODE"
-}
 if (-not (Test-Path $iconOutputPath)) {
   throw "Không tạo được icon installer: $iconOutputPath"
 }
