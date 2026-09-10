@@ -3,13 +3,21 @@ import 'package:salonmanager/core/services/windows_self_update_handoff.dart';
 
 void main() {
   test('self-update helper waits, closes gracefully, installs, then restarts', () {
-    expect(windowsSelfUpdateHelperScript, contains('Wait-ProcessExit $ParentPid 20'));
+    expect(
+      windowsSelfUpdateHelperScript,
+      contains(r'Wait-ProcessExit $ParentPid 20'),
+    );
     expect(windowsSelfUpdateHelperScript, contains('CloseMainWindow()'));
-    expect(windowsSelfUpdateHelperScript, contains('-FilePath $Installer'));
+    expect(
+      windowsSelfUpdateHelperScript,
+      contains(r'-FilePath $Installer'),
+    );
     expect(windowsSelfUpdateHelperScript, contains('-Wait'));
     expect(
       windowsSelfUpdateHelperScript,
-      contains('Start-Process -FilePath $Executable -WorkingDirectory $InstallDir'),
+      contains(
+        r'Start-Process -FilePath $Executable -WorkingDirectory $InstallDir',
+      ),
     );
   });
 
