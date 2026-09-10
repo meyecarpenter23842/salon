@@ -63,7 +63,7 @@ void main() {
     );
 
     expect(result.allowed, isFalse);
-    expect(result.message, contains('đồng hồ Windows'));
+    expect(result.message, contains('Đồng hồ Windows'));
   });
 
   test('rejects token once offline grace is exhausted', () async {
