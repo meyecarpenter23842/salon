@@ -232,7 +232,7 @@ class _ActivationCardState extends State<_ActivationCard> {
               widget.busy
                   ? 'Đang kiểm tra license với Key Manager...'
                   : blocked
-                  ? 'License hiện tại chưa cho phép mở ứng dụng. Anh có thể thử lại hoặc nhập key khác.'
+                  ? 'License hiện tại chưa cho phép mở ứng dụng. Có thể thử lại hoặc nhập key khác.'
                   : 'Nhập license key một lần. Những lần mở sau Salon sẽ tự xác minh trước khi vào ứng dụng.',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 height: 1.5,
@@ -297,7 +297,7 @@ class _ActivationCardState extends State<_ActivationCard> {
                   ),
                   validator: (value) {
                     if ((value ?? '').trim().isEmpty) {
-                      return 'Anh nhập license key.';
+                      return 'Nhập license key.';
                     }
                     return null;
                   },
@@ -350,6 +350,6 @@ class _ActivationCardState extends State<_ActivationCard> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
-    widget.onActivate(_controller.text.trim());
+    unawaited(widget.onActivate(_controller.text.trim()));
   }
 }
