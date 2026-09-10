@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $nsisPath = Join-Path $repoRoot 'installer\salon.nsi'
 $packagePath = Join-Path $PSScriptRoot 'package-installer.ps1'
+$handoffPath = Join-Path $repoRoot 'lib\core\services\windows_self_update_handoff.dart'
 $pubspecPath = Join-Path $repoRoot 'pubspec.yaml'
 $outputDir = Join-Path $repoRoot 'dist\windows-release'
 $iconPath = Join-Path $outputDir '.salon-installer-icon.ico'
@@ -98,14 +99,17 @@ public static class SalonShellIcon {
 
 $nsis = Get-Content -Raw -Encoding UTF8 -Path $nsisPath
 $packageScript = Get-Content -Raw -Encoding UTF8 -Path $packagePath
+$handoff = Get-Content -Raw -Encoding UTF8 -Path $handoffPath
 
 Assert-Contains $nsis '!insertmacro MUI_PAGE_DIRECTORY' 'Installer phải có trang chọn thư mục.'
 Assert-Contains $nsis 'InstallDirRegKey HKCU "Software\HairSpaManager" "InstallDir"' 'Installer phải nhớ thư mục cài hiện tại.'
 Assert-Contains $nsis 'CreateShortcut "$DESKTOP\Salon.lnk"' 'Thiếu Desktop shortcut.'
 Assert-Contains $nsis 'CreateShortcut "$SMPROGRAMS\Salon\Salon.lnk"' 'Thiếu Start Menu shortcut.'
 Assert-Contains $nsis 'RequestExecutionLevel user' 'Installer phải chạy per-user để cho phép chọn ổ/thư mục mà không ép admin.'
-Assert-Contains $nsis 'taskkill /IM salonmanager.exe /F' 'Silent updater phải đóng các process Salon trước khi thay binary.'
-Assert-Contains $nsis 'Exec ''"$INSTDIR\salonmanager.exe"''' 'Silent updater phải mở lại Salon sau khi cài.'
+Assert-Contains $nsis '!define MUI_FINISHPAGE_RUN "$INSTDIR\salonmanager.exe"' 'Installer tương tác phải cho phép mở Salon sau khi cài.'
+Assert-Contains $handoff 'CloseMainWindow()' 'Silent updater phải đóng các cửa sổ Salon còn lại theo cách graceful.'
+Assert-Contains $handoff '-Wait' 'Silent updater phải chờ installer hoàn tất trước khi mở lại Salon.'
+Assert-Contains $handoff 'Start-Process -FilePath $Executable' 'Silent updater helper phải tự mở lại Salon.'
 Assert-Contains $nsis '!define MUI_ICON "${APP_ICON}"' 'Installer phải dùng icon Salon qua MUI_ICON.'
 Assert-Contains $nsis '!define MUI_UNICON "${APP_ICON}"' 'Uninstaller phải dùng icon Salon qua MUI_UNICON.'
 Assert-Contains $packageScript 'icon.png' 'Package installer phải dùng icon.png làm nguồn icon.'
@@ -113,6 +117,9 @@ Assert-Contains $packageScript 'prepare-icon.ps1' 'Package installer phải tạ
 Assert-Contains $packageScript '"/DAPP_ICON=$iconOutputPath"' 'Package installer phải truyền APP_ICON cho NSIS.'
 Assert-Contains $packageScript 'Salon-Setup-$BuildName.exe' 'Tên artifact installer không đúng contract.'
 
+if ($nsis -match '(?i)taskkill' -or $handoff -match '(?i)taskkill') {
+  throw 'Updater không được force-kill Salon khi SQLite có thể đang mở.'
+}
 if ($nsis -match '(?i)RMDir\s+/r\s+"?\$APPDATA' -or $nsis -match '(?i)Delete\s+"?\$APPDATA') {
   throw 'Installer/uninstaller không được xóa AppData.'
 }
@@ -127,7 +134,8 @@ if ($RequireArtifacts) {
   $version = $match.Groups[1].Value
   $artifact = Join-Path $outputDir "Salon-Setup-$version.exe"
   if (-not (Test-Path $artifact)) { throw "Thiếu artifact installer: $artifact" }
-  if ((Get-Item $artifact).Length -lt 1MB) { throw 'Installer nhỏ bất thường (<1MB).' }
+  if ((Get-Item $artifact).Length -lt 1MB) { throw 'Installer nhỏ bất thường (<1MB).'
+  }
   if (-not (Test-Path $iconPath)) { throw "Thiếu icon installer đã tạo: $iconPath" }
 
   Assert-EmbeddedInstallerIcon $artifact $iconPath
