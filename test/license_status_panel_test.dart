@@ -5,7 +5,7 @@ import 'package:salonmanager/core/license/license_models.dart';
 import 'package:salonmanager/features/settings/presentation/pages/license_status_panel.dart';
 
 void main() {
-  testWidgets('license panel shows useful metadata without exposing full key', (
+  testWidgets('license dialog shows useful metadata without exposing full key', (
     tester,
   ) async {
     final state = StoredLicenseState(
@@ -25,13 +25,27 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: LicenseStatusPanel(loader: () async => state),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => showLicenseStatusDialog(
+                  context,
+                  loader: () async => state,
+                ),
+                child: const Text('Mở bản quyền'),
+              ),
+            ),
+          ),
         ),
       ),
     );
+
+    await tester.tap(find.text('Mở bản quyền'));
     await tester.pumpAndSettle();
 
+    expect(tester.takeException(), isNull);
+    expect(find.text('Bản quyền & thiết bị'), findsOneWidget);
     expect(find.text('Salon đã được kích hoạt'), findsOneWidget);
     expect(find.text('Theo thời hạn'), findsOneWidget);
     expect(find.text('Tối đa 3 thiết bị'), findsOneWidget);
