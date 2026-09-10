@@ -1,10 +1,20 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app/app.dart';
 import 'core/database/database_bootstrap.dart';
 import 'core/database/salon_database.dart';
+import 'core/license/license_api.dart';
+import 'core/license/license_config.dart';
+import 'core/license/license_coordinator.dart';
+import 'core/license/license_gate.dart';
+import 'core/license/license_models.dart';
+import 'core/license/license_storage.dart';
+import 'core/license/offline_license_verifier.dart';
 import 'core/settings/local_settings_store.dart';
 
 Future<void> main(List<String> args) async {
@@ -14,12 +24,39 @@ Future<void> main(List<String> args) async {
     await DatabaseBootstrap.ensureInitialized();
     await LocalSettingsStore.instance.initialize();
     await SalonDatabase.instance.initialize();
-    final launchStaffWindow = args.any((arg) => arg.trim() == '--staff-window');
+
+    final deviceSettings = LocalSettingsStore.instance.readDeviceSettings();
+    final licenseStorage = WindowsCredentialLicenseStorage();
+    final deviceId = await licenseStorage.loadOrCreateDeviceId(
+      legacyDeviceId: deviceSettings['deviceId'],
+    );
+    final packageInfo = await PackageInfo.fromPlatform();
+    final runtime = LicenseRuntimeContext(
+      deviceId: deviceId,
+      deviceName: (deviceSettings['deviceName'] ?? '').trim().isEmpty
+          ? 'Salon Windows'
+          : deviceSettings['deviceName']!.trim(),
+      os: _windowsDescription(),
+      appVersion: packageInfo.version,
+    );
+    final licenseCoordinator = LicenseCoordinator(
+      api: HttpLicenseApi(baseUrl: LicenseConfig.apiBaseUrl),
+      storage: licenseStorage,
+      offlineVerifier: Ed25519OfflineLicenseVerifier(),
+      runtime: runtime,
+    );
+    final launchStaffWindow = args.any(
+      (arg) => arg.trim() == '--staff-window',
+    );
+
     runApp(
       ProviderScope(
-        child: launchStaffWindow
-            ? const StaffWindowApp()
-            : const SalonManagerApp(),
+        child: LicenseGate(
+          controller: licenseCoordinator,
+          launchStaffWindow: launchStaffWindow,
+          mainAppBuilder: (_) => const SalonManagerApp(),
+          staffAppBuilder: (_) => const StaffWindowApp(),
+        ),
       ),
     );
   } catch (error, stackTrace) {
@@ -34,6 +71,14 @@ Future<void> main(List<String> args) async {
 
     runApp(_StartupFailureApp(error: error, stackTrace: stackTrace));
   }
+}
+
+String _windowsDescription() {
+  final version = Platform.operatingSystemVersion.trim();
+  if (version.isEmpty) {
+    return 'Windows';
+  }
+  return version.length <= 200 ? version : version.substring(0, 200);
 }
 
 class _StartupFailureApp extends StatelessWidget {
