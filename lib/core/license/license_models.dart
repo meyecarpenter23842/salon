@@ -61,7 +61,11 @@ class LicenseServerSnapshot {
     required this.deviceId,
     required this.deviceStatus,
     required this.requestId,
+    this.licenseType,
     this.licenseExpiresAt,
+    this.maxDevices,
+    this.deviceActivatedAt,
+    this.deviceLastSeenAt,
     this.offline,
   });
 
@@ -70,9 +74,13 @@ class LicenseServerSnapshot {
   final String applicationId;
   final String appCode;
   final String licenseId;
+  final String? licenseType;
   final DateTime? licenseExpiresAt;
+  final int? maxDevices;
   final String deviceId;
   final String deviceStatus;
+  final DateTime? deviceActivatedAt;
+  final DateTime? deviceLastSeenAt;
   final String requestId;
   final LicenseOfflineEntitlement? offline;
 
@@ -88,11 +96,13 @@ class LicenseServerSnapshot {
       applicationId: _text(application['id'], 'application.id'),
       appCode: _text(application['appCode'], 'application.appCode'),
       licenseId: _text(license['id'], 'license.id'),
-      licenseExpiresAt: license['expiresAt'] == null
-          ? null
-          : _date(license['expiresAt'], 'license.expiresAt'),
+      licenseType: _optionalText(license['type'], 'license.type'),
+      licenseExpiresAt: _optionalDate(license['expiresAt'], 'license.expiresAt'),
+      maxDevices: _optionalPositiveInt(license['maxDevices'], 'license.maxDevices'),
       deviceId: _text(device['deviceId'], 'device.deviceId'),
       deviceStatus: _text(device['status'], 'device.status'),
+      deviceActivatedAt: _optionalDate(device['activatedAt'], 'device.activatedAt'),
+      deviceLastSeenAt: _optionalDate(device['lastSeenAt'], 'device.lastSeenAt'),
       requestId: _text(json['requestId'], 'requestId'),
       offline: offlineJson == null
           ? null
@@ -128,6 +138,12 @@ class StoredLicenseState {
     required this.wallClockAtSync,
     required this.trustedHighWater,
     this.offlineToken,
+    this.licenseType,
+    this.licenseExpiresAt,
+    this.maxDevices,
+    this.deviceName,
+    this.deviceActivatedAt,
+    this.deviceLastSeenAt,
   });
 
   final String licenseKey;
@@ -135,6 +151,12 @@ class StoredLicenseState {
   final String applicationId;
   final String deviceId;
   final String? offlineToken;
+  final String? licenseType;
+  final DateTime? licenseExpiresAt;
+  final int? maxDevices;
+  final String? deviceName;
+  final DateTime? deviceActivatedAt;
+  final DateTime? deviceLastSeenAt;
   final DateTime serverTimeAtSync;
   final DateTime wallClockAtSync;
   final DateTime trustedHighWater;
@@ -149,6 +171,12 @@ class StoredLicenseState {
       applicationId: applicationId,
       deviceId: deviceId,
       offlineToken: offlineToken ?? this.offlineToken,
+      licenseType: licenseType,
+      licenseExpiresAt: licenseExpiresAt,
+      maxDevices: maxDevices,
+      deviceName: deviceName,
+      deviceActivatedAt: deviceActivatedAt,
+      deviceLastSeenAt: deviceLastSeenAt,
       serverTimeAtSync: serverTimeAtSync,
       wallClockAtSync: wallClockAtSync,
       trustedHighWater: trustedHighWater ?? this.trustedHighWater,
@@ -162,6 +190,12 @@ class StoredLicenseState {
     'applicationId': applicationId,
     'deviceId': deviceId,
     'offlineToken': offlineToken,
+    'licenseType': licenseType,
+    'licenseExpiresAt': licenseExpiresAt?.toUtc().toIso8601String(),
+    'maxDevices': maxDevices,
+    'deviceName': deviceName,
+    'deviceActivatedAt': deviceActivatedAt?.toUtc().toIso8601String(),
+    'deviceLastSeenAt': deviceLastSeenAt?.toUtc().toIso8601String(),
     'serverTimeAtSync': serverTimeAtSync.toUtc().toIso8601String(),
     'wallClockAtSync': wallClockAtSync.toUtc().toIso8601String(),
     'trustedHighWater': trustedHighWater.toUtc().toIso8601String(),
@@ -181,6 +215,12 @@ class StoredLicenseState {
       applicationId: _text(json['applicationId'], 'applicationId'),
       deviceId: _text(json['deviceId'], 'deviceId'),
       offlineToken: offlineToken as String?,
+      licenseType: _optionalText(json['licenseType'], 'licenseType'),
+      licenseExpiresAt: _optionalDate(json['licenseExpiresAt'], 'licenseExpiresAt'),
+      maxDevices: _optionalPositiveInt(json['maxDevices'], 'maxDevices'),
+      deviceName: _optionalText(json['deviceName'], 'deviceName'),
+      deviceActivatedAt: _optionalDate(json['deviceActivatedAt'], 'deviceActivatedAt'),
+      deviceLastSeenAt: _optionalDate(json['deviceLastSeenAt'], 'deviceLastSeenAt'),
       serverTimeAtSync: _date(json['serverTimeAtSync'], 'serverTimeAtSync'),
       wallClockAtSync: _date(json['wallClockAtSync'], 'wallClockAtSync'),
       trustedHighWater: _date(json['trustedHighWater'], 'trustedHighWater'),
@@ -205,6 +245,11 @@ String _text(Object? value, String field) {
   return value.trim();
 }
 
+String? _optionalText(Object? value, String field) {
+  if (value == null) return null;
+  return _text(value, field);
+}
+
 DateTime _date(Object? value, String field) {
   final text = _text(value, field);
   final parsed = DateTime.tryParse(text);
@@ -212,4 +257,17 @@ DateTime _date(Object? value, String field) {
     throw FormatException('$field must be an ISO-8601 timestamp');
   }
   return parsed.toUtc();
+}
+
+DateTime? _optionalDate(Object? value, String field) {
+  if (value == null) return null;
+  return _date(value, field);
+}
+
+int? _optionalPositiveInt(Object? value, String field) {
+  if (value == null) return null;
+  if (value is! int || value <= 0) {
+    throw FormatException('$field must be a positive integer');
+  }
+  return value;
 }
