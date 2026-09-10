@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/offline_update_summary.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/services/offline_update_service.dart';
+import '../../../../core/services/safe_windows_update_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
 
@@ -19,8 +20,6 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
   bool _isDownloading = false;
   bool _isInstalling = false;
   double _downloadPercent = 0;
-  String? _downloadedInstallerPath;
-  String? _downloadedVersion;
   UpdateRestartResult? _postRestartResult;
 
   @override
@@ -54,9 +53,6 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
   }
 
   Widget _buildContent(OfflineUpdateSummary item) {
-    final downloadedForCurrentRelease =
-        _downloadedInstallerPath != null &&
-        _downloadedVersion == item.manifest?.latestVersion;
     final busy = _isChecking || _isDownloading || _isInstalling;
 
     return Column(
@@ -72,14 +68,13 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             PremiumStatusPill(
-              label: item.statusLabel,
+              label: _isInstalling
+                  ? 'Đang chuẩn bị cài đặt'
+                  : _isDownloading
+                      ? 'Đang tải bản cập nhật'
+                      : item.statusLabel,
               tone: item.hasUpdate ? AppColors.warning : AppColors.success,
             ),
-            if (downloadedForCurrentRelease)
-              PremiumStatusPill(
-                label: 'Đã tải xong',
-                tone: AppColors.success,
-              ),
           ],
         ),
         const SizedBox(height: 10),
@@ -135,15 +130,13 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
             ),
           ),
         ],
-        if (_isDownloading || downloadedForCurrentRelease) ...[
+        if (_isDownloading || _downloadPercent >= 100) ...[
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: LinearProgressIndicator(
-                  value: downloadedForCurrentRelease
-                      ? 1
-                      : (_downloadPercent / 100).clamp(0, 1).toDouble(),
+                  value: (_downloadPercent / 100).clamp(0, 1).toDouble(),
                   minHeight: 7,
                   borderRadius: BorderRadius.circular(999),
                 ),
@@ -152,7 +145,7 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
               SizedBox(
                 width: 52,
                 child: Text(
-                  '${downloadedForCurrentRelease ? 100 : _downloadPercent.round()}%',
+                  '${_downloadPercent.round()}%',
                   textAlign: TextAlign.right,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
@@ -165,7 +158,7 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
           spacing: 10,
           runSpacing: 10,
           children: [
-            FilledButton.icon(
+            OutlinedButton.icon(
               onPressed: busy ? null : _checkForUpdate,
               icon: _isChecking
                   ? const SizedBox(
@@ -178,43 +171,30 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
                 _isChecking ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật',
               ),
             ),
-            if (item.hasUpdate && !downloadedForCurrentRelease)
-              OutlinedButton.icon(
-                onPressed: busy ? null : () => _downloadUpdate(item),
-                icon: _isDownloading
+            if (item.hasUpdate)
+              FilledButton.icon(
+                key: const Key('salon-update-now'),
+                onPressed: busy ? null : () => _updateNow(item),
+                icon: _isDownloading || _isInstalling
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.download_outlined),
+                    : const Icon(Icons.system_update_alt_rounded),
                 label: Text(
                   _isDownloading
                       ? 'Đang tải ${_downloadPercent.round()}%'
-                      : 'Tải bản cập nhật',
-                ),
-              ),
-            if (downloadedForCurrentRelease)
-              FilledButton.icon(
-                onPressed: busy ? null : () => _restartAndUpdate(item),
-                icon: _isInstalling
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.restart_alt_rounded),
-                label: Text(
-                  _isInstalling
-                      ? 'Đang khởi động trình cập nhật...'
-                      : 'Khởi động lại & cập nhật',
+                      : _isInstalling
+                          ? 'Đang sao lưu & cập nhật...'
+                          : 'Cập nhật ngay',
                 ),
               ),
           ],
         ),
         const SizedBox(height: 12),
         Text(
-          'Cập nhật chỉ thay file chương trình trong thư mục cài đặt. Database và dữ liệu Salon tại AppData không bị xóa hoặc di chuyển.',
+          'Khi bấm Cập nhật ngay, Salon tải và xác minh SHA-256, tạo một backup SQLite hợp lệ, đóng database, đóng an toàn các cửa sổ Salon, cài đè file chương trình rồi tự mở lại. Database và backup nằm ngoài thư mục cài đặt nên không bị installer xóa hoặc di chuyển.',
           style: TextStyle(
             color: AppColors.textMuted,
             fontSize: 11.5,
@@ -228,8 +208,6 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
   Future<void> _checkForUpdate() async {
     setState(() {
       _isChecking = true;
-      _downloadedInstallerPath = null;
-      _downloadedVersion = null;
       _downloadPercent = 0;
     });
 
@@ -250,18 +228,17 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
     );
   }
 
-  Future<void> _downloadUpdate(OfflineUpdateSummary summary) async {
+  Future<void> _updateNow(OfflineUpdateSummary summary) async {
     final manifest = summary.manifest;
     if (manifest == null) return;
 
     setState(() {
       _isDownloading = true;
+      _isInstalling = false;
       _downloadPercent = 0;
-      _downloadedInstallerPath = null;
-      _downloadedVersion = null;
     });
 
-    final result = await const OfflineUpdateService().downloadInstaller(
+    final download = await const OfflineUpdateService().downloadInstaller(
       installerPath: manifest.downloadPath,
       targetVersion: manifest.latestVersion,
       expectedSha256: manifest.sha256,
@@ -272,38 +249,41 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
     );
     if (!mounted) return;
 
+    if (!download.success || download.localInstallerPath == null) {
+      setState(() => _isDownloading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(download.detail)),
+      );
+      return;
+    }
+
     setState(() {
       _isDownloading = false;
-      if (result.success && result.localInstallerPath != null) {
-        _downloadPercent = 100;
-        _downloadedInstallerPath = result.localInstallerPath;
-        _downloadedVersion = manifest.latestVersion;
-      }
+      _isInstalling = true;
+      _downloadPercent = 100;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.detail)),
+      const SnackBar(
+        content: Text(
+          'Đã xác minh bộ cài. Salon đang tạo backup dữ liệu trước khi cập nhật...',
+        ),
+      ),
     );
-  }
 
-  Future<void> _restartAndUpdate(OfflineUpdateSummary summary) async {
-    final installerPath = _downloadedInstallerPath;
-    final targetVersion = _downloadedVersion;
-    if (installerPath == null || targetVersion == null) return;
-
-    setState(() => _isInstalling = true);
-    final result = await const OfflineUpdateService().installDownloadedUpdate(
-      localInstallerPath: installerPath,
+    // On success this call closes SQLite, hands off to an external helper and
+    // exits the current process. It only returns when the safe handoff failed.
+    final install =
+        await const SafeWindowsUpdateService().installDownloadedUpdate(
+      localInstallerPath: download.localInstallerPath!,
       fromVersion: summary.currentVersion,
-      targetVersion: targetVersion,
+      targetVersion: manifest.latestVersion,
     );
     if (!mounted) return;
 
-    if (!result.success) {
-      setState(() => _isInstalling = false);
-    }
+    setState(() => _isInstalling = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.detail)),
+      SnackBar(content: Text(install.detail)),
     );
   }
 }

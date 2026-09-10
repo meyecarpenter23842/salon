@@ -7,17 +7,30 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $servicePath = Join-Path $repoRoot 'lib\core\services\offline_update_service.dart'
+$safeServicePath = Join-Path $repoRoot 'lib\core\services\safe_windows_update_service.dart'
+$handoffPath = Join-Path $repoRoot 'lib\core\services\windows_self_update_handoff.dart'
 $panelPath = Join-Path $repoRoot 'lib\features\settings\presentation\pages\windows_update_panel.dart'
+$installerScriptPath = Join-Path $repoRoot 'installer\salon.nsi'
+$databasePath = Join-Path $repoRoot 'lib\core\database\salon_database.dart'
 $packageUpdatePath = Join-Path $PSScriptRoot 'package-update.ps1'
 $outputDir = Join-Path $repoRoot 'dist\windows-release'
 $pubspecPath = Join-Path $repoRoot 'pubspec.yaml'
+$packageJsonPath = Join-Path $repoRoot 'package.json'
 
 function Assert-Contains([string]$Text, [string]$Needle, [string]$Message) {
   if (-not $Text.Contains($Needle)) { throw $Message }
 }
 
+function Assert-NotContains([string]$Text, [string]$Needle, [string]$Message) {
+  if ($Text.Contains($Needle)) { throw $Message }
+}
+
 $service = Get-Content -Raw -Encoding UTF8 -Path $servicePath
+$safeService = Get-Content -Raw -Encoding UTF8 -Path $safeServicePath
+$handoff = Get-Content -Raw -Encoding UTF8 -Path $handoffPath
 $panel = Get-Content -Raw -Encoding UTF8 -Path $panelPath
+$installer = Get-Content -Raw -Encoding UTF8 -Path $installerScriptPath
+$database = Get-Content -Raw -Encoding UTF8 -Path $databasePath
 $packageUpdate = Get-Content -Raw -Encoding UTF8 -Path $packageUpdatePath
 $publicFeed = 'https://pub-3f0aad8b18e146eb9eb09b9529063295.r2.dev'
 
@@ -25,11 +38,33 @@ Assert-Contains $service $publicFeed 'Updater phải dùng đúng public R2 feed
 Assert-Contains $service 'latest.json' 'Updater phải đọc latest.json.'
 Assert-Contains $service 'SHA-256' 'Updater phải xác minh SHA-256.'
 Assert-Contains $service 'pending_update.json' 'Updater phải có marker xác nhận sau restart.'
+
 Assert-Contains $panel 'Kiểm tra cập nhật' 'UI thiếu nút Kiểm tra cập nhật.'
-Assert-Contains $panel 'Tải bản cập nhật' 'UI thiếu bước tải update.'
-Assert-Contains $panel 'Khởi động lại & cập nhật' 'UI thiếu bước restart & update.'
+Assert-Contains $panel 'Cập nhật ngay' 'UI phải có một nút Cập nhật ngay tự tải và cài.'
+Assert-Contains $panel 'SafeWindowsUpdateService' 'UI phải dùng safe self-update handoff.'
+
+Assert-Contains $safeService 'BackupService' 'Updater an toàn phải tạo SQLite safety backup.'
+Assert-Contains $safeService 'createBackup()' 'Updater an toàn phải gọi createBackup trước khi cài.'
+Assert-Contains $safeService 'SalonDatabase.instance.close()' 'Updater phải đóng SQLite trước khi thoát app.'
+Assert-Contains $safeService 'WindowsSelfUpdateHandoff' 'Updater phải bàn giao sang helper ngoài tiến trình.'
+Assert-Contains $safeService 'exit(0)' 'Salon phải thoát sau khi đóng DB để helper cài đè binary.'
+
+Assert-Contains $handoff 'CloseMainWindow()' 'Helper phải đóng các cửa sổ Salon còn lại theo cách graceful.'
+Assert-Contains $handoff '-Wait' 'Helper phải chờ installer hoàn tất trước khi restart Salon.'
+Assert-Contains $handoff 'Start-Process -FilePath $Executable' 'Helper phải tự mở lại Salon sau update.'
+Assert-NotContains $handoff 'taskkill' 'Helper không được force-kill Salon.'
+Assert-NotContains $installer 'taskkill' 'NSIS không được force-kill Salon khi SQLite có thể đang mở.'
+
+Assert-Contains $database "Platform.environment['APPDATA']" 'Database Windows phải nằm dưới AppData.'
+Assert-Contains $installer 'InstallDir "$LOCALAPPDATA\Programs\Salon"' 'Installer phải cài binary ngoài thư mục database.'
+if ($installer -match '(?im)^\s*(Delete|RMDir).*APPDATA') {
+  throw 'Installer/uninstaller không được xóa dữ liệu AppData.'
+}
+
 Assert-Contains $packageUpdate 'latest.json' 'package:update phải sinh latest.json.'
 Assert-Contains $packageUpdate 'UPLOAD LAST' 'Script phải nhắc upload manifest cuối cùng.'
+Assert-Contains $packageUpdate 'package.json' 'package:update phải kiểm tra version mà Key Manager release profile đọc.'
+Assert-Contains $packageUpdate 'Version lệch' 'package:update phải chặn package.json/pubspec version mismatch.'
 
 $forbiddenRuntimeTokens = @(
   'cloudflarestorage.com',
@@ -39,8 +74,10 @@ $forbiddenRuntimeTokens = @(
   'S3 endpoint'
 )
 foreach ($token in $forbiddenRuntimeTokens) {
-  if ($service.IndexOf($token, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-    throw "Runtime updater chứa token vận hành bị cấm: $token"
+  foreach ($runtimeText in @($service, $safeService, $handoff)) {
+    if ($runtimeText.IndexOf($token, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+      throw "Runtime updater chứa token vận hành bị cấm: $token"
+    }
   }
 }
 
@@ -49,12 +86,16 @@ if ($service -match '(?i)portable.*(copy|scan|migrat|adopt)' -or
   throw 'Updater không được chứa logic adoption/migration từ portable.'
 }
 
-if ($RequireArtifacts) {
-  $pubspec = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
-  $versionMatch = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+\s*$')
-  if (-not $versionMatch.Success) { throw 'Không đọc được version pubspec.' }
-  $version = $versionMatch.Groups[1].Value
+$pubspec = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
+$versionMatch = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+\s*$')
+if (-not $versionMatch.Success) { throw 'Không đọc được version pubspec.' }
+$version = $versionMatch.Groups[1].Value
+$package = Get-Content -Raw -Encoding UTF8 -Path $packageJsonPath | ConvertFrom-Json
+if ($package.version.ToString().Trim() -ne $version) {
+  throw "package.json version $($package.version) không khớp pubspec $version"
+}
 
+if ($RequireArtifacts) {
   $installerPath = Join-Path $outputDir "Salon-Setup-$version.exe"
   $manifestPath = Join-Path $outputDir 'latest.json'
   if (-not (Test-Path $installerPath)) { throw "Thiếu installer: $installerPath" }
