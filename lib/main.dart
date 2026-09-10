@@ -13,8 +13,8 @@ import 'core/license/license_config.dart';
 import 'core/license/license_coordinator.dart';
 import 'core/license/license_gate.dart';
 import 'core/license/license_models.dart';
-import 'core/license/license_storage.dart';
 import 'core/license/offline_license_verifier.dart';
+import 'core/license/windows_credential_license_storage.dart';
 import 'core/settings/local_settings_store.dart';
 
 Future<void> main(List<String> args) async {
