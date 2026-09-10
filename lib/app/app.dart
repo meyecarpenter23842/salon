@@ -7,8 +7,10 @@ import '../core/theme/app_theme.dart';
 import '../core/theme/theme_controller.dart';
 import '../features/overview/presentation/pages/staff_intake_workspace.dart';
 import '../features/overview/presentation/pages/staff_window_workspace.dart';
+import '../features/settings/presentation/pages/license_status_panel.dart';
 import 'desktop_shell_page.dart';
 import 'main_cross_process_refresh.dart';
+import 'navigation/desktop_navigation.dart';
 
 class SalonManagerApp extends ConsumerWidget {
   const SalonManagerApp({super.key});
@@ -29,11 +31,38 @@ class SalonManagerApp extends ConsumerWidget {
         ).copyWith(textScaler: const TextScaler.linear(1.0)),
         child: child!,
       ),
-      home: MainCrossProcessRefreshGate(
-        enabled: Platform.isWindows &&
-            !Platform.environment.containsKey('FLUTTER_TEST'),
-        child: const DesktopShellPage(),
-      ),
+      home: const _SalonManagerHome(),
+    );
+  }
+}
+
+class _SalonManagerHome extends ConsumerWidget {
+  const _SalonManagerHome();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedSection = ref.watch(desktopSectionProvider);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        MainCrossProcessRefreshGate(
+          enabled: Platform.isWindows &&
+              !Platform.environment.containsKey('FLUTTER_TEST'),
+          child: const DesktopShellPage(),
+        ),
+        if (selectedSection == DesktopSection.settings)
+          Positioned(
+            right: 24,
+            bottom: 20,
+            child: FilledButton.tonalIcon(
+              key: const Key('license-status-open'),
+              onPressed: () => showLicenseStatusDialog(context),
+              icon: const Icon(Icons.verified_user_outlined, size: 18),
+              label: const Text('Bản quyền'),
+            ),
+          ),
+      ],
     );
   }
 }
