@@ -32,6 +32,9 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^2.6.1
   crypto: ^3.0.6
+  cryptography: ^2.9.0
+  ffi: ^2.2.0
+  http: ^1.6.0
   pdf: ^3.11.3
   printing: ^5.14.3
   file_selector: ^1.0.3
@@ -44,6 +47,7 @@ dependencies:
   path: ^1.9.1
   intl: ^0.20.2
   uuid: ^4.5.1
+  win32: ^5.15.0
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
