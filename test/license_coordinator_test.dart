@@ -51,6 +51,11 @@ void main() {
     expect(storage.state?.licenseKey, 'SALON-VALID-KEY');
     expect(storage.state?.deviceId, runtime.deviceId);
     expect(storage.state?.licenseId, 'license-1');
+    expect(storage.state?.licenseType, 'SUBSCRIPTION');
+    expect(storage.state?.licenseExpiresAt, DateTime.utc(2026, 10, 10, 12));
+    expect(storage.state?.maxDevices, 3);
+    expect(storage.state?.deviceName, 'Salon PC');
+    expect(storage.state?.deviceActivatedAt, DateTime.utc(2026, 9, 1, 8));
   });
 
   test('wrong application key is blocked and is not persisted', () async {
@@ -135,8 +140,13 @@ LicenseServerSnapshot _snapshot() {
     applicationId: 'app-salon',
     appCode: 'SALON',
     licenseId: 'license-1',
+    licenseType: 'SUBSCRIPTION',
+    licenseExpiresAt: DateTime.utc(2026, 10, 10, 12),
+    maxDevices: 3,
     deviceId: 'device-1',
     deviceStatus: 'ACTIVE',
+    deviceActivatedAt: DateTime.utc(2026, 9, 1, 8),
+    deviceLastSeenAt: DateTime.utc(2026, 9, 10, 11, 59),
     requestId: 'request-1',
     offline: LicenseOfflineEntitlement(
       token: 'header.payload.signature',
