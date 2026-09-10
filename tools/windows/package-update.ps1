@@ -10,6 +10,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $pubspecPath = Join-Path $repoRoot 'pubspec.yaml'
+$packageJsonPath = Join-Path $repoRoot 'package.json'
 $outputDir = Join-Path $repoRoot 'dist\windows-release'
 $installerScript = Join-Path $PSScriptRoot 'package-installer.ps1'
 
@@ -25,13 +26,37 @@ function Read-SalonVersion {
   }
 }
 
+function Read-ReleaseManagerVersion {
+  if (-not (Test-Path $packageJsonPath)) {
+    throw "Không tìm thấy package.json dùng bởi Key Manager release profile."
+  }
+  $package = Get-Content -Raw -Encoding UTF8 -Path $packageJsonPath | ConvertFrom-Json
+  $value = $package.version.ToString().Trim()
+  if ($value -notmatch '^\d+\.\d+\.\d+$') {
+    throw "package.json version phải có dạng x.y.z, nhận được: $value"
+  }
+  return $value
+}
+
 $version = Read-SalonVersion
+$releaseManagerVersion = Read-ReleaseManagerVersion
+
 if ([string]::IsNullOrWhiteSpace($BuildName)) {
   $BuildName = $version.Name
 }
 if ($BuildNumber -lt 0) {
   $BuildNumber = $version.Number
 }
+
+# Key Manager release profile reads package.json.version while the Flutter/NSIS
+# package is built from pubspec.yaml. Refuse to publish split-brain metadata.
+if ($releaseManagerVersion -ne $version.Name) {
+  throw "Version lệch: package.json=$releaseManagerVersion nhưng pubspec.yaml=$($version.Name). Đồng bộ version trước khi release."
+}
+if ($BuildName -ne $version.Name) {
+  throw "BuildName=$BuildName không khớp pubspec.yaml=$($version.Name). Hãy bump version trong source thay vì override khi release."
+}
+
 if ([string]::IsNullOrWhiteSpace($Message)) {
   $Message = "Salon $BuildName đã sẵn sàng cập nhật."
 }

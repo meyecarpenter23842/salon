@@ -54,15 +54,9 @@ VIAddVersionKey /LANG=1033 "ProductVersion" "${PRODUCT_VERSION}"
 
 Function .onInit
   SetShellVarContext current
-  IfSilent 0 done
-    ; Updater launches this installer while Salon is still running. Give the
-    ; Flutter process time to flush state, then stop all Salon windows before
-    ; replacing application binaries. Runtime data lives under AppData and is
-    ; intentionally outside $INSTDIR.
-    Sleep 800
-    nsExec::ExecToLog 'taskkill /IM salonmanager.exe /F'
-    Sleep 500
-  done:
+  ; Silent self-update is launched only after the external updater helper has
+  ; confirmed all Salon processes exited. Never force-kill Salon from NSIS:
+  ; SQLite must already be closed before application binaries are replaced.
 FunctionEnd
 
 Section "Salon" SEC_MAIN
@@ -87,11 +81,9 @@ Section "Salon" SEC_MAIN
   CreateShortcut "$SMPROGRAMS\Salon\Salon.lnk" "$INSTDIR\salonmanager.exe"
   CreateShortcut "$SMPROGRAMS\Salon\Gỡ cài đặt Salon.lnk" "$INSTDIR\Uninstall.exe"
 
-  ; Silent mode is used only by the in-app updater. Restart after files have
-  ; been replaced so the next Flutter process can verify the new version.
-  IfSilent 0 interactive_done
-    Exec '"$INSTDIR\salonmanager.exe"'
-  interactive_done:
+  ; Interactive installs use the MUI finish-page Run action above. Silent
+  ; self-updates are restarted by the external helper only after this installer
+  ; exits successfully, matching the Key Manager handoff model.
 SectionEnd
 
 Section "Uninstall"
