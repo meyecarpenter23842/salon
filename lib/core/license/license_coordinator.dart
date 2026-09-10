@@ -75,7 +75,7 @@ class LicenseCoordinator implements LicenseGateController {
     if (normalizedKey.isEmpty) {
       return const LicenseGateResult(
         status: LicenseAccessStatus.activationRequired,
-        message: 'Anh nhập license key để kích hoạt Salon.',
+        message: 'Nhập license key để kích hoạt Salon.',
       );
     }
 
@@ -197,14 +197,17 @@ class LicenseCoordinator implements LicenseGateController {
 
   LicenseGateResult _blockedFromApi(LicenseApiException error) {
     final message = switch (error.code) {
-      'INVALID_LICENSE' => 'License key không hợp lệ hoặc không còn hoạt động trên máy này.',
+      'INVALID_LICENSE' =>
+        'License key không hợp lệ hoặc không còn hoạt động trên máy này.',
       'WRONG_APPLICATION' => 'License key này không được cấp cho Salon.',
-      'APPLICATION_DISABLED' => 'Ứng dụng Salon đang bị vô hiệu hóa trên Key Manager.',
+      'APPLICATION_DISABLED' =>
+        'Ứng dụng Salon đang bị vô hiệu hóa trên Key Manager.',
       'LICENSE_EXPIRED' => 'License key đã hết hạn.',
       'LICENSE_REVOKED' => 'License key đã bị thu hồi.',
       'DEVICE_REVOKED' => 'Thiết bị này đã bị thu hồi quyền sử dụng license.',
       'DEVICE_LIMIT_REACHED' => 'License key đã đạt giới hạn số thiết bị.',
-      'UPDATE_REQUIRED' => 'Phiên bản Salon hiện tại quá cũ. Cần cập nhật Salon trước khi tiếp tục.',
+      'UPDATE_REQUIRED' =>
+        'Phiên bản Salon hiện tại quá cũ. Cần cập nhật Salon trước khi tiếp tục.',
       'RATE_LIMITED' => 'Key Manager đang giới hạn yêu cầu. Hãy thử lại sau.',
       'INVALID_REQUEST' => 'Salon gửi yêu cầu license không hợp lệ.',
       _ => error.message,
