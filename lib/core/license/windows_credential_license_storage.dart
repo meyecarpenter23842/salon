@@ -47,22 +47,20 @@ class WindowsCredentialLicenseStorage implements LicenseStorage {
 
   String? _readCredential(String target) {
     _requireWindows();
-    final targetName = target.toNativeUtf16();
-    final credentialPointer = calloc<Pointer<CREDENTIAL>>();
-    try {
+    return using((arena) {
+      final targetName = arena.pcwstr(target);
+      final credentialPointer = arena<Pointer<CREDENTIAL>>();
       final result = CredRead(
         targetName,
         CRED_TYPE_GENERIC,
-        0,
         credentialPointer,
       );
-      if (result != TRUE) {
-        final errorCode = GetLastError();
-        if (errorCode == ERROR_NOT_FOUND) {
+      if (!result.value) {
+        if (result.error == ERROR_NOT_FOUND) {
           return null;
         }
         throw StateError(
-          'Windows Credential Manager read failed ($errorCode)',
+          'Windows Credential Manager read failed (${result.error})',
         );
       }
 
@@ -76,22 +74,18 @@ class WindowsCredentialLicenseStorage implements LicenseStorage {
       } finally {
         CredFree(nativeCredential);
       }
-    } finally {
-      calloc.free(credentialPointer);
-      calloc.free(targetName);
-    }
+    });
   }
 
   void _writeCredential(String target, String value) {
     _requireWindows();
-    final bytes = utf8.encode(value);
-    final blob = calloc<Uint8>(bytes.length);
-    final targetName = target.toNativeUtf16();
-    final userName = _credentialUser.toNativeUtf16();
-    final credential = calloc<CREDENTIAL>();
+    using((arena) {
+      final bytes = utf8.encode(value);
+      final blob = bytes.toNative(allocator: arena);
+      final targetName = arena.pwstr(target);
+      final userName = arena.pwstr(_credentialUser);
+      final credential = arena<CREDENTIAL>();
 
-    try {
-      blob.asTypedList(bytes.length).setAll(0, bytes);
       credential.ref
         ..Type = CRED_TYPE_GENERIC
         ..TargetName = targetName
@@ -101,18 +95,12 @@ class WindowsCredentialLicenseStorage implements LicenseStorage {
         ..CredentialBlobSize = bytes.length;
 
       final result = CredWrite(credential, 0);
-      if (result != TRUE) {
-        final errorCode = GetLastError();
+      if (!result.value) {
         throw StateError(
-          'Windows Credential Manager write failed ($errorCode)',
+          'Windows Credential Manager write failed (${result.error})',
         );
       }
-    } finally {
-      calloc.free(credential);
-      calloc.free(userName);
-      calloc.free(targetName);
-      calloc.free(blob);
-    }
+    });
   }
 
   void _requireWindows() {
