@@ -21,7 +21,7 @@ function Assert-Contains([string]$Text, [string]$Needle, [string]$Message) {
 function Assert-ValidAuthenticodeSignature([string]$Path) {
   $signature = Get-AuthenticodeSignature -FilePath $Path
   if ($signature.Status -ne 'Valid') {
-    throw "Authenticode signature không hợp lệ cho $Path: $($signature.Status)"
+    throw "Authenticode signature không hợp lệ cho ${Path}: $($signature.Status)"
   }
 }
 
