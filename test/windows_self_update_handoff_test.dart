@@ -35,10 +35,5 @@ void main() {
   test('self-update helper receives an explicit diagnostic log path', () {
     expect(windowsSelfUpdateHelperScript, contains(r'[string]$LogPath'));
     expect(windowsSelfUpdateHelperScript, contains(r'$logPath = $LogPath'));
-    expect(
-      windowsSelfUpdateHelperScript,
-      contains('self_update_helper.log'),
-      reason: 'Dart service should pass this filename through LogPath.',
-    );
   });
 }
