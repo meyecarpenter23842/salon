@@ -61,6 +61,24 @@ Assert-Contains $handoff 'Start-Process -FilePath $Executable' 'Helper phải t�
 Assert-NotContains $handoff 'taskkill' 'Helper không được force-kill Salon.'
 Assert-NotContains $installer 'taskkill' 'NSIS không được force-kill Salon khi SQLite có thể đang mở.'
 
+$helperMatch = [regex]::Match(
+  $handoff,
+  "(?s)const windowsSelfUpdateHelperScript = r'''(.*?)''';"
+)
+if (-not $helperMatch.Success) {
+  throw 'Không trích được PowerShell self-update helper để kiểm tra cú pháp.'
+}
+$tokens = $null
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseInput(
+  $helperMatch.Groups[1].Value,
+  [ref]$tokens,
+  [ref]$parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+  throw "PowerShell self-update helper có lỗi cú pháp: $($parseErrors[0].Message)"
+}
+
 Assert-Contains $database "Platform.environment['APPDATA']" 'Database Windows phải nằm dưới AppData.'
 Assert-Contains $installer 'InstallDir "$LOCALAPPDATA\Programs\Salon"' 'Installer phải cài binary ngoài thư mục database.'
 if ($installer -match '(?im)^\s*(Delete|RMDir).*APPDATA') {
