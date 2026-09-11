@@ -22,7 +22,7 @@ Unicode true
 !define MUI_ICON "${APP_ICON}"
 !define MUI_UNICON "${APP_ICON}"
 
-Name "Salon"
+Name "Hair Spa Manager"
 OutFile "${OUTPUT_DIR}\Salon-Setup-${PRODUCT_VERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\Salon"
 InstallDirRegKey HKCU "Software\HairSpaManager" "InstallDir"
@@ -33,14 +33,14 @@ ShowInstDetails show
 ShowUninstDetails show
 
 VIProductVersion "${FILE_VERSION}"
-VIAddVersionKey /LANG=1033 "ProductName" "Salon"
-VIAddVersionKey /LANG=1033 "FileDescription" "Salon Windows Installer"
+VIAddVersionKey /LANG=1033 "ProductName" "Hair Spa Manager"
+VIAddVersionKey /LANG=1033 "FileDescription" "Hair Spa Manager Windows Installer"
 VIAddVersionKey /LANG=1033 "FileVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${PRODUCT_VERSION}"
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\salonmanager.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "Mở Salon"
+!define MUI_FINISHPAGE_RUN_TEXT "Mở Hair Spa Manager"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -59,7 +59,7 @@ Function .onInit
   ; SQLite must already be closed before application binaries are replaced.
 FunctionEnd
 
-Section "Salon" SEC_MAIN
+Section "Hair Spa Manager" SEC_MAIN
   SectionIn RO
   SetShellVarContext current
   SetOutPath "$INSTDIR"
@@ -68,18 +68,24 @@ Section "Salon" SEC_MAIN
   File /r "${BUILD_DIR}\*.*"
 
   WriteRegStr HKCU "Software\HairSpaManager" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "DisplayName" "Salon"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "DisplayName" "Hair Spa Manager"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "DisplayVersion" "${PRODUCT_VERSION}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "Publisher" "Salon"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "Publisher" "Hair Spa Manager"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Salon" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  CreateShortcut "$DESKTOP\Salon.lnk" "$INSTDIR\salonmanager.exe"
-  CreateDirectory "$SMPROGRAMS\Salon"
-  CreateShortcut "$SMPROGRAMS\Salon\Salon.lnk" "$INSTDIR\salonmanager.exe"
-  CreateShortcut "$SMPROGRAMS\Salon\Gỡ cài đặt Salon.lnk" "$INSTDIR\Uninstall.exe"
+  ; Remove legacy shortcut names before creating the canonical brand shortcuts.
+  Delete "$DESKTOP\Salon.lnk"
+  Delete "$SMPROGRAMS\Salon\Salon.lnk"
+  Delete "$SMPROGRAMS\Salon\Gỡ cài đặt Salon.lnk"
+  RMDir "$SMPROGRAMS\Salon"
+
+  CreateShortcut "$DESKTOP\Hair Spa Manager.lnk" "$INSTDIR\salonmanager.exe"
+  CreateDirectory "$SMPROGRAMS\Hair Spa Manager"
+  CreateShortcut "$SMPROGRAMS\Hair Spa Manager\Hair Spa Manager.lnk" "$INSTDIR\salonmanager.exe"
+  CreateShortcut "$SMPROGRAMS\Hair Spa Manager\Gỡ cài đặt Hair Spa Manager.lnk" "$INSTDIR\Uninstall.exe"
 
   ; Interactive installs use the MUI finish-page Run action above. Silent
   ; self-updates are restarted by the external helper only after this installer
@@ -89,6 +95,12 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext current
 
+  Delete "$DESKTOP\Hair Spa Manager.lnk"
+  Delete "$SMPROGRAMS\Hair Spa Manager\Hair Spa Manager.lnk"
+  Delete "$SMPROGRAMS\Hair Spa Manager\Gỡ cài đặt Hair Spa Manager.lnk"
+  RMDir "$SMPROGRAMS\Hair Spa Manager"
+
+  ; Also clean up legacy shortcut names from older releases.
   Delete "$DESKTOP\Salon.lnk"
   Delete "$SMPROGRAMS\Salon\Salon.lnk"
   Delete "$SMPROGRAMS\Salon\Gỡ cài đặt Salon.lnk"

@@ -21,7 +21,7 @@ class SalonManagerApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Quản Lý Salon Tóc',
+      title: 'Hair Spa Manager',
       theme: AppTheme.build(template),
       // Clamp text scale to 1.0 on desktop — OS DPI handles display scaling;
       // unclamped accessibility font sizes break fixed-height desktop layouts.
@@ -76,7 +76,7 @@ class StaffWindowApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Bàn Nhân Viên',
+      title: 'Hair Spa Manager — Bàn Nhân Viên',
       theme: AppTheme.build(template),
       navigatorObservers: [staffWindowRouteObserver],
       builder: (context, child) => MediaQuery(

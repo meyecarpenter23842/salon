@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.ungdungthongminh" "\0"
-            VALUE "FileDescription", "Quản Lý Salon Tóc" "\0"
+            VALUE "CompanyName", "Hair Spa Manager" "\0"
+            VALUE "FileDescription", "Hair Spa Manager" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "Quản Lý Salon Tóc" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.ungdungthongminh. All rights reserved." "\0"
+            VALUE "InternalName", "Hair Spa Manager" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Hair Spa Manager. All rights reserved." "\0"
             VALUE "OriginalFilename", "salonmanager.exe" "\0"
-            VALUE "ProductName", "Quản Lý Salon Tóc" "\0"
+            VALUE "ProductName", "Hair Spa Manager" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

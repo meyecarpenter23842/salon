@@ -1,6 +1,7 @@
 {
   "name": "salonmanager-windows-tooling",
   "version": "1.8.0",
+  "description": "Windows release tooling for Hair Spa Manager",
   "private": true,
   "scripts": {
     "typecheck": "flutter analyze",
@@ -8,8 +9,11 @@
     "build": "flutter build windows --release",
     "smoke:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/smoke-windows.ps1",
     "package:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/package-installer.ps1",
+    "package:installer:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/package-installer.ps1 -RequireCodeSigning",
     "package:update": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/package-update.ps1",
+    "package:update:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/package-update.ps1 -RequireCodeSigning",
     "verify:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/verify-installer.ps1",
+    "verify:installer:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/verify-installer.ps1 -RequireArtifacts -RequireSignedArtifacts",
     "verify:updater": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/windows/verify-updater.ps1"
   }
 }

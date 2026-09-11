@@ -1,5 +1,6 @@
 ﻿param(
-  [switch]$RequireArtifacts
+  [switch]$RequireArtifacts,
+  [switch]$RequireSignedArtifacts
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +16,13 @@ $iconPath = Join-Path $outputDir '.salon-installer-icon.ico'
 
 function Assert-Contains([string]$Text, [string]$Needle, [string]$Message) {
   if (-not $Text.Contains($Needle)) { throw $Message }
+}
+
+function Assert-ValidAuthenticodeSignature([string]$Path) {
+  $signature = Get-AuthenticodeSignature -FilePath $Path
+  if ($signature.Status -ne 'Valid') {
+    throw "Authenticode signature không hợp lệ cho $Path: $($signature.Status)"
+  }
 }
 
 function Get-IconBitmapHash([System.Drawing.Icon]$Icon) {
@@ -103,8 +111,8 @@ $handoff = Get-Content -Raw -Encoding UTF8 -Path $handoffPath
 
 Assert-Contains $nsis '!insertmacro MUI_PAGE_DIRECTORY' 'Installer phải có trang chọn thư mục.'
 Assert-Contains $nsis 'InstallDirRegKey HKCU "Software\HairSpaManager" "InstallDir"' 'Installer phải nhớ thư mục cài hiện tại.'
-Assert-Contains $nsis 'CreateShortcut "$DESKTOP\Salon.lnk"' 'Thiếu Desktop shortcut.'
-Assert-Contains $nsis 'CreateShortcut "$SMPROGRAMS\Salon\Salon.lnk"' 'Thiếu Start Menu shortcut.'
+Assert-Contains $nsis 'CreateShortcut "$DESKTOP\Hair Spa Manager.lnk"' 'Thiếu Desktop shortcut Hair Spa Manager.'
+Assert-Contains $nsis 'CreateShortcut "$SMPROGRAMS\Hair Spa Manager\Hair Spa Manager.lnk"' 'Thiếu Start Menu shortcut Hair Spa Manager.'
 Assert-Contains $nsis 'RequestExecutionLevel user' 'Installer phải chạy per-user để cho phép chọn ổ/thư mục mà không ép admin.'
 Assert-Contains $nsis '!define MUI_FINISHPAGE_RUN "$INSTDIR\salonmanager.exe"' 'Installer tương tác phải cho phép mở Salon sau khi cài.'
 Assert-Contains $handoff 'CloseMainWindow()' 'Silent updater phải đóng các cửa sổ Salon còn lại theo cách graceful.'
@@ -116,6 +124,10 @@ Assert-Contains $packageScript 'icon.png' 'Package installer phải dùng icon.p
 Assert-Contains $packageScript 'prepare-icon.ps1' 'Package installer phải tạo ICO đa kích thước trước khi chạy NSIS.'
 Assert-Contains $packageScript '"/DAPP_ICON=$iconOutputPath"' 'Package installer phải truyền APP_ICON cho NSIS.'
 Assert-Contains $packageScript 'Salon-Setup-$BuildName.exe' 'Tên artifact installer không đúng contract.'
+Assert-Contains $packageScript 'SALON_SIGNING_THUMBPRINT' 'Package installer phải hỗ trợ certificate thumbprint từ môi trường local.'
+Assert-Contains $packageScript 'signtool.exe' 'Package installer phải dùng Windows SignTool cho Authenticode.'
+Assert-Contains $packageScript 'Invoke-CodeSign $salonExe' 'Windows app executable phải được ký trước khi đóng gói khi signing được bật.'
+Assert-Contains $packageScript 'Invoke-CodeSign $artifactPath' 'Installer phải được ký sau khi NSIS đóng gói khi signing được bật.'
 
 if ($nsis -match '(?i)taskkill' -or $handoff -match '(?i)taskkill') {
   throw 'Updater không được force-kill Salon khi SQLite có thể đang mở.'
@@ -125,6 +137,10 @@ if ($nsis -match '(?i)RMDir\s+/r\s+"?\$APPDATA' -or $nsis -match '(?i)Delete\s+"
 }
 if ($nsis -match '(?i)HairSpaManager\\data') {
   throw 'Installer không được thao tác thư mục runtime data HairSpaManager\data.'
+}
+
+if ($RequireSignedArtifacts -and -not $RequireArtifacts) {
+  throw 'RequireSignedArtifacts yêu cầu RequireArtifacts.'
 }
 
 if ($RequireArtifacts) {
@@ -139,6 +155,13 @@ if ($RequireArtifacts) {
   if (-not (Test-Path $iconPath)) { throw "Thiếu icon installer đã tạo: $iconPath" }
 
   Assert-EmbeddedInstallerIcon $artifact $iconPath
+
+  if ($RequireSignedArtifacts) {
+    $releaseExe = Join-Path $repoRoot 'build\windows\x64\runner\Release\salonmanager.exe'
+    if (-not (Test-Path $releaseExe)) { throw "Thiếu Windows executable để verify signature: $releaseExe" }
+    Assert-ValidAuthenticodeSignature $releaseExe
+    Assert-ValidAuthenticodeSignature $artifact
+  }
 }
 
 Write-Host 'verify:installer passed.'
