@@ -4,49 +4,35 @@ import 'package:path/path.dart' as path;
 
 /// PowerShell handoff used by the Windows self-updater.
 ///
-/// The helper runs outside Salon, waits for the main process to exit, asks any
-/// remaining Salon windows (for example --staff-window) to close normally,
-/// installs the verified NSIS package silently, waits for it to finish, and
-/// only then starts the updated executable.
+/// The helper runs outside Salon, gives the current process a short grace
+/// period to finish closing SQLite and exit, asks any remaining Salon windows
+/// (for example --staff-window) to close normally, installs the verified NSIS
+/// package silently, waits for it to finish, and only then starts the updated
+/// executable.
 const windowsSelfUpdateHelperScript = r'''
 param(
   [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$Executable,
   [Parameter(Mandatory = $true)][string]$InstallDir,
-  [Parameter(Mandatory = $true)][int]$ParentPid
+  [Parameter(Mandatory = $true)][string]$LogPath
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$logDir = if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {
-  Join-Path $env:TEMP 'HairSpaManager\logs'
-} else {
-  Join-Path $env:APPDATA 'HairSpaManager\logs'
-}
-$logPath = Join-Path $logDir 'self_update_helper.log'
+$logPath = $LogPath
+$logDir = Split-Path -Parent $logPath
 
 function Write-UpdateLog([string]$Message) {
   try {
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    if (-not [string]::IsNullOrWhiteSpace($logDir)) {
+      New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    }
     $timestamp = (Get-Date).ToUniversalTime().ToString('o')
     Add-Content -Encoding UTF8 -Path $logPath -Value "$timestamp $Message"
   } catch {
     # Logging must never decide whether the update can continue.
   }
-}
-
-function Test-ProcessAlive([int]$ProcessId) {
-  return $null -ne (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
-}
-
-function Wait-ProcessExit([int]$ProcessId, [int]$TimeoutSeconds) {
-  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-  while (Test-ProcessAlive $ProcessId) {
-    if ((Get-Date) -ge $deadline) { return $false }
-    Start-Sleep -Milliseconds 250
-  }
-  return $true
 }
 
 function Get-RemainingSalonProcesses {
@@ -65,11 +51,12 @@ function Wait-AllSalonProcessesExit([int]$TimeoutSeconds) {
 }
 
 try {
-  Write-UpdateLog "handoff_start parent=$ParentPid installer=$Installer"
+  Write-UpdateLog "handoff_start installer=$Installer"
 
-  if (-not (Wait-ProcessExit $ParentPid 20)) {
-    throw 'Salon chính chưa đóng sau 20 giây; hủy cập nhật để bảo vệ dữ liệu.'
-  }
+  # Match Key Manager's proven external handoff model: the helper starts
+  # outside the app, waits briefly while Salon closes its SQLite connection and
+  # exits, then checks whether any Salon process (typically Staff) remains.
+  Start-Sleep -Milliseconds 900
 
   $remaining = @(Get-RemainingSalonProcesses)
   if ($remaining.Count -gt 0) {
@@ -110,9 +97,9 @@ try {
 } catch {
   Write-UpdateLog "handoff_error $($_.Exception.Message)"
 
-  # If the main process already exited, reopen the existing installation so a
-  # failed update never leaves the user with Salon silently closed.
-  if (-not (Test-ProcessAlive $ParentPid)) {
+  # If no Salon process remains, reopen the existing installation so a failed
+  # update never leaves the user with Salon silently closed.
+  if (@(Get-RemainingSalonProcesses).Count -eq 0) {
     try {
       if (Test-Path $Executable) {
         Start-Process -FilePath $Executable -WorkingDirectory $InstallDir
@@ -144,7 +131,7 @@ class WindowsSelfUpdateHandoff {
     required File installer,
     required String executable,
     required String installDir,
-    required int parentPid,
+    required String logPath,
   }) {
     return Process.start(
       _powershellExecutable(),
@@ -161,8 +148,8 @@ class WindowsSelfUpdateHandoff {
         executable,
         '-InstallDir',
         installDir,
-        '-ParentPid',
-        '$parentPid',
+        '-LogPath',
+        logPath,
       ],
       mode: ProcessStartMode.detached,
     );
