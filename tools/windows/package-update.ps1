@@ -2,7 +2,10 @@
   [string]$BuildName = '',
   [int]$BuildNumber = -1,
   [switch]$SkipFlutterBuild,
-  [string]$Message = ''
+  [string]$Message = '',
+  [string]$SigningThumbprint = $env:SALON_SIGNING_THUMBPRINT,
+  [string]$TimestampUrl = $env:SALON_TIMESTAMP_URL,
+  [switch]$RequireCodeSigning
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,7 +61,7 @@ if ($BuildName -ne $version.Name) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Message)) {
-  $Message = "Salon $BuildName đã sẵn sàng cập nhật."
+  $Message = "Hair Spa Manager $BuildName đã sẵn sàng cập nhật."
 }
 
 $installerArgs = @{
@@ -67,6 +70,15 @@ $installerArgs = @{
 }
 if ($SkipFlutterBuild) {
   $installerArgs.SkipFlutterBuild = $true
+}
+if (-not [string]::IsNullOrWhiteSpace($SigningThumbprint)) {
+  $installerArgs.SigningThumbprint = $SigningThumbprint
+}
+if (-not [string]::IsNullOrWhiteSpace($TimestampUrl)) {
+  $installerArgs.TimestampUrl = $TimestampUrl
+}
+if ($RequireCodeSigning) {
+  $installerArgs.RequireCodeSigning = $true
 }
 & $installerScript @installerArgs | Out-Host
 
@@ -81,7 +93,7 @@ $manifest = [ordered]@{
   latestVersion = $BuildName
   minimumSupportedVersion = ''
   required = $false
-  title = "Salon $BuildName"
+  title = "Hair Spa Manager $BuildName"
   message = $Message
   notes = @()
   downloadPath = "Salon-Setup-$BuildName.exe"

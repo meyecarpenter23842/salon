@@ -34,7 +34,7 @@ Future<void> main(List<String> args) async {
     final runtime = LicenseRuntimeContext(
       deviceId: deviceId,
       deviceName: (deviceSettings['deviceName'] ?? '').trim().isEmpty
-          ? 'Salon Windows'
+          ? 'Hair Spa Manager Windows'
           : deviceSettings['deviceName']!.trim(),
       os: _windowsDescription(),
       appVersion: packageInfo.version,
@@ -119,7 +119,7 @@ class _StartupFailureApp extends StatelessWidget {
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Không thể khởi động Quản Lý Salon Tóc',
+                              'Không thể khởi động Hair Spa Manager',
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w700,

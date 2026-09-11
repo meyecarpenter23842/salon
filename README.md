@@ -1,6 +1,6 @@
-# Quản Lý Salon Tóc
+# Hair Spa Manager
 
-Ứng dụng Flutter desktop-first để quản lý vận hành salon tóc trên Windows, tập trung vào lịch hẹn, khách hàng, dịch vụ, nhân sự, hóa đơn và thiết lập cục bộ.
+Hair Spa Manager là ứng dụng Flutter desktop-first để quản lý vận hành salon tóc trên Windows, tập trung vào lịch hẹn, khách hàng, dịch vụ, nhân sự, hóa đơn và thiết lập cục bộ.
 
 ## Phạm vi MVP hiện tại
 
@@ -108,6 +108,16 @@ Tạo installer + metadata updater:
 npm run package:update
 ```
 
+Bản phát hành chính thức có code signing:
+
+```powershell
+$env:SALON_SIGNING_THUMBPRINT = '<certificate-thumbprint>'
+npm run package:update:signed
+npm run verify:installer:signed
+```
+
+Certificate/private key chỉ nằm trên máy release, không commit vào repo.
+
 Output release local:
 
 - `dist/windows-release/Salon-Setup-x.x.x.exe`
@@ -170,7 +180,7 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 - Chưa có refund/void paid invoice đầy đủ.
 - Chưa tự trừ kho khi checkout hoặc chặn bán khi hết tồn.
 - Chưa có payroll/chấm công hoàn chỉnh.
-- Installer hiện chưa code-sign; Windows SmartScreen có thể cảnh báo ở lần phát hành đầu.
+- Release tooling hỗ trợ Authenticode code signing. Bản phát hành chính thức phải dùng certificate hợp lệ và package với `-RequireCodeSigning`; source/CI không chứa private key.
 
 ## Windows auto update qua R2
 

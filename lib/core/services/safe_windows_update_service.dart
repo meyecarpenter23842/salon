@@ -130,7 +130,7 @@ class SafeWindowsUpdateService {
       return OfflineUpdateInstallResult(
         success: false,
         detail:
-            'Không thể bàn giao sang trình cập nhật an toàn. Salon chưa cài đè bản mới: $error',
+            'Không thể bàn giao sang trình cập nhật an toàn. Hair Spa Manager chưa cài đè bản mới: $error',
       );
     }
   }

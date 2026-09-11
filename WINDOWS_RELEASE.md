@@ -1,6 +1,6 @@
 # Windows installer + R2 updater
 
-Salon vẫn là **Flutter Windows native**. NSIS chỉ đóng gói output `flutter build windows --release`; không có Electron/React runtime.
+Hair Spa Manager vẫn là **Flutter Windows native**. NSIS chỉ đóng gói output `flutter build windows --release`; không có Electron/React runtime.
 
 ## 1. Installer
 
@@ -22,6 +22,8 @@ Output:
 dist\windows-release\Salon-Setup-x.x.x.exe
 ```
 
+Tên file `Salon-Setup-*` được giữ ổn định để tương thích updater hiện tại; tên sản phẩm hiển thị trong Windows/shortcut là **Hair Spa Manager**.
+
 Installer dùng NSIS dạng wizard:
 
 - có trang chọn thư mục cài đặt;
@@ -35,6 +37,21 @@ Installer dùng NSIS dạng wizard:
 Runtime data của Salon **không nằm trong thư mục cài**. Database vẫn ở `%APPDATA%\HairSpaManager\data\.salon_manager\salon_manager.db`, vì vậy update installer không xóa/move database hoặc backup.
 
 Không có logic scan/copy/adopt/migrate dữ liệu từ portable hoặc app cũ bên ngoài.
+
+### Code signing cho release chính thức
+
+Release tooling ký cả `salonmanager.exe` và installer bằng Windows Authenticode khi có certificate trong Current User certificate store.
+
+```powershell
+$env:SALON_SIGNING_THUMBPRINT = '<SHA1-thumbprint-40-hex>'
+# Tùy chọn; mặc định dùng DigiCert RFC3161 timestamp.
+$env:SALON_TIMESTAMP_URL = 'http://timestamp.digicert.com'
+
+npm run package:update:signed
+npm run verify:installer:signed
+```
+
+`-RequireCodeSigning` làm package fail nếu thiếu certificate/signature. Không commit PFX, private key hoặc password vào repo/CI.
 
 ## 2. Tạo bản update
 
@@ -120,7 +137,7 @@ Sau khi package update, verify cả artifact:
 
 `verify-installer -RequireArtifacts` kiểm tra cả icon shell 16x16 và 32x32 nhúng trong `Salon-Setup-x.x.x.exe` phải khớp ICO vừa sinh từ `icon.png`, để chặn NSIS quay về icon mặc định.
 
-CI chạy analyze, unit, Windows build, native smoke, build NSIS để verify và kiểm tra artifact. CI **không upload R2, không tạo release và không deploy**.
+CI chạy analyze, unit, Windows build, native smoke, build NSIS để verify và kiểm tra artifact. CI **không upload R2, không tạo release, không deploy và không giữ private signing key**. Code signing thật được thực hiện trên máy release.
 
 ## 6. Test end-to-end release
 

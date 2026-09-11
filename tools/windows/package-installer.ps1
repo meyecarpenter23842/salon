@@ -1,7 +1,10 @@
 ﻿param(
   [string]$BuildName = '',
   [int]$BuildNumber = -1,
-  [switch]$SkipFlutterBuild
+  [switch]$SkipFlutterBuild,
+  [string]$SigningThumbprint = $env:SALON_SIGNING_THUMBPRINT,
+  [string]$TimestampUrl = $env:SALON_TIMESTAMP_URL,
+  [switch]$RequireCodeSigning
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +18,10 @@ $outputDir = Join-Path $repoRoot 'dist\windows-release'
 $iconSourcePath = Join-Path $repoRoot 'icon.png'
 $iconOutputPath = Join-Path $outputDir '.salon-installer-icon.ico'
 $prepareIconScript = Join-Path $PSScriptRoot 'prepare-icon.ps1'
+
+if ([string]::IsNullOrWhiteSpace($TimestampUrl)) {
+  $TimestampUrl = 'http://timestamp.digicert.com'
+}
 
 function Read-SalonVersion {
   $raw = Get-Content -Raw -Encoding UTF8 -Path $pubspecPath
@@ -41,6 +48,54 @@ function Resolve-MakeNsis {
 
   if ($candidates.Count -gt 0) { return $candidates[0] }
   throw 'Không tìm thấy makensis.exe. Hãy cài NSIS trước khi package installer.'
+}
+
+function Resolve-SignTool {
+  $command = Get-Command signtool.exe -ErrorAction SilentlyContinue
+  if ($command) { return $command.Source }
+
+  $kitsRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+  if (Test-Path $kitsRoot) {
+    $candidates = @(
+      Get-ChildItem -Path $kitsRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
+        Where-Object { Test-Path $_ }
+    )
+    if ($candidates.Count -gt 0) { return $candidates[0] }
+  }
+
+  throw 'Không tìm thấy signtool.exe. Hãy cài Windows SDK trước khi code-sign release.'
+}
+
+function Invoke-CodeSign([string]$Path) {
+  if ([string]::IsNullOrWhiteSpace($SigningThumbprint)) {
+    if ($RequireCodeSigning) {
+      throw 'Release yêu cầu code signing nhưng SALON_SIGNING_THUMBPRINT/SigningThumbprint đang trống.'
+    }
+    Write-Host "Code signing skipped (no signing thumbprint): $Path"
+    return
+  }
+
+  if (-not (Test-Path $Path)) {
+    throw "Không tìm thấy artifact để ký: $Path"
+  }
+
+  $thumbprint = ($SigningThumbprint -replace '\s', '').ToUpperInvariant()
+  if ($thumbprint -notmatch '^[0-9A-F]{40}$') {
+    throw 'SigningThumbprint phải là SHA-1 certificate thumbprint gồm 40 ký tự hex.'
+  }
+
+  $signTool = Resolve-SignTool
+  & $signTool sign /sha1 $thumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 $Path
+  if ($LASTEXITCODE -ne 0) {
+    throw "Code signing thất bại: $Path"
+  }
+
+  & $signTool verify /pa /v $Path | Out-Host
+  if ($LASTEXITCODE -ne 0) {
+    throw "Xác minh Authenticode thất bại sau khi ký: $Path"
+  }
 }
 
 $version = Read-SalonVersion
@@ -83,6 +138,8 @@ if (-not (Test-Path $salonExe)) {
   throw "Không tìm thấy Windows release: $salonExe"
 }
 
+Invoke-CodeSign $salonExe
+
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 & $prepareIconScript -SourcePng $iconSourcePath -OutputIco $iconOutputPath | Out-Host
 if (-not (Test-Path $iconOutputPath)) {
@@ -112,6 +169,8 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path $artifactPath)) {
   throw "NSIS không tạo artifact mong đợi: $artifactPath"
 }
+
+Invoke-CodeSign $artifactPath
 
 Write-Host "Installer ready: $artifactPath"
 Write-Output $artifactPath

@@ -194,7 +194,7 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Khi bấm Cập nhật ngay, Salon tải và xác minh SHA-256, tạo một backup SQLite hợp lệ, đóng database, đóng an toàn các cửa sổ Salon, cài đè file chương trình rồi tự mở lại. Database và backup nằm ngoài thư mục cài đặt nên không bị installer xóa hoặc di chuyển.',
+          'Khi bấm Cập nhật ngay, Hair Spa Manager tải và xác minh SHA-256, tạo một backup SQLite hợp lệ, đóng database, đóng an toàn các cửa sổ ứng dụng, cài đè file chương trình rồi tự mở lại. Database và backup nằm ngoài thư mục cài đặt nên không bị installer xóa hoặc di chuyển.',
           style: TextStyle(
             color: AppColors.textMuted,
             fontSize: 11.5,
@@ -266,7 +266,7 @@ class _WindowsUpdatePanelState extends ConsumerState<WindowsUpdatePanel> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Đã xác minh bộ cài. Salon đang tạo backup dữ liệu trước khi cập nhật...',
+          'Đã xác minh bộ cài. Hair Spa Manager đang tạo backup dữ liệu trước khi cập nhật...',
         ),
       ),
     );

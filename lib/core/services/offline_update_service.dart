@@ -196,7 +196,7 @@ class OfflineUpdateService {
         success: true,
         localInstallerPath: targetFile.path,
         detail:
-            'Đã tải Salon $targetVersion. Sẵn sàng khởi động lại và cập nhật.',
+            'Đã tải Hair Spa Manager $targetVersion. Sẵn sàng khởi động lại và cập nhật.',
       );
     } catch (error) {
       await _UpdateAuditLogger.instance.log(
@@ -264,7 +264,7 @@ class OfflineUpdateService {
         success: true,
         localInstallerPath: installer.path,
         detail:
-            'Salon sẽ đóng, cập nhật tại thư mục đang cài và tự mở lại.',
+            'Hair Spa Manager sẽ đóng, cập nhật tại thư mục đang cài và tự mở lại.',
       );
     } catch (error) {
       await _clearPendingMarker();
