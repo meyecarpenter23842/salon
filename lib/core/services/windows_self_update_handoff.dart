@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -53,9 +54,8 @@ function Wait-AllSalonProcessesExit([int]$TimeoutSeconds) {
 try {
   Write-UpdateLog "handoff_start installer=$Installer"
 
-  # Match Key Manager's proven external handoff model: the helper starts
-  # outside the app, waits briefly while Salon closes its SQLite connection and
-  # exits, then checks whether any Salon process (typically Staff) remains.
+  # Match Key Manager's external handoff model: start outside Salon, wait
+  # briefly for SQLite close/app exit, then close any remaining Salon windows.
   Start-Sleep -Milliseconds 900
 
   $remaining = @(Get-RemainingSalonProcesses)
@@ -70,7 +70,7 @@ try {
     }
 
     if (-not (Wait-AllSalonProcessesExit 15)) {
-      throw 'Một cửa sổ Salon chưa đóng an toàn; hủy cập nhật thay vì force-kill.'
+      throw 'A Salon window did not close safely; aborting instead of force-killing.'
     }
   }
 
@@ -83,11 +83,11 @@ try {
     -PassThru
 
   if ($installerProcess.ExitCode -ne 0) {
-    throw "Installer thoát với mã $($installerProcess.ExitCode)."
+    throw "Installer exited with code $($installerProcess.ExitCode)."
   }
 
   if (-not (Test-Path $Executable)) {
-    throw 'Không tìm thấy executable sau khi cài cập nhật.'
+    throw 'Updated executable was not found after install.'
   }
 
   Write-UpdateLog 'installer_success_restart'
@@ -122,7 +122,14 @@ class WindowsSelfUpdateHandoff {
     final helper = File(
       path.join(cacheDirectory.path, 'salon-self-update.ps1'),
     );
-    await helper.writeAsString(windowsSelfUpdateHelperScript, flush: true);
+    // Windows PowerShell 5.1 treats UTF-8 without BOM as an ANSI code page.
+    // Keep the generated helper strictly ASCII so its parser is independent of
+    // the machine locale/ACP. ascii.encode also fails fast if a future edit
+    // accidentally introduces a non-ASCII source character.
+    await helper.writeAsBytes(
+      ascii.encode(windowsSelfUpdateHelperScript),
+      flush: true,
+    );
     return helper;
   }
 
