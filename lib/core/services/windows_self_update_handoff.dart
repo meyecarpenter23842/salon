@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -122,7 +123,14 @@ class WindowsSelfUpdateHandoff {
     final helper = File(
       path.join(cacheDirectory.path, 'salon-self-update.ps1'),
     );
-    await helper.writeAsString(windowsSelfUpdateHelperScript, flush: true);
+    // Windows PowerShell 5.1 treats UTF-8 without BOM as an ANSI code page.
+    // Keep the generated helper strictly ASCII so its parser is independent of
+    // the machine locale/ACP. ascii.encode also fails fast if a future edit
+    // accidentally introduces a non-ASCII source character.
+    await helper.writeAsBytes(
+      ascii.encode(windowsSelfUpdateHelperScript),
+      flush: true,
+    );
     return helper;
   }
 
