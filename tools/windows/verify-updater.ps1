@@ -48,12 +48,36 @@ Assert-Contains $safeService 'createBackup()' 'Updater an toàn phải gọi cre
 Assert-Contains $safeService 'SalonDatabase.instance.close()' 'Updater phải đóng SQLite trước khi thoát app.'
 Assert-Contains $safeService 'WindowsSelfUpdateHandoff' 'Updater phải bàn giao sang helper ngoài tiến trình.'
 Assert-Contains $safeService 'exit(0)' 'Salon phải thoát sau khi đóng DB để helper cài đè binary.'
+Assert-Contains $safeService 'self_update_helper.log' 'Updater phải truyền một helper log path ổn định để chẩn đoán lỗi sau handoff.'
+Assert-Contains $safeService 'helperPid' 'Updater audit phải ghi PID của helper đã launch.'
 
+Assert-Contains $handoff 'Start-Sleep -Milliseconds 900' 'Helper phải cho Salon thời gian ngắn để đóng DB và thoát trước khi cài.'
 Assert-Contains $handoff 'CloseMainWindow()' 'Helper phải đóng các cửa sổ Salon còn lại theo cách graceful.'
+Assert-Contains $handoff '[string]$LogPath' 'Helper phải nhận log path tuyệt đối từ app.'
+Assert-NotContains $handoff 'ParentPid' 'Helper không được chờ parent PID vì có thể kẹt timeout và mở lại bản cũ.'
+Assert-NotContains $handoff 'Wait-ProcessExit' 'Helper không được phụ thuộc parent PID wait.'
 Assert-Contains $handoff '-Wait' 'Helper phải chờ installer hoàn tất trước khi restart Salon.'
 Assert-Contains $handoff 'Start-Process -FilePath $Executable' 'Helper phải tự mở lại Salon sau update.'
 Assert-NotContains $handoff 'taskkill' 'Helper không được force-kill Salon.'
 Assert-NotContains $installer 'taskkill' 'NSIS không được force-kill Salon khi SQLite có thể đang mở.'
+
+$helperMatch = [regex]::Match(
+  $handoff,
+  "(?s)const windowsSelfUpdateHelperScript = r'''(.*?)''';"
+)
+if (-not $helperMatch.Success) {
+  throw 'Không trích được PowerShell self-update helper để kiểm tra cú pháp.'
+}
+$tokens = $null
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseInput(
+  $helperMatch.Groups[1].Value,
+  [ref]$tokens,
+  [ref]$parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+  throw "PowerShell self-update helper có lỗi cú pháp: $($parseErrors[0].Message)"
+}
 
 Assert-Contains $database "Platform.environment['APPDATA']" 'Database Windows phải nằm dưới AppData.'
 Assert-Contains $installer 'InstallDir "$LOCALAPPDATA\Programs\Salon"' 'Installer phải cài binary ngoài thư mục database.'

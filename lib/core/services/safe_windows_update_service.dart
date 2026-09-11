@@ -14,7 +14,7 @@ import 'windows_self_update_handoff.dart';
 /// Data safety order:
 /// 1. create and validate a SQLite snapshot;
 /// 2. write the post-restart marker;
-/// 3. start an external helper that waits for Salon to exit;
+/// 3. start an external helper with a short shutdown grace period;
 /// 4. explicitly close the live SQLite connection;
 /// 5. exit the current process;
 /// 6. helper closes any Staff window normally, runs NSIS silently, waits for
@@ -69,6 +69,7 @@ class SafeWindowsUpdateService {
       final installDir = path.dirname(executable);
       final cacheDirectory = await _resolveUpdateCacheDirectory();
       final helper = await handoff.writeHelper(cacheDirectory);
+      final helperLog = await _resolveHelperLogFile();
 
       await _writePendingMarker(
         fromVersion: fromVersion,
@@ -76,12 +77,12 @@ class SafeWindowsUpdateService {
         backupPath: backup.filePath!,
       );
 
-      await handoff.launch(
+      final helperProcess = await handoff.launch(
         helper: helper,
         installer: installer,
         executable: executable,
         installDir: installDir,
-        parentPid: pid,
+        logPath: helperLog.path,
       );
       handoffStarted = true;
 
@@ -95,6 +96,8 @@ class SafeWindowsUpdateService {
           'targetVersion': targetVersion,
           'backupPath': backup.filePath!,
           'installDir': installDir,
+          'helperLog': helperLog.path,
+          'helperPid': '${helperProcess.pid}',
         },
       );
 
@@ -143,6 +146,19 @@ class SafeWindowsUpdateService {
       await directory.create(recursive: true);
     }
     return directory;
+  }
+
+  Future<File> _resolveHelperLogFile() async {
+    final appData = Platform.environment['APPDATA']?.trim();
+    final directory = Directory(
+      appData != null && appData.isNotEmpty
+          ? path.join(appData, 'HairSpaManager', 'logs')
+          : path.join(Directory.systemTemp.path, 'hair_spa_manager', 'logs'),
+    );
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    return File(path.join(directory.path, 'self_update_helper.log'));
   }
 
   Future<File> _resolvePendingMarkerFile() async {
