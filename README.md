@@ -156,6 +156,12 @@ Lưu ý:
 
 Có thể dùng Overview và Reports để đọc nhanh số liệu vận hành cục bộ của máy đang chạy app. Với máy mới chưa phát sinh dữ liệu, các màn này hiển thị số 0/empty state thay vì số liệu mẫu.
 
+## Chẩn đoán & hỗ trợ
+
+Trong **Cài đặt → Chẩn đoán & Hỗ trợ**, Hair Spa Manager có thể hiển thị version/build, Windows version, database schema, đường dẫn dữ liệu/backup/log và kênh cập nhật.
+
+Có thể tạo file chẩn đoán kỹ thuật trong thư mục `%APPDATA%\HairSpaManager\logs`. File này chỉ lấy tối đa 200 dòng cuối của các log hỗ trợ đã biết (`startup_failure.log`, `update_audit.log`, `self_update_helper.log`), tự redact path người dùng và các giá trị nhạy cảm dạng token/password/license key/email. Không đóng gói SQLite database, file backup hoặc dữ liệu khách hàng.
+
 ## Startup hardening
 
 Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi động nếu không thể tạo môi trường SQLite hoặc mở database, thay vì thoát im lặng. Khi gặp lỗi này, kiểm tra:
@@ -163,6 +169,7 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 1. Quyền ghi của `%APPDATA%/HairSpaManager/data/.salon_manager`.
 2. Sự tồn tại và khả năng truy cập của `%APPDATA%/HairSpaManager/data/.salon_manager/salon_manager.db`.
 3. Việc ứng dụng có đang bị chặn bởi antivirus hoặc chạy từ thư mục chỉ đọc hay không.
+4. Log khởi động tại `%APPDATA%\HairSpaManager\logs\startup_failure.log` nếu app ghi được log trước khi hiển thị màn lỗi.
 
 ## Checklist preview trước publish
 
