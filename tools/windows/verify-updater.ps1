@@ -54,6 +54,7 @@ Assert-Contains $safeService 'helperPid' 'Updater audit phải ghi PID của hel
 Assert-Contains $handoff 'Start-Sleep -Milliseconds 900' 'Helper phải cho Salon thời gian ngắn để đóng DB và thoát trước khi cài.'
 Assert-Contains $handoff 'CloseMainWindow()' 'Helper phải đóng các cửa sổ Salon còn lại theo cách graceful.'
 Assert-Contains $handoff '[string]$LogPath' 'Helper phải nhận log path tuyệt đối từ app.'
+Assert-Contains $handoff 'ascii.encode(windowsSelfUpdateHelperScript)' 'Dart phải ghi helper bằng ASCII để Windows PowerShell 5.1 không phụ thuộc code page.'
 Assert-NotContains $handoff 'ParentPid' 'Helper không được chờ parent PID vì có thể kẹt timeout và mở lại bản cũ.'
 Assert-NotContains $handoff 'Wait-ProcessExit' 'Helper không được phụ thuộc parent PID wait.'
 Assert-Contains $handoff '-Wait' 'Helper phải chờ installer hoàn tất trước khi restart Salon.'
@@ -68,15 +69,35 @@ $helperMatch = [regex]::Match(
 if (-not $helperMatch.Success) {
   throw 'Không trích được PowerShell self-update helper để kiểm tra cú pháp.'
 }
-$tokens = $null
-$parseErrors = $null
-[void][System.Management.Automation.Language.Parser]::ParseInput(
-  $helperMatch.Groups[1].Value,
-  [ref]$tokens,
-  [ref]$parseErrors
-)
-if ($parseErrors.Count -gt 0) {
-  throw "PowerShell self-update helper có lỗi cú pháp: $($parseErrors[0].Message)"
+$helperScript = $helperMatch.Groups[1].Value
+$nonAscii = @($helperScript.ToCharArray() | Where-Object { [int][char]$_ -gt 127 })
+if ($nonAscii.Count -gt 0) {
+  throw 'PowerShell self-update helper source phải chỉ chứa ASCII để tương thích Windows PowerShell 5.1.'
+}
+
+# Production writes this helper without a UTF-8 BOM. Parse an actual ASCII file
+# instead of only ParseInput so CI exercises the same file-decoding boundary that
+# previously broke on Windows PowerShell 5.1.
+$tempHelper = Join-Path $env:TEMP "salon-self-update-verify-$PID.ps1"
+try {
+  [System.IO.File]::WriteAllText(
+    $tempHelper,
+    $helperScript,
+    (New-Object System.Text.ASCIIEncoding)
+  )
+  $tokens = $null
+  $parseErrors = $null
+  [void][System.Management.Automation.Language.Parser]::ParseFile(
+    $tempHelper,
+    [ref]$tokens,
+    [ref]$parseErrors
+  )
+  if ($parseErrors.Count -gt 0) {
+    throw "PowerShell self-update helper có lỗi cú pháp/file encoding: $($parseErrors[0].Message)"
+  }
+}
+finally {
+  Remove-Item -Force $tempHelper -ErrorAction SilentlyContinue
 }
 
 Assert-Contains $database "Platform.environment['APPDATA']" 'Database Windows phải nằm dưới AppData.'
