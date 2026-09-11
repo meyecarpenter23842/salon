@@ -54,9 +54,8 @@ function Wait-AllSalonProcessesExit([int]$TimeoutSeconds) {
 try {
   Write-UpdateLog "handoff_start installer=$Installer"
 
-  # Match Key Manager's proven external handoff model: the helper starts
-  # outside the app, waits briefly while Salon closes its SQLite connection and
-  # exits, then checks whether any Salon process (typically Staff) remains.
+  # Match Key Manager's external handoff model: start outside Salon, wait
+  # briefly for SQLite close/app exit, then close any remaining Salon windows.
   Start-Sleep -Milliseconds 900
 
   $remaining = @(Get-RemainingSalonProcesses)
@@ -71,7 +70,7 @@ try {
     }
 
     if (-not (Wait-AllSalonProcessesExit 15)) {
-      throw 'Một cửa sổ Salon chưa đóng an toàn; hủy cập nhật thay vì force-kill.'
+      throw 'A Salon window did not close safely; aborting instead of force-killing.'
     }
   }
 
@@ -84,11 +83,11 @@ try {
     -PassThru
 
   if ($installerProcess.ExitCode -ne 0) {
-    throw "Installer thoát với mã $($installerProcess.ExitCode)."
+    throw "Installer exited with code $($installerProcess.ExitCode)."
   }
 
   if (-not (Test-Path $Executable)) {
-    throw 'Không tìm thấy executable sau khi cài cập nhật.'
+    throw 'Updated executable was not found after install.'
   }
 
   Write-UpdateLog 'installer_success_restart'
