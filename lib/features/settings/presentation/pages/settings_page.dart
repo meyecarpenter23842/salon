@@ -7,6 +7,7 @@ import '../../../../core/models/offline_update_summary.dart';
 import '../../../../core/models/settings_upsert_input.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/services/backup_service.dart';
+import '../../../../core/services/diagnostic_support_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/salon_theme_template.dart';
 import '../../../../core/theme/theme_controller.dart';
@@ -186,6 +187,20 @@ class _SettingsView extends ConsumerWidget {
           icon: Icons.backup_outlined,
           title: 'Backup & Restore',
           child: const _BackupRestorePanel(),
+        ),
+      ),
+      _SettingsHubItem(
+        keyName: 'diagnostics',
+        icon: Icons.support_agent_outlined,
+        title: 'Chẩn đoán & Hỗ trợ',
+        subtitle:
+            'Xem thông tin kỹ thuật, mở thư mục log và tạo gói chẩn đoán đã lọc.',
+        metrics: const ['Không kèm database', 'Log đã redact'],
+        onTap: () => _showSettingsHubDialog(
+          context,
+          icon: Icons.support_agent_outlined,
+          title: 'Chẩn đoán & Hỗ trợ',
+          child: const _DiagnosticsPanel(),
         ),
       ),
     ];
@@ -754,6 +769,198 @@ class _UpdatePanel extends StatelessWidget {
       title: 'Cập nhật Salon',
       subtitle: 'Kênh cập nhật Windows công khai qua Cloudflare R2. Không dùng credential trong app.',
       child: WindowsUpdatePanel(),
+    );
+  }
+}
+
+class _DiagnosticsPanel extends StatefulWidget {
+  const _DiagnosticsPanel();
+
+  @override
+  State<_DiagnosticsPanel> createState() => _DiagnosticsPanelState();
+}
+
+class _DiagnosticsPanelState extends State<_DiagnosticsPanel> {
+  final _service = const DiagnosticSupportService();
+  late Future<DiagnosticSnapshot> _snapshotFuture;
+  bool _isExporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshotFuture = _service.collectSnapshot();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _snapshotFuture = _service.collectSnapshot();
+    });
+  }
+
+  Future<void> _exportReport() async {
+    setState(() => _isExporting = true);
+    final result = await _service.exportDiagnosticReport();
+    if (!mounted) return;
+    setState(() => _isExporting = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.filePath == null
+              ? result.message
+              : '${result.message}\n${result.filePath}',
+        ),
+        backgroundColor:
+            result.success ? null : Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _openLogs() async {
+    final result = await _service.openLogsDirectory();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor:
+            result.success ? null : Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _openData() async {
+    final result = await _service.openDataDirectory();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor:
+            result.success ? null : Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumSectionCard(
+      icon: Icons.support_agent_outlined,
+      title: 'Thông tin chẩn đoán',
+      subtitle:
+          'Chỉ dùng metadata kỹ thuật và log updater giới hạn dung lượng; không đóng gói dữ liệu khách hàng.',
+      child: FutureBuilder<DiagnosticSnapshot>(
+        future: _snapshotFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const PremiumLoadingState(
+              label: 'Đang đọc thông tin hệ thống…',
+            );
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return PremiumErrorState(
+              title: 'Không đọc được thông tin chẩn đoán',
+              message: snapshot.error?.toString() ?? 'Không có dữ liệu.',
+              onRetry: _refresh,
+            );
+          }
+
+          final item = snapshot.data!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              PremiumInfoRow(
+                icon: Icons.info_outline_rounded,
+                label: 'Phiên bản ứng dụng',
+                value: item.versionLabel,
+              ),
+              const PremiumDivider(indent: 42),
+              PremiumInfoRow(
+                icon: Icons.desktop_windows_outlined,
+                label: 'Hệ điều hành',
+                value: item.systemLabel,
+              ),
+              const PremiumDivider(indent: 42),
+              PremiumInfoRow(
+                icon: Icons.storage_outlined,
+                label: 'Database schema',
+                value: 'v${item.schemaVersion}',
+              ),
+              const PremiumDivider(indent: 42),
+              PremiumInfoRow(
+                icon: Icons.folder_outlined,
+                label: 'Tệp dữ liệu',
+                value: item.databasePath,
+              ),
+              const PremiumDivider(indent: 42),
+              PremiumInfoRow(
+                icon: Icons.folder_copy_outlined,
+                label: 'Thư mục backup',
+                value: item.backupDirectory,
+              ),
+              const PremiumDivider(indent: 42),
+              PremiumInfoRow(
+                icon: Icons.article_outlined,
+                label: 'Thư mục log',
+                value: item.logsDirectory,
+              ),
+              const PremiumDivider(indent: 42),
+              PremiumInfoRow(
+                icon: Icons.cloud_outlined,
+                label: 'Kênh cập nhật',
+                value: item.updateFeed,
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    key: const Key('diagnostics-export'),
+                    onPressed: _isExporting ? null : _exportReport,
+                    icon: _isExporting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.description_outlined),
+                    label: Text(
+                      _isExporting
+                          ? 'Đang tạo gói...'
+                          : 'Tạo gói chẩn đoán',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('diagnostics-open-logs'),
+                    onPressed: _openLogs,
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: const Text('Mở thư mục log'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('diagnostics-open-data'),
+                    onPressed: _openData,
+                    icon: const Icon(Icons.storage_outlined),
+                    label: const Text('Mở thư mục dữ liệu'),
+                  ),
+                  IconButton(
+                    onPressed: _refresh,
+                    tooltip: 'Làm mới thông tin',
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Gói chẩn đoán chỉ lấy tối đa 200 dòng cuối của startup_failure.log, update_audit.log và self_update_helper.log, tự che path người dùng, token, password, license key, email và thông tin nhạy cảm dạng key/value. Không đính kèm SQLite database hoặc file backup.',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

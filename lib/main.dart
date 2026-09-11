@@ -15,6 +15,7 @@ import 'core/license/license_gate.dart';
 import 'core/license/license_models.dart';
 import 'core/license/offline_license_verifier.dart';
 import 'core/license/windows_credential_license_storage.dart';
+import 'core/services/diagnostic_support_service.dart';
 import 'core/settings/local_settings_store.dart';
 
 Future<void> main(List<String> args) async {
@@ -68,8 +69,30 @@ Future<void> main(List<String> args) async {
         context: ErrorDescription('during application startup'),
       ),
     );
+    await _writeStartupFailureLog(error, stackTrace);
 
     runApp(_StartupFailureApp(error: error, stackTrace: stackTrace));
+  }
+}
+
+
+Future<void> _writeStartupFailureLog(Object error, StackTrace stackTrace) async {
+  try {
+    final directory =
+        await const DiagnosticSupportService().resolveLogsDirectory();
+    final detail = kReleaseMode ? error.toString() : '$error\n\n$stackTrace';
+    final safeDetail = sanitizeDiagnosticText(
+      detail,
+      environment: Platform.environment,
+    );
+    final file = File('${directory.path}${Platform.pathSeparator}startup_failure.log');
+    await file.writeAsString(
+      '${DateTime.now().toUtc().toIso8601String()} startup_failure\n'
+      '$safeDetail\n',
+      flush: true,
+    );
+  } catch (_) {
+    // Diagnostics must never create a second startup failure.
   }
 }
 
@@ -145,6 +168,14 @@ class _StartupFailureApp extends StatelessWidget {
                         child: const Text(
                           'Đường dẫn dữ liệu mặc định (Windows): %APPDATA%/HairSpaManager/data/.salon_manager/salon_manager.db.',
                           style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Log chẩn đoán khởi động (nếu ghi được): %APPDATA%/HairSpaManager/logs/startup_failure.log',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6D5545),
                         ),
                       ),
                       const SizedBox(height: 16),
