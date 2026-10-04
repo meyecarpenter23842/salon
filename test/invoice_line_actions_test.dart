@@ -77,6 +77,12 @@ void main() {
       'updated_at': now.toIso8601String(),
     });
 
+    await database.insert('inventory_stock', {
+      'product_id': productId,
+      'stock_on_hand': 10,
+      'updated_at': now.toIso8601String(),
+    });
+
     await repository.addInvoiceProduct(productId);
     final doubledDraft = await repository.addInvoiceProduct(productId);
     expect(doubledDraft.customerId, isEmpty);

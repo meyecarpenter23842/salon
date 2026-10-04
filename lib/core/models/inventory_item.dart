@@ -50,8 +50,16 @@ class InventoryMovementItem {
   final String note;
   final DateTime createdAt;
 
-  bool get isReceipt => movementType == 'receive';
-  String get movementLabel => isReceipt ? 'Nhập kho' : 'Điều chỉnh';
+  bool get isReceipt =>
+      movementType == 'receive' || movementType == 'void';
+  bool get isSale => movementType == 'sale';
+
+  String get movementLabel => switch (movementType) {
+    'receive' => 'Nhập kho',
+    'sale' => 'Bán hàng',
+    'void' => 'Hoàn tồn do hủy bill',
+    _ => 'Điều chỉnh',
+  };
   String get quantityDeltaLabel => quantityDelta > 0
       ? '+$quantityDelta'
       : quantityDelta.toString();

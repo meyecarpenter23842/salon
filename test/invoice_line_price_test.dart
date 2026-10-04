@@ -69,6 +69,12 @@ void main() {
       'updated_at': now.toIso8601String(),
     });
 
+    await database.insert('inventory_stock', {
+      'product_id': productId,
+      'stock_on_hand': 10,
+      'updated_at': now.toIso8601String(),
+    });
+
     await repository.addInvoiceProduct(productId);
     final doubledDraft = await repository.addInvoiceProduct(productId);
     final lineId = doubledDraft.lines.single.id;
@@ -154,6 +160,12 @@ void main() {
       'is_active': 1,
       'is_hidden_from_staff': 0,
       'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+    });
+
+    await database.insert('inventory_stock', {
+      'product_id': productId,
+      'stock_on_hand': 10,
       'updated_at': now.toIso8601String(),
     });
 

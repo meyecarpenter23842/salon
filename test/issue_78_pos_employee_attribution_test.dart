@@ -146,6 +146,12 @@ void main() {
       'updated_at': now.toIso8601String(),
     });
 
+    await database.insert('inventory_stock', {
+      'product_id': productId,
+      'stock_on_hand': 5,
+      'updated_at': now.toIso8601String(),
+    });
+
     await invoices.selectInvoiceCustomer(customerId);
     final added = await invoices.addInvoiceProduct(productId);
 
