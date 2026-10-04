@@ -12,6 +12,7 @@ import '../models/reports_period.dart';
 import '../models/service_catalog_item.dart';
 import '../models/service_formula_item.dart';
 import 'data_backend_provider.dart';
+import '../repositories/billing_sessions_repository.dart';
 import '../repositories/fake_repositories.dart';
 import '../repositories/guarded_salon_repositories.dart';
 import '../repositories/invoice_line_actions_repository.dart';
@@ -20,6 +21,7 @@ import '../repositories/repository_contracts.dart';
 import '../repositories/sqlite_appointments_repository.dart';
 import '../repositories/sqlite_customers_repository.dart';
 import '../repositories/sqlite_employees_repository.dart';
+import '../repositories/sqlite_billing_sessions_repository.dart';
 import '../repositories/sqlite_invoices_repository.dart';
 import '../repositories/sqlite_overview_repository.dart';
 import '../repositories/sqlite_reports_repository.dart';
@@ -155,6 +157,26 @@ final invoiceLineActionsRepositoryProvider =
           ? repository as InvoiceLineActionsRepository
           : null;
     });
+
+final billingSessionsRepositoryProvider =
+    Provider<BillingSessionsRepository>((ref) {
+      final backend = ref.watch(appDataBackendProvider);
+      if (backend != AppDataBackend.sqlite) {
+        throw UnsupportedError(
+          'Billing sessions are only available on the SQLite runtime backend.',
+        );
+      }
+      return SqliteBillingSessionsRepository(SalonDatabase.instance);
+    });
+
+final activeInvoiceSessionsProvider = FutureProvider<List<InvoiceDraft>>(
+  (ref) => ref.watch(billingSessionsRepositoryProvider).fetchActiveSessions(),
+);
+
+final invoiceSessionProvider = FutureProvider.family<InvoiceDraft, String>(
+  (ref, sessionId) =>
+      ref.watch(billingSessionsRepositoryProvider).fetchSession(sessionId),
+);
 
 final reportsRepositoryProvider = Provider<ReportsRepository>((ref) {
   final backend = ref.watch(appDataBackendProvider);
