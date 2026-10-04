@@ -198,9 +198,15 @@ class SqliteInvoicesRepository
       throw StateError('Service $serviceId not found');
     }
 
+    final normalizedEmployeeId = employeeId?.trim();
+    final effectiveEmployeeId =
+        normalizedEmployeeId == null || normalizedEmployeeId.isEmpty
+        ? null
+        : normalizedEmployeeId;
     final existingIndex = draft.lines.indexWhere(
       (line) =>
-          line.serviceId == serviceId && line.employeeId == employeeId,
+          line.serviceId == serviceId &&
+          line.employeeId == effectiveEmployeeId,
     );
     final now = DateTime.now();
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
@@ -214,7 +220,7 @@ class SqliteInvoicesRepository
           existing.unitPrice * quantity,
           existing.discountAmount,
         ),
-        employeeId: employeeId ?? existing.employeeId,
+        employeeId: effectiveEmployeeId ?? existing.employeeId,
       );
     } else {
       updatedLines.add(
@@ -224,7 +230,7 @@ class SqliteInvoicesRepository
           itemType: 'service',
           serviceId: serviceId,
           productId: null,
-          employeeId: employeeId,
+          employeeId: effectiveEmployeeId,
           title: service['name'].toString(),
           quantity: 1,
           unitPrice: _toInt(service['price']),
@@ -386,7 +392,7 @@ class SqliteInvoicesRepository
   @override
   Future<InvoiceDraft> updateInvoiceLineEmployee(
     String lineId,
-    String employeeId,
+    String? employeeId,
   ) async {
     final database = await _database.database;
     final draft = await _loadDraft(database);
@@ -396,10 +402,7 @@ class SqliteInvoicesRepository
       );
     }
 
-    final normalizedEmployeeId = employeeId.trim();
-    if (normalizedEmployeeId.isEmpty) {
-      throw StateError('Chọn nhân viên thực hiện dịch vụ.');
-    }
+    final normalizedEmployeeId = employeeId?.trim() ?? '';
 
     final index = draft.lines.indexWhere((line) => line.id == lineId);
     if (index < 0) {
@@ -412,7 +415,9 @@ class SqliteInvoicesRepository
     }
 
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
-    updatedLines[index] = line.copyWith(employeeId: normalizedEmployeeId);
+    updatedLines[index] = normalizedEmployeeId.isEmpty
+        ? line.copyWith(clearEmployeeId: true)
+        : line.copyWith(employeeId: normalizedEmployeeId);
 
     return _saveDraft(
       database,

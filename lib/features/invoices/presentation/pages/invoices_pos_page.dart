@@ -72,17 +72,11 @@ Future<void> _addInvoiceService(
   ServiceCatalogItem service,
   String? employeeId,
 ) async {
-  var effectiveEmployeeId = employeeId?.trim() ?? '';
-  if (effectiveEmployeeId.isEmpty) {
-    final selected = await _chooseInvoiceEmployee(
-      context,
-      ref,
-      selectedEmployeeId: null,
-    );
-    if (selected == null || selected.isEmpty || !context.mounted) return;
-    effectiveEmployeeId = selected;
-    ref.read(_invoiceServiceEmployeeIdProvider.notifier).state = selected;
-  }
+  final normalizedEmployeeId = employeeId?.trim();
+  final effectiveEmployeeId =
+      normalizedEmployeeId == null || normalizedEmployeeId.isEmpty
+      ? null
+      : normalizedEmployeeId;
 
   try {
     await ref

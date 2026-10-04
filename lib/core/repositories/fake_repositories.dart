@@ -837,9 +837,16 @@ class FakeInvoicesRepository implements InvoicesRepository {
       orElse: () => throw StateError('Service $serviceId not found'),
     );
 
+    final normalizedEmployeeId = employeeId?.trim();
+    final effectiveEmployeeId =
+        normalizedEmployeeId == null || normalizedEmployeeId.isEmpty
+        ? null
+        : normalizedEmployeeId;
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
     final existingIndex = updatedLines.indexWhere(
-      (line) => line.serviceId == serviceId,
+      (line) =>
+          line.serviceId == serviceId &&
+          line.employeeId == effectiveEmployeeId,
     );
 
     if (existingIndex >= 0) {
@@ -849,7 +856,7 @@ class FakeInvoicesRepository implements InvoicesRepository {
       updatedLines[existingIndex] = existing.copyWith(
         quantity: quantity,
         totalPrice: _lineTotal(subtotal, existing.discountAmount),
-        employeeId: employeeId ?? existing.employeeId,
+        employeeId: effectiveEmployeeId ?? existing.employeeId,
       );
     } else {
       final now = DateTime.now();
@@ -861,7 +868,7 @@ class FakeInvoicesRepository implements InvoicesRepository {
           itemType: 'service',
           serviceId: serviceId,
           productId: null,
-          employeeId: employeeId,
+          employeeId: effectiveEmployeeId,
           title: service['name'].toString(),
           quantity: 1,
           unitPrice: unitPrice,
@@ -1002,7 +1009,7 @@ class FakeInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> updateInvoiceLineEmployee(
     String lineId,
-    String employeeId,
+    String? employeeId,
   ) async {
     final draft = await _loadDraft();
     if (draft.isPaid) {
@@ -1011,10 +1018,7 @@ class FakeInvoicesRepository implements InvoicesRepository {
       );
     }
 
-    final normalizedEmployeeId = employeeId.trim();
-    if (normalizedEmployeeId.isEmpty) {
-      throw StateError('Chọn nhân viên thực hiện dịch vụ.');
-    }
+    final normalizedEmployeeId = employeeId?.trim() ?? '';
 
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
     final index = updatedLines.indexWhere((line) => line.id == lineId);
@@ -1026,7 +1030,9 @@ class FakeInvoicesRepository implements InvoicesRepository {
       throw StateError('Chỉ dòng dịch vụ mới gắn nhân viên thực hiện.');
     }
 
-    updatedLines[index] = line.copyWith(employeeId: normalizedEmployeeId);
+    updatedLines[index] = normalizedEmployeeId.isEmpty
+        ? line.copyWith(clearEmployeeId: true)
+        : line.copyWith(employeeId: normalizedEmployeeId);
     return _storeDraft(
       draft.copyWith(
         lines: updatedLines,

@@ -12,18 +12,27 @@ Future<void> _editInvoiceLineEmployeeAction(
     ref,
     selectedEmployeeId: line.employeeId,
   );
-  if (employeeId == null || employeeId.isEmpty || !context.mounted) return;
+  if (employeeId == null || !context.mounted) return;
 
   try {
     await _queueCatalogMutation(
       () => ref
           .read(invoicesRepositoryProvider)
-          .updateInvoiceLineEmployee(line.id, employeeId),
+          .updateInvoiceLineEmployee(
+            line.id,
+            employeeId.isEmpty ? null : employeeId,
+          ),
     );
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đã cập nhật nhân viên cho ${line.title}')),
+      SnackBar(
+        content: Text(
+          employeeId.isEmpty
+              ? 'Đã bỏ gán nhân viên cho ${line.title}'
+              : 'Đã cập nhật nhân viên cho ${line.title}',
+        ),
+      ),
     );
   } catch (error) {
     if (!context.mounted) return;
@@ -538,8 +547,8 @@ class _InvoiceLineMenu extends ConsumerWidget {
             child: ListTile(
               dense: true,
               leading: Icon(Icons.badge_outlined),
-              title: Text('Đổi nhân viên thực hiện'),
-              subtitle: Text('Gắn đúng người làm dịch vụ trên bill'),
+              title: Text('Gán / bỏ gán nhân viên'),
+              subtitle: Text('Gắn đúng người làm cho từng dòng dịch vụ'),
             ),
           ),
         if (canEditPrice)
