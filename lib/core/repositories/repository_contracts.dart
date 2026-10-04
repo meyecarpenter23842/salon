@@ -134,7 +134,7 @@ abstract interface class InvoicesRepository {
 
   Future<InvoiceDraft> updateInvoiceLineEmployee(
     String lineId,
-    String employeeId,
+    String? employeeId,
   );
 
   Future<InvoiceDraft> removeInvoiceLine(String lineId);

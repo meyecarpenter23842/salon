@@ -381,11 +381,11 @@ class GuardedInvoicesRepository
   @override
   Future<InvoiceDraft> updateInvoiceLineEmployee(
     String lineId,
-    String employeeId,
+    String? employeeId,
   ) async {
-    final normalizedEmployeeId = employeeId.trim();
+    final normalizedEmployeeId = employeeId?.trim() ?? '';
     if (normalizedEmployeeId.isEmpty) {
-      throw StateError('Chọn nhân viên thực hiện dịch vụ.');
+      return _delegate.updateInvoiceLineEmployee(lineId, null);
     }
 
     final database = await _database.database;

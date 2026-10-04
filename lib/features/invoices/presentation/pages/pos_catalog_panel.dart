@@ -166,8 +166,7 @@ class _ServiceEmployeePicker extends ConsumerWidget {
         final selectedIsAvailable = available.any(
           (employee) => employee['id']?.toString() == selectedEmployeeId,
         );
-        final effectiveValue =
-            selectedIsAvailable ? selectedEmployeeId : null;
+        final effectiveValue = selectedIsAvailable ? selectedEmployeeId : '';
 
         if (!selectedIsAvailable && selectedEmployeeId != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -187,27 +186,29 @@ class _ServiceEmployeePicker extends ConsumerWidget {
                   labelText: 'Nhân viên thực hiện dịch vụ',
                   prefixIcon: const Icon(Icons.badge_outlined, size: 18),
                   helperText: available.isEmpty
-                      ? 'Chưa có nhân viên đang làm. Bấm + để thêm ngay.'
-                      : 'Dùng cho dịch vụ thêm trực tiếp tại bill.',
+                      ? 'Chưa có nhân viên đang làm; dịch vụ vẫn có thể thêm mà chưa gán.'
+                      : 'Có thể để Chưa gán nhân viên và gán sau trên từng dòng.',
                 ),
-                items: available
-                    .map(
-                      (employee) => DropdownMenuItem<String>(
-                        value: employee['id']?.toString(),
-                        child: Text(
-                          '${employee['name']} • ${employee['role']}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('Chưa gán nhân viên'),
+                  ),
+                  ...available.map(
+                    (employee) => DropdownMenuItem<String>(
+                      value: employee['id']?.toString(),
+                      child: Text(
+                        '${employee['name']} • ${employee['role']}',
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                    .toList(growable: false),
-                onChanged: available.isEmpty
-                    ? null
-                    : (value) {
-                        ref
-                            .read(_invoiceServiceEmployeeIdProvider.notifier)
-                            .state = value;
-                      },
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  final normalized = value?.trim() ?? '';
+                  ref.read(_invoiceServiceEmployeeIdProvider.notifier).state =
+                      normalized.isEmpty ? null : normalized;
+                },
               ),
             ),
             const SizedBox(width: 8),

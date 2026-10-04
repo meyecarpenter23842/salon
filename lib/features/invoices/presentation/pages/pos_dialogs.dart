@@ -106,7 +106,7 @@ class _InvoiceEmployeePickerDialog extends StatelessWidget {
                 icon: Icons.group_off_outlined,
                 title: 'Chưa có nhân viên đang làm',
                 message:
-                    'Thêm nhân viên nhanh ngay tại bill, không cần rời màn hình.',
+                    'Có thể để Chưa gán nhân viên hoặc thêm nhân viên nhanh ngay tại bill.',
               )
             : ListView.separated(
                 itemCount: employees.length,
@@ -163,6 +163,12 @@ class _InvoiceEmployeePickerDialog extends StatelessWidget {
               ),
       ),
       actions: [
+        TextButton.icon(
+          key: const Key('billing-employee-picker-unassigned'),
+          onPressed: () => Navigator.of(context).pop(''),
+          icon: const Icon(Icons.person_off_outlined),
+          label: const Text('Không gán nhân viên'),
+        ),
         TextButton.icon(
           key: const Key('billing-employee-picker-add'),
           onPressed: () =>
