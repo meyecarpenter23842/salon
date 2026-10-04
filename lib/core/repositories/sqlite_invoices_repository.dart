@@ -329,20 +329,29 @@ class SqliteInvoicesRepository
     );
   }
 
+
   @override
   Future<InvoiceDraft> addInvoiceProduct(String productId) async {
     final database = await _database.database;
     final draft = await _loadDraft(database);
-    final rows = await database.query(
-      'retail_products',
-      where: 'id = ? AND is_active = 1',
-      whereArgs: [productId],
-      limit: 1,
+    final rows = await database.rawQuery(
+      'SELECT p.*, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
+      'FROM retail_products p '
+      'LEFT JOIN inventory_stock s ON s.product_id = p.id '
+      'WHERE p.id = ? AND p.is_active = 1 LIMIT 1',
+      [productId],
     );
     if (rows.isEmpty) {
       throw StateError('Product $productId not found or inactive');
     }
     final product = rows.first;
+    final requestedQuantity =
+        _productQuantityInDraft(draft, productId) + 1;
+    _ensureProductStockAvailable(
+      productName: product['name']?.toString() ?? 'Sản phẩm',
+      available: _toInt(product['stock_on_hand']),
+      requested: requestedQuantity,
+    );
 
     final existingIndex = draft.lines.indexWhere(
       (line) => line.isProduct && line.productId == productId,
@@ -407,6 +416,21 @@ class SqliteInvoicesRepository
     final normalizedQuantity = quantity < 1 ? 1 : quantity;
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
     final line = updatedLines[index];
+    if (line.isProduct) {
+      final productId = line.productId?.trim() ?? '';
+      if (productId.isEmpty) {
+        throw StateError('Dòng sản phẩm không có mã sản phẩm.');
+      }
+      final requestedQuantity =
+          _productQuantityInDraft(draft, productId) -
+          line.quantity +
+          normalizedQuantity;
+      await _ensureProductStockAvailableFromDatabase(
+        database,
+        productId: productId,
+        requested: requestedQuantity,
+      );
+    }
     updatedLines[index] = line.copyWith(
       quantity: normalizedQuantity,
       totalPrice: _lineTotal(
@@ -716,6 +740,14 @@ class SqliteInvoicesRepository
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
 
+      if (type == InvoiceAdjustmentType.voided) {
+        await _restoreInventoryForVoidedInvoice(
+          transaction,
+          normalizedInvoiceId,
+          now,
+        );
+      }
+
       await _reverseCustomerCheckoutMetrics(transaction, adjustment);
       return adjustment;
     });
@@ -958,6 +990,13 @@ class SqliteInvoicesRepository
     );
 
     await database.transaction((transaction) async {
+      await _deductInventoryForCheckout(
+        transaction,
+        draft,
+        archivedInvoiceId,
+        now,
+      );
+
       await transaction.insert(
         'invoices',
         InvoiceMapper.toDatabase(archivedDraft),
@@ -1009,6 +1048,212 @@ class SqliteInvoicesRepository
 
     return _loadDraft(database);
   }
+
+
+  Future<void> _deductInventoryForCheckout(
+    DatabaseExecutor database,
+    InvoiceDraft draft,
+    String invoiceId,
+    DateTime now,
+  ) async {
+    final quantities = <String, int>{};
+    for (final line in draft.lines) {
+      if (!line.isProduct) continue;
+      final productId = line.productId?.trim() ?? '';
+      if (productId.isEmpty) {
+        throw StateError('Dòng sản phẩm không có mã sản phẩm.');
+      }
+      quantities.update(
+        productId,
+        (current) => current + line.quantity,
+        ifAbsent: () => line.quantity,
+      );
+    }
+
+    for (final entry in quantities.entries) {
+      final rows = await database.rawQuery(
+        'SELECT p.name, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
+        'FROM retail_products p '
+        'LEFT JOIN inventory_stock s ON s.product_id = p.id '
+        'WHERE p.id = ? LIMIT 1',
+        [entry.key],
+      );
+      if (rows.isEmpty) {
+        throw StateError('Sản phẩm ${entry.key} không còn trong danh mục.');
+      }
+
+      final productName = rows.first['name']?.toString() ?? 'Sản phẩm';
+      final before = _toInt(rows.first['stock_on_hand']);
+      _ensureProductStockAvailable(
+        productName: productName,
+        available: before,
+        requested: entry.value,
+      );
+      final after = before - entry.value;
+      final updated = await database.update(
+        'inventory_stock',
+        {
+          'stock_on_hand': after,
+          'updated_at': now.toIso8601String(),
+        },
+        where: 'product_id = ?',
+        whereArgs: [entry.key],
+      );
+      if (updated != 1) {
+        throw StateError(
+          'Sản phẩm $productName chưa có tồn kho để bán. Nhập kho trước khi thanh toán.',
+        );
+      }
+
+      await database.insert(
+        'inventory_movements',
+        {
+          'id': _saleMovementId(invoiceId, entry.key),
+          'product_id': entry.key,
+          'movement_type': 'sale',
+          'quantity_delta': -entry.value,
+          'stock_before': before,
+          'stock_after': after,
+          'note': 'Bán theo hóa đơn $invoiceId',
+          'created_at': now.toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    }
+  }
+
+  Future<void> _restoreInventoryForVoidedInvoice(
+    DatabaseExecutor database,
+    String invoiceId,
+    DateTime now,
+  ) async {
+    final productRows = await database.rawQuery(
+      'SELECT DISTINCT product_id FROM invoice_items '
+      "WHERE invoice_id = ? AND item_type = 'product' "
+      'AND product_id IS NOT NULL',
+      [invoiceId],
+    );
+
+    for (final row in productRows) {
+      final productId = row['product_id']?.toString().trim() ?? '';
+      if (productId.isEmpty) continue;
+
+      final saleRows = await database.query(
+        'inventory_movements',
+        where: 'id = ? AND product_id = ? AND movement_type = ?',
+        whereArgs: [_saleMovementId(invoiceId, productId), productId, 'sale'],
+        limit: 1,
+      );
+      if (saleRows.isEmpty) continue;
+
+      final soldQuantity = -_toInt(saleRows.first['quantity_delta']);
+      if (soldQuantity <= 0) continue;
+
+      final stockRows = await database.query(
+        'inventory_stock',
+        columns: const ['stock_on_hand'],
+        where: 'product_id = ?',
+        whereArgs: [productId],
+        limit: 1,
+      );
+      final before = stockRows.isEmpty
+          ? 0
+          : _toInt(stockRows.first['stock_on_hand']);
+      final after = before + soldQuantity;
+      final values = <String, Object?>{
+        'product_id': productId,
+        'stock_on_hand': after,
+        'updated_at': now.toIso8601String(),
+      };
+
+      if (stockRows.isEmpty) {
+        await database.insert(
+          'inventory_stock',
+          values,
+          conflictAlgorithm: ConflictAlgorithm.abort,
+        );
+      } else {
+        final updated = await database.update(
+          'inventory_stock',
+          values,
+          where: 'product_id = ?',
+          whereArgs: [productId],
+        );
+        if (updated != 1) {
+          throw StateError('Không thể hoàn tồn cho sản phẩm $productId.');
+        }
+      }
+
+      await database.insert(
+        'inventory_movements',
+        {
+          'id': _voidMovementId(invoiceId, productId),
+          'product_id': productId,
+          'movement_type': 'void',
+          'quantity_delta': soldQuantity,
+          'stock_before': before,
+          'stock_after': after,
+          'note': 'Hoàn tồn do hủy hóa đơn $invoiceId',
+          'created_at': now.toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    }
+  }
+
+  Future<void> _ensureProductStockAvailableFromDatabase(
+    DatabaseExecutor database, {
+    required String productId,
+    required int requested,
+  }) async {
+    final rows = await database.rawQuery(
+      'SELECT p.name, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
+      'FROM retail_products p '
+      'LEFT JOIN inventory_stock s ON s.product_id = p.id '
+      'WHERE p.id = ? LIMIT 1',
+      [productId],
+    );
+    if (rows.isEmpty) {
+      throw StateError('Sản phẩm $productId không còn trong danh mục.');
+    }
+    _ensureProductStockAvailable(
+      productName: rows.first['name']?.toString() ?? 'Sản phẩm',
+      available: _toInt(rows.first['stock_on_hand']),
+      requested: requested,
+    );
+  }
+
+  void _ensureProductStockAvailable({
+    required String productName,
+    required int available,
+    required int requested,
+  }) {
+    if (requested <= available) return;
+    if (available <= 0) {
+      throw StateError(
+        '$productName đã hết hàng. Nhập kho trước khi bán.',
+      );
+    }
+    throw StateError(
+      'Không đủ tồn kho cho $productName: cần $requested, còn $available.',
+    );
+  }
+
+  int _productQuantityInDraft(InvoiceDraft draft, String productId) {
+    var total = 0;
+    for (final line in draft.lines) {
+      if (line.isProduct && line.productId == productId) {
+        total += line.quantity;
+      }
+    }
+    return total;
+  }
+
+  String _saleMovementId(String invoiceId, String productId) =>
+      'stock-sale-$invoiceId-$productId';
+
+  String _voidMovementId(String invoiceId, String productId) =>
+      'stock-void-$invoiceId-$productId';
 
   Future<void> _applyCustomerCheckoutMetrics(
     DatabaseExecutor database,

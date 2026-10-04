@@ -20,6 +20,7 @@ import '../../../../core/models/receipt_template_config.dart';
 import '../../../../core/models/retail_product_item.dart';
 import '../../../../core/models/retail_product_upsert_input.dart';
 import '../../../../core/models/service_catalog_item.dart';
+import '../../../../core/providers/inventory_providers.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/settings/receipt_template_store.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -101,12 +102,23 @@ Future<void> _addInvoiceProduct(
   WidgetRef ref,
   RetailProductItem product,
 ) async {
-  await ref.read(invoicesRepositoryProvider).addInvoiceProduct(product.id);
-  if (!context.mounted) return;
-  ref.invalidate(invoiceDraftProvider);
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text('Đã thêm ${product.name} vào bill')));
+  try {
+    await ref.read(invoicesRepositoryProvider).addInvoiceProduct(product.id);
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã thêm ${product.name} vào bill')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Không thêm được sản phẩm: ${_friendlyCheckoutError(error)}',
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _updateInvoiceLineQuantity(
@@ -115,11 +127,22 @@ Future<void> _updateInvoiceLineQuantity(
   InvoiceDraftLine line,
   int quantity,
 ) async {
-  await ref
-      .read(invoicesRepositoryProvider)
-      .updateInvoiceLineQuantity(line.id, quantity);
-  if (!context.mounted) return;
-  ref.invalidate(invoiceDraftProvider);
+  try {
+    await ref
+        .read(invoicesRepositoryProvider)
+        .updateInvoiceLineQuantity(line.id, quantity);
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Không đổi được số lượng: ${_friendlyCheckoutError(error)}',
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _removeInvoiceLine(

@@ -85,7 +85,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
                 key: const Key('inventory-premium-header'),
                 title: 'Kho hàng',
                 subtitle:
-                    'Theo dõi tồn nội bộ, nhập kho và điều chỉnh nhanh. Không chặn bán hàng.',
+                    'Theo dõi tồn thật; POS tự trừ khi checkout và chặn bán quá tồn.',
                 actionLabel: 'Nhập hàng',
                 actionIcon: Icons.add_box_outlined,
                 onAction: () => _startBatchMutation(

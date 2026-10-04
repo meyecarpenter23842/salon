@@ -250,6 +250,7 @@ Future<void> _checkoutAndShowReceipt(
     ref.invalidate(appointmentsRepositoryProvider);
     ref.invalidate(appointmentsViewProvider);
     ref.invalidate(overviewSummaryProvider);
+    ref.read(inventoryRefreshNonceProvider.notifier).state++;
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1304,6 +1305,9 @@ Future<InvoiceAdjustment?> _createInvoiceAdjustment(
     ref.invalidate(appointmentsViewProvider);
     ref.invalidate(overviewSummaryProvider);
     ref.invalidate(reportsSummaryProvider);
+    if (type == InvoiceAdjustmentType.voided) {
+      ref.read(inventoryRefreshNonceProvider.notifier).state++;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
