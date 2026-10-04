@@ -13,16 +13,45 @@ import 'repository_contracts.dart';
 
 class SqliteInvoicesRepository
     implements InvoicesRepository, InvoiceLineActionsRepository {
-  SqliteInvoicesRepository(this._database, [Object? _]);
+  SqliteInvoicesRepository(
+    this._database, [
+    Object? _,
+    String draftInvoiceId = legacyDraftInvoiceId,
+  ]) : _draftInvoiceId = draftInvoiceId.trim().isEmpty
+           ? legacyDraftInvoiceId
+           : draftInvoiceId.trim();
+
+  static const String legacyDraftInvoiceId = 'invoice-draft-001';
+  static const String legacyDraftStateSettingsKey = 'invoice_draft_state_v1';
+  static const String sessionDraftStateSettingsPrefix =
+      'invoice_draft_state_v2:';
 
   final SalonDatabase _database;
-  static const String _draftInvoiceId = 'invoice-draft-001';
-  static const String _draftStateSettingsKey = 'invoice_draft_state_v1';
+  final String _draftInvoiceId;
+
+  String get _draftStateSettingsKey =>
+      _draftInvoiceId == legacyDraftInvoiceId
+      ? legacyDraftStateSettingsKey
+      : '$sessionDraftStateSettingsPrefix$_draftInvoiceId';
 
   @override
   Future<InvoiceDraft> fetchInvoiceDraft() async {
     final database = await _database.database;
     return _loadDraft(database);
+  }
+
+  Future<InvoiceDraft> createEmptyDraft() async {
+    final database = await _database.database;
+    final current = await _loadDraft(database);
+    if (current.lines.isNotEmpty ||
+        current.customerId.trim().isNotEmpty ||
+        current.appointmentId != null) {
+      return current;
+    }
+    return _saveDraft(
+      database,
+      current.copyWith(updatedAt: DateTime.now()),
+    );
   }
 
   @override
@@ -571,7 +600,7 @@ class SqliteInvoicesRepository
       'invoices',
       columns: const ['id'],
       where: 'id = ?',
-      whereArgs: const [_draftInvoiceId],
+      whereArgs: [_draftInvoiceId],
       limit: 1,
     );
     if (invoiceRows.isNotEmpty) {
@@ -582,7 +611,7 @@ class SqliteInvoicesRepository
       'app_settings',
       columns: const ['value'],
       where: 'key = ?',
-      whereArgs: const [_draftStateSettingsKey],
+      whereArgs: [_draftStateSettingsKey],
       limit: 1,
     );
     if (stateRows.isNotEmpty) {
@@ -709,7 +738,7 @@ class SqliteInvoicesRepository
       await transaction.delete(
         'app_settings',
         where: 'key = ?',
-        whereArgs: const [_draftStateSettingsKey],
+        whereArgs: [_draftStateSettingsKey],
       );
     });
 
@@ -763,12 +792,12 @@ class SqliteInvoicesRepository
       await transaction.delete(
         'invoice_items',
         where: 'invoice_id = ?',
-        whereArgs: const [_draftInvoiceId],
+        whereArgs: [_draftInvoiceId],
       );
       final deletedDrafts = await transaction.delete(
         'invoices',
         where: 'id = ? AND paid_at IS NULL',
-        whereArgs: const [_draftInvoiceId],
+        whereArgs: [_draftInvoiceId],
       );
       if (deletedDrafts != 1) {
         throw StateError('Invoice draft disappeared during checkout.');
@@ -776,7 +805,7 @@ class SqliteInvoicesRepository
       await transaction.delete(
         'app_settings',
         where: 'key = ?',
-        whereArgs: const [_draftStateSettingsKey],
+        whereArgs: [_draftStateSettingsKey],
       );
     });
 
