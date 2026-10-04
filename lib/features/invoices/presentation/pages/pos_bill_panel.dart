@@ -1,5 +1,38 @@
 part of 'invoices_pos_page.dart';
 
+Future<void> _editInvoiceLineEmployeeAction(
+  BuildContext context,
+  WidgetRef ref,
+  InvoiceDraftLine line,
+) async {
+  if (!line.isService) return;
+
+  final employeeId = await _chooseInvoiceEmployee(
+    context,
+    ref,
+    selectedEmployeeId: line.employeeId,
+  );
+  if (employeeId == null || employeeId.isEmpty || !context.mounted) return;
+
+  try {
+    await _queueCatalogMutation(
+      () => ref
+          .read(invoicesRepositoryProvider)
+          .updateInvoiceLineEmployee(line.id, employeeId),
+    );
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã cập nhật nhân viên cho ${line.title}')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không đổi được nhân viên: $error')),
+    );
+  }
+}
+
 Future<void> _editInvoiceLineUnitPriceAction(
   BuildContext context,
   WidgetRef ref,
@@ -86,9 +119,14 @@ Future<void> _clearInvoiceDraft(
 }
 
 class _InvoiceDraftPanel extends ConsumerWidget {
-  const _InvoiceDraftPanel({required this.draft, required this.dense});
+  const _InvoiceDraftPanel({
+    required this.draft,
+    required this.employeesState,
+    required this.dense,
+  });
 
   final InvoiceDraft draft;
+  final AsyncValue<List<Map<String, Object?>>> employeesState;
   final bool dense;
 
   @override
@@ -138,6 +176,9 @@ class _InvoiceDraftPanel extends ConsumerWidget {
                     separatorBuilder: (_, _) => const PremiumDivider(),
                     itemBuilder: (context, index) => _InvoiceLineRow(
                       line: draft.lines[index],
+                      employees:
+                          employeesState.valueOrNull ??
+                          const <Map<String, Object?>>[],
                       isLocked: draft.isPaid,
                     ),
                   ),
@@ -185,9 +226,14 @@ class _InvoiceTableHeader extends StatelessWidget {
 }
 
 class _InvoiceLineRow extends ConsumerWidget {
-  const _InvoiceLineRow({required this.line, required this.isLocked});
+  const _InvoiceLineRow({
+    required this.line,
+    required this.employees,
+    required this.isLocked,
+  });
 
   final InvoiceDraftLine line;
+  final List<Map<String, Object?>> employees;
   final bool isLocked;
 
   @override
@@ -222,6 +268,14 @@ class _InvoiceLineRow extends ConsumerWidget {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+                          if (line.isService) ...[
+                            const SizedBox(height: 3),
+                            _InvoiceLineEmployeeAttribution(
+                              line: line,
+                              employees: employees,
+                              isLocked: isLocked,
+                            ),
+                          ],
                           const SizedBox(height: 2),
                           Text(
                             _currency(line.unitPrice),
@@ -309,6 +363,14 @@ class _InvoiceLineRow extends ConsumerWidget {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+                          if (line.isService) ...[
+                            const SizedBox(height: 3),
+                            _InvoiceLineEmployeeAttribution(
+                              line: line,
+                              employees: employees,
+                              isLocked: isLocked,
+                            ),
+                          ],
                           if (line.discountAmount > 0)
                             Text(
                               _lineDiscountSummary(line),
@@ -379,6 +441,66 @@ class _InvoiceLineRow extends ConsumerWidget {
   }
 }
 
+class _InvoiceLineEmployeeAttribution extends ConsumerWidget {
+  const _InvoiceLineEmployeeAttribution({
+    required this.line,
+    required this.employees,
+    required this.isLocked,
+  });
+
+  final InvoiceDraftLine line;
+  final List<Map<String, Object?>> employees;
+  final bool isLocked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final employeeId = line.employeeId?.trim() ?? '';
+    String label = employeeId.isEmpty ? 'Chưa gán nhân viên' : 'Nhân viên đã gán';
+    for (final employee in employees) {
+      if (employee['id']?.toString() == employeeId) {
+        final name = employee['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty) label = name;
+        break;
+      }
+    }
+
+    final tone = employeeId.isEmpty ? AppColors.warning : AppColors.textMuted;
+    return InkWell(
+      key: Key('billing-line-employee-${line.id}'),
+      onTap: isLocked
+          ? null
+          : () => _editInvoiceLineEmployeeAction(context, ref, line),
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.badge_outlined, size: 12, color: tone),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 9.8,
+                  color: tone,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (!isLocked) ...[
+              const SizedBox(width: 3),
+              Icon(Icons.edit_outlined, size: 10, color: tone),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InvoiceLineMenu extends ConsumerWidget {
   const _InvoiceLineMenu({required this.line, required this.isLocked});
 
@@ -397,7 +519,9 @@ class _InvoiceLineMenu extends ConsumerWidget {
       padding: EdgeInsets.zero,
       icon: Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textMuted),
       onSelected: (value) {
-        if (value == 'price') {
+        if (value == 'employee') {
+          _editInvoiceLineEmployeeAction(context, ref, line);
+        } else if (value == 'price') {
           _editInvoiceLineUnitPriceAction(context, ref, line);
         } else if (value == 'discount') {
           _openLineDiscountEditor(context, ref, line);
@@ -408,6 +532,16 @@ class _InvoiceLineMenu extends ConsumerWidget {
         }
       },
       itemBuilder: (_) => [
+        if (line.isService)
+          const PopupMenuItem(
+            value: 'employee',
+            child: ListTile(
+              dense: true,
+              leading: Icon(Icons.badge_outlined),
+              title: Text('Đổi nhân viên thực hiện'),
+              subtitle: Text('Gắn đúng người làm dịch vụ trên bill'),
+            ),
+          ),
         if (canEditPrice)
           const PopupMenuItem(
             value: 'price',

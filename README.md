@@ -123,6 +123,8 @@ Output release local:
 - `dist/windows-release/Salon-Setup-x.x.x.exe`
 - `dist/windows-release/latest.json`
 
+Các bundle portable/test kiểu `dist/salonmanager-windows-test-*` là artifact sinh ra, không phải source và không được commit. Nếu thanh tiêu đề còn hiện chuỗi tiếng Việt lỗi kiểu `Quáº...`, máy đang mở binary cũ; phải build/cài lại từ release hiện tại thay vì chạy bundle test cũ.
+
 Hướng dẫn đầy đủ: `WINDOWS_RELEASE.md`.
 
 ## Dữ liệu cục bộ và backup

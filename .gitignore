@@ -46,3 +46,7 @@ app.*.map.json
 # Local Windows installer/update artifacts. Releases are built locally and
 # uploaded to R2 manually; generated binaries/metadata are not source files.
 /dist/windows-release/
+
+# Generated portable/test Windows bundles must never be committed or launched as source artifacts.
+/dist/salonmanager-windows-test-*/
+/dist/salonmanager-windows-test-*.zip

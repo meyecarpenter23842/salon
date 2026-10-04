@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,6 +8,34 @@ import 'package:salonmanager/core/license/license_gate.dart';
 import 'package:salonmanager/core/license/license_models.dart';
 
 void main() {
+  testWidgets('initial license validation uses stable dark startup shell', (
+    tester,
+  ) async {
+    final controller = _PendingGateController();
+
+    await tester.pumpWidget(
+      LicenseGate(
+        controller: controller,
+        launchStaffWindow: false,
+        mainAppBuilder: (_) => const MaterialApp(home: Text('MAIN_APP')),
+        staffAppBuilder: (_) => const MaterialApp(home: Text('STAFF_APP')),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('license-startup-shell')), findsOneWidget);
+    expect(find.text('Hair Spa Manager'), findsOneWidget);
+    expect(find.byKey(const Key('license-key-field')), findsNothing);
+
+    controller.complete(
+      const LicenseGateResult(status: LicenseAccessStatus.allowedOnline),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MAIN_APP'), findsOneWidget);
+    expect(find.byKey(const Key('license-startup-shell')), findsNothing);
+  });
+
   testWidgets('unlicensed staff launch cannot bypass the shared gate', (
     tester,
   ) async {
@@ -96,6 +126,27 @@ class _FakeGateController implements LicenseGateController {
   Future<LicenseGateResult> activate(String licenseKey) async {
     return const LicenseGateResult(
       status: LicenseAccessStatus.allowedOnline,
+    );
+  }
+}
+
+
+class _PendingGateController implements LicenseGateController {
+  final _completer = Completer<LicenseGateResult>();
+
+  @override
+  Future<LicenseGateResult> check() => _completer.future;
+
+  void complete(LicenseGateResult result) {
+    if (!_completer.isCompleted) {
+      _completer.complete(result);
+    }
+  }
+
+  @override
+  Future<LicenseGateResult> activate(String licenseKey) {
+    return Future.value(
+      const LicenseGateResult(status: LicenseAccessStatus.allowedOnline),
     );
   }
 }

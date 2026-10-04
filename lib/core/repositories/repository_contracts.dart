@@ -132,6 +132,11 @@ abstract interface class InvoicesRepository {
     int discountAmount,
   );
 
+  Future<InvoiceDraft> updateInvoiceLineEmployee(
+    String lineId,
+    String employeeId,
+  );
+
   Future<InvoiceDraft> removeInvoiceLine(String lineId);
 
   Future<InvoiceDraft> checkoutInvoice();

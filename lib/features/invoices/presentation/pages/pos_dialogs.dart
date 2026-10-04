@@ -1,5 +1,302 @@
 part of 'invoices_pos_page.dart';
 
+
+const _newInvoiceEmployeeChoice = '__new_invoice_employee__';
+
+List<Map<String, Object?>> _availableInvoiceEmployees(
+  List<Map<String, Object?>> employees,
+) {
+  return employees.where((employee) {
+    final status = employee['status']?.toString() ?? '';
+    return status == 'Đang làm việc' || status == 'Sắp có lịch';
+  }).toList(growable: false);
+}
+
+Future<String?> _chooseInvoiceEmployee(
+  BuildContext context,
+  WidgetRef ref, {
+  String? selectedEmployeeId,
+}) async {
+  List<Map<String, Object?>> employees;
+  try {
+    employees = await ref.read(employeesViewProvider.future);
+  } catch (error) {
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không tải được nhân viên: $error')),
+    );
+    return null;
+  }
+  if (!context.mounted) return null;
+
+  final choice = await showAppDialog<String>(
+    context: context,
+    builder: (_) => _InvoiceEmployeePickerDialog(
+      employees: _availableInvoiceEmployees(employees),
+      selectedEmployeeId: selectedEmployeeId,
+    ),
+  );
+  if (choice == null || !context.mounted) return null;
+  if (choice != _newInvoiceEmployeeChoice) return choice;
+
+  return _quickCreateInvoiceEmployee(context, ref);
+}
+
+Future<String?> _quickCreateInvoiceEmployee(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final input = await showAppDialog<EmployeeUpsertInput>(
+    context: context,
+    builder: (_) => const _QuickInvoiceEmployeeDialog(),
+  );
+  if (input == null || !context.mounted) return null;
+
+  try {
+    final saved = await ref.read(employeesRepositoryProvider).saveEmployee(input);
+    if (!context.mounted) return null;
+    ref.invalidate(employeesViewProvider);
+    final id = saved['id']?.toString().trim() ?? '';
+    if (id.isEmpty) {
+      throw StateError('Không đọc được mã nhân viên vừa tạo.');
+    }
+    ref.read(_invoiceServiceEmployeeIdProvider.notifier).state = id;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Đã thêm nhân viên ${saved['name'] ?? input.fullName} và chọn cho bill.',
+        ),
+      ),
+    );
+    return id;
+  } catch (error) {
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không tạo được nhân viên: $error')),
+    );
+    return null;
+  }
+}
+
+class _InvoiceEmployeePickerDialog extends StatelessWidget {
+  const _InvoiceEmployeePickerDialog({
+    required this.employees,
+    required this.selectedEmployeeId,
+  });
+
+  final List<Map<String, Object?>> employees;
+  final String? selectedEmployeeId;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const Key('billing-employee-picker'),
+      title: const Row(
+        children: [
+          PremiumIconBadge(icon: Icons.badge_outlined, size: 36),
+          SizedBox(width: 9),
+          Text('Chọn nhân viên thực hiện'),
+        ],
+      ),
+      content: SizedBox(
+        width: adaptiveDialogWidth(context, 480),
+        height: employees.isEmpty ? 180 : 380,
+        child: employees.isEmpty
+            ? const PremiumEmptyState(
+                icon: Icons.group_off_outlined,
+                title: 'Chưa có nhân viên đang làm',
+                message:
+                    'Thêm nhân viên nhanh ngay tại bill, không cần rời màn hình.',
+              )
+            : ListView.separated(
+                itemCount: employees.length,
+                separatorBuilder: (_, _) => const PremiumDivider(indent: 44),
+                itemBuilder: (context, index) {
+                  final employee = employees[index];
+                  final id = employee['id']?.toString() ?? '';
+                  final selected = id == selectedEmployeeId;
+                  return PremiumInteractiveSurface(
+                    selected: selected,
+                    onTap: id.isEmpty ? null : () => Navigator.of(context).pop(id),
+                    child: Row(
+                      children: [
+                        PremiumIconBadge(
+                          icon: Icons.person_outline_rounded,
+                          size: 34,
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                employee['name']?.toString() ?? 'Nhân viên',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${employee['role'] ?? ''} · ${employee['status'] ?? ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (selected)
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: AppColors.copper,
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton.icon(
+          key: const Key('billing-employee-picker-add'),
+          onPressed: () =>
+              Navigator.of(context).pop(_newInvoiceEmployeeChoice),
+          icon: const Icon(Icons.person_add_alt_1_outlined),
+          label: const Text('Thêm nhân viên nhanh'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Đóng'),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickInvoiceEmployeeDialog extends StatefulWidget {
+  const _QuickInvoiceEmployeeDialog();
+
+  @override
+  State<_QuickInvoiceEmployeeDialog> createState() =>
+      _QuickInvoiceEmployeeDialogState();
+}
+
+class _QuickInvoiceEmployeeDialogState
+    extends State<_QuickInvoiceEmployeeDialog> {
+  static const _roles = [
+    'Stylist chính',
+    'Barber',
+    'Chăm sóc tóc',
+    'Lễ tân',
+  ];
+
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  String _role = _roles.first;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          PremiumIconBadge(icon: Icons.person_add_alt_1_outlined, size: 36),
+          SizedBox(width: 9),
+          Text('Thêm nhân viên nhanh'),
+        ],
+      ),
+      content: SizedBox(
+        width: adaptiveDialogWidth(context, 460),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const Key('billing-quick-employee-name'),
+                controller: _nameController,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Họ tên'),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Nhập họ tên nhân viên'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _role,
+                decoration: const InputDecoration(labelText: 'Vai trò'),
+                items: _roles
+                    .map(
+                      (role) => DropdownMenuItem(
+                        value: role,
+                        child: Text(role),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => _role = value);
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Số điện thoại (không bắt buộc)',
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          key: const Key('billing-quick-employee-save'),
+          onPressed: _submit,
+          child: const Text('Lưu & chọn'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      EmployeeUpsertInput(
+        fullName: _nameController.text.trim(),
+        role: _role,
+        status: 'Đang làm việc',
+        phone: _phoneController.text.trim(),
+        shift: '',
+        specialty: '',
+        commissionLabel: '0%',
+        todaySchedule: '',
+        servicesDone: 0,
+        monthlyRevenue: '',
+        rating: '',
+        note: 'Tạo nhanh từ Bill',
+      ),
+    );
+  }
+}
+
 Future<void> _showCustomerPickerDialog(
   BuildContext context,
   WidgetRef ref,

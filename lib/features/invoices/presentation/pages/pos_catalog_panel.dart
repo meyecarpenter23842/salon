@@ -162,12 +162,7 @@ class _ServiceEmployeePicker extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return state.when(
       data: (employees) {
-        final available = employees
-            .where((employee) {
-              final status = employee['status']?.toString() ?? '';
-              return status == 'Đang làm việc' || status == 'Sắp có lịch';
-            })
-            .toList(growable: false);
+        final available = _availableInvoiceEmployees(employees);
         final selectedIsAvailable = available.any(
           (employee) => employee['id']?.toString() == selectedEmployeeId,
         );
@@ -180,32 +175,49 @@ class _ServiceEmployeePicker extends ConsumerWidget {
           });
         }
 
-        return DropdownButtonFormField<String>(
-          key: ValueKey('billing-service-employee-$effectiveValue'),
-          initialValue: effectiveValue,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Nhân viên thực hiện dịch vụ',
-            prefixIcon: Icon(Icons.badge_outlined, size: 18),
-            helperText: 'Bắt buộc với dịch vụ walk-in để tính đúng hiệu suất.',
-          ),
-          items: available
-              .map(
-                (employee) => DropdownMenuItem<String>(
-                  value: employee['id']?.toString(),
-                  child: Text(
-                    '${employee['name']} • ${employee['role']}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('billing-service-employee-$effectiveValue'),
+                initialValue: effectiveValue,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Nhân viên thực hiện dịch vụ',
+                  prefixIcon: const Icon(Icons.badge_outlined, size: 18),
+                  helperText: available.isEmpty
+                      ? 'Chưa có nhân viên đang làm. Bấm + để thêm ngay.'
+                      : 'Dùng cho dịch vụ thêm trực tiếp tại bill.',
                 ),
-              )
-              .toList(growable: false),
-          onChanged: available.isEmpty
-              ? null
-              : (value) {
-                  ref.read(_invoiceServiceEmployeeIdProvider.notifier).state =
-                      value;
-                },
+                items: available
+                    .map(
+                      (employee) => DropdownMenuItem<String>(
+                        value: employee['id']?.toString(),
+                        child: Text(
+                          '${employee['name']} • ${employee['role']}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: available.isEmpty
+                    ? null
+                    : (value) {
+                        ref
+                            .read(_invoiceServiceEmployeeIdProvider.notifier)
+                            .state = value;
+                      },
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              key: const Key('billing-quick-add-employee'),
+              tooltip: 'Thêm nhân viên nhanh',
+              onPressed: () => _quickCreateInvoiceEmployee(context, ref),
+              icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+            ),
+          ],
         );
       },
       loading: () => const LinearProgressIndicator(minHeight: 2),

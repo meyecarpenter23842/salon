@@ -91,6 +91,9 @@ class _LicenseGateState extends State<LicenseGate> {
   @override
   Widget build(BuildContext context) {
     final result = _result;
+    if (_busy && result == null) {
+      return const _LicenseCheckingShell();
+    }
     if (!_busy && result?.isAllowed == true) {
       return Builder(
         builder: widget.launchStaffWindow
@@ -104,6 +107,55 @@ class _LicenseGateState extends State<LicenseGate> {
       result: result,
       onRetry: _check,
       onActivate: _activate,
+    );
+  }
+}
+
+class _LicenseCheckingShell extends StatelessWidget {
+  const _LicenseCheckingShell();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Hair Spa Manager',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF0B0B0C),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFD6A654),
+          brightness: Brightness.dark,
+        ),
+      ),
+      home: const Scaffold(
+        key: Key('license-startup-shell'),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.content_cut_rounded,
+                size: 34,
+                color: Color(0xFFD6A654),
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Hair Spa Manager',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 14),
+              SizedBox(
+                width: 120,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

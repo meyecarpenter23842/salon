@@ -1000,6 +1000,42 @@ class FakeInvoicesRepository implements InvoicesRepository {
   }
 
   @override
+  Future<InvoiceDraft> updateInvoiceLineEmployee(
+    String lineId,
+    String employeeId,
+  ) async {
+    final draft = await _loadDraft();
+    if (draft.isPaid) {
+      throw StateError(
+        'Hóa đơn đã thanh toán nên không thể đổi nhân viên thực hiện.',
+      );
+    }
+
+    final normalizedEmployeeId = employeeId.trim();
+    if (normalizedEmployeeId.isEmpty) {
+      throw StateError('Chọn nhân viên thực hiện dịch vụ.');
+    }
+
+    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
+    final index = updatedLines.indexWhere((line) => line.id == lineId);
+    if (index < 0) {
+      throw StateError('Invoice line $lineId not found');
+    }
+    final line = updatedLines[index];
+    if (!line.isService) {
+      throw StateError('Chỉ dòng dịch vụ mới gắn nhân viên thực hiện.');
+    }
+
+    updatedLines[index] = line.copyWith(employeeId: normalizedEmployeeId);
+    return _storeDraft(
+      draft.copyWith(
+        lines: updatedLines,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
   Future<InvoiceDraft> removeInvoiceLine(String lineId) async {
     final draft = await _loadDraft();
     final updatedLines = draft.lines

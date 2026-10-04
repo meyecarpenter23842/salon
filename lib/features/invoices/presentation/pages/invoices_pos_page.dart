@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/models/customer_profile.dart';
+import '../../../../core/models/employee_upsert_input.dart';
 import '../../../../core/models/invoice_draft.dart';
 import '../../../../core/models/invoice_draft_line.dart';
 import '../../../../core/models/receipt_template_config.dart';
@@ -71,22 +72,33 @@ Future<void> _addInvoiceService(
   ServiceCatalogItem service,
   String? employeeId,
 ) async {
-  if (employeeId == null || employeeId.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Chọn nhân viên thực hiện trước khi thêm dịch vụ.'),
-      ),
+  var effectiveEmployeeId = employeeId?.trim() ?? '';
+  if (effectiveEmployeeId.isEmpty) {
+    final selected = await _chooseInvoiceEmployee(
+      context,
+      ref,
+      selectedEmployeeId: null,
     );
-    return;
+    if (selected == null || selected.isEmpty || !context.mounted) return;
+    effectiveEmployeeId = selected;
+    ref.read(_invoiceServiceEmployeeIdProvider.notifier).state = selected;
   }
-  await ref
-      .read(invoicesRepositoryProvider)
-      .addInvoiceService(service.id, employeeId: employeeId);
-  if (!context.mounted) return;
-  ref.invalidate(invoiceDraftProvider);
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text('Đã thêm ${service.name} vào bill')));
+
+  try {
+    await ref
+        .read(invoicesRepositoryProvider)
+        .addInvoiceService(service.id, employeeId: effectiveEmployeeId);
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã thêm ${service.name} vào bill')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không thêm được dịch vụ: $error')),
+    );
+  }
 }
 
 Future<void> _addInvoiceProduct(
@@ -377,7 +389,11 @@ class _BillingView extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 6,
-                    child: _InvoiceDraftPanel(draft: draft, dense: dense),
+                    child: _InvoiceDraftPanel(
+                      draft: draft,
+                      employeesState: employeesState,
+                      dense: dense,
+                    ),
                   ),
                   SizedBox(width: gap),
                   Expanded(

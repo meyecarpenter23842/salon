@@ -384,6 +384,47 @@ class SqliteInvoicesRepository
   }
 
   @override
+  Future<InvoiceDraft> updateInvoiceLineEmployee(
+    String lineId,
+    String employeeId,
+  ) async {
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    if (draft.isPaid) {
+      throw StateError(
+        'Hóa đơn đã thanh toán nên không thể đổi nhân viên thực hiện.',
+      );
+    }
+
+    final normalizedEmployeeId = employeeId.trim();
+    if (normalizedEmployeeId.isEmpty) {
+      throw StateError('Chọn nhân viên thực hiện dịch vụ.');
+    }
+
+    final index = draft.lines.indexWhere((line) => line.id == lineId);
+    if (index < 0) {
+      throw StateError('Invoice line $lineId not found');
+    }
+
+    final line = draft.lines[index];
+    if (!line.isService) {
+      throw StateError('Chỉ dòng dịch vụ mới gắn nhân viên thực hiện.');
+    }
+
+    final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
+    updatedLines[index] = line.copyWith(employeeId: normalizedEmployeeId);
+
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        lines: updatedLines,
+        updatedAt: DateTime.now(),
+      ),
+      rewriteItems: true,
+    );
+  }
+
+  @override
   Future<InvoiceDraft> updateInvoiceLineUnitPrice(
     String lineId,
     int unitPrice,

@@ -50,6 +50,7 @@ void main() {
 
     const customerId = 'cust-ef-01';
     const employeeId = 'emp-ef-01';
+    const reassignedEmployeeId = 'emp-ef-02';
     const serviceId = 'svc-ef-01';
     const appointmentId = 'apt-ef-01';
     const servicePrice = 150000;
@@ -78,6 +79,27 @@ void main() {
       'role': 'Stylist',
       'status': 'Đang làm việc',
       'phone': '0900000002',
+      'email': null,
+      'shift_label': '',
+      'specialty': '',
+      'commission_rate': 0,
+      'commission_label': '',
+      'today_schedule': '',
+      'services_done': 0,
+      'monthly_revenue_label': '',
+      'rating_label': '5.0',
+      'notes': '',
+      'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+    });
+
+    await db.insert('employees', {
+      'id': reassignedEmployeeId,
+      'full_name': 'NV Đổi Bill',
+      'initials': 'ĐB',
+      'role': 'Stylist',
+      'status': 'Đang làm việc',
+      'phone': '0900000004',
       'email': null,
       'shift_label': '',
       'specialty': '',
@@ -151,6 +173,15 @@ void main() {
     expect(draft.lines, isNotEmpty);
     expect(draft.lines.first.employeeId, employeeId);
 
+    // Bill cho phép đổi người thực hiện ngay trên từng dòng dịch vụ.
+    final reassigned = await invoicesRepository.updateInvoiceLineEmployee(
+      draft.lines.first.id,
+      reassignedEmployeeId,
+    );
+    expect(reassigned.lines.first.employeeId, reassignedEmployeeId);
+    final persistedDraft = await invoicesRepository.fetchInvoiceDraft();
+    expect(persistedDraft.lines.first.employeeId, reassignedEmployeeId);
+
     // Checkout — tạo invoice đã thanh toán
     await invoicesRepository.checkoutInvoice();
 
@@ -172,7 +203,7 @@ void main() {
       whereArgs: [paidInvoiceId],
     );
     expect(items, isNotEmpty);
-    expect(items.first['employee_id'], employeeId);
+    expect(items.first['employee_id'], reassignedEmployeeId);
 
     // Verify customer stats được cập nhật sau checkout
     final customers = await db.query(

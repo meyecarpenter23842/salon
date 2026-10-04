@@ -49,6 +49,11 @@ void main() {
       expect(find.text('Bill'), findsOneWidget);
       expect(find.text('Dịch vụ / Sản phẩm'), findsOneWidget);
       expect(find.text('Khách + Thanh toán'), findsOneWidget);
+      expect(
+        find.byKey(const Key('billing-quick-add-employee')),
+        findsOneWidget,
+      );
+      expect(find.text('Nhân viên thực hiện dịch vụ'), findsOneWidget);
       expect(find.text('Tính tiền'), findsNothing);
       expect(
         find.byKey(const Key('billing-pos-total-summary')),
