@@ -10,15 +10,17 @@ import 'package:salonmanager/core/repositories/repository_contracts.dart';
 import 'package:salonmanager/features/appointments/presentation/pages/appointments_page.dart';
 
 void main() {
-  testWidgets('periodic refresh reloads appointment state changed externally', (
+  testWidgets('periodic probe does not reload UI until shared database changes', (
     WidgetTester tester,
   ) async {
     final repository = _MutableAppointmentsRepository();
+    var fingerprint = 'db-v1';
 
     await tester.pumpWidget(
       _buildHarness(
         repository,
         refreshInterval: const Duration(seconds: 1),
+        fingerprintLoader: () async => fingerprint,
       ),
     );
     await _pumpLoaded(tester);
@@ -26,7 +28,12 @@ void main() {
     expect(find.text('Đang làm'), findsOneWidget);
     expect(repository.fetchCount, 1);
 
+    await tester.pump(const Duration(seconds: 1));
+    await _pumpLoaded(tester);
+    expect(repository.fetchCount, 1);
+
     repository.status = 'Hoàn thành';
+    fingerprint = 'db-v2';
     await tester.pump(const Duration(seconds: 1));
     await _pumpLoaded(tester);
 
@@ -35,7 +42,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('resuming main window refreshes without waiting for poll', (
+  testWidgets('resuming main window refreshes without waiting for database poll', (
     WidgetTester tester,
   ) async {
     final repository = _MutableAppointmentsRepository();
@@ -44,6 +51,7 @@ void main() {
       _buildHarness(
         repository,
         refreshInterval: const Duration(hours: 1),
+        fingerprintLoader: () async => 'db-static',
       ),
     );
     await _pumpLoaded(tester);
@@ -66,6 +74,7 @@ void main() {
 Widget _buildHarness(
   _MutableAppointmentsRepository repository, {
   required Duration refreshInterval,
+  required CrossProcessFingerprintLoader fingerprintLoader,
 }) {
   return ProviderScope(
     overrides: [
@@ -75,6 +84,7 @@ Widget _buildHarness(
       home: MainCrossProcessRefreshGate(
         enabled: true,
         refreshInterval: refreshInterval,
+        fingerprintLoader: fingerprintLoader,
         child: const Scaffold(body: _AppointmentStatusProbe()),
       ),
     ),

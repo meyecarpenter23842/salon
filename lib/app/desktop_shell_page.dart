@@ -350,8 +350,9 @@ class _SidebarBrand extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
+                      letterSpacing: -0.1,
                     ),
                   ),
                   const SizedBox(height: 3),

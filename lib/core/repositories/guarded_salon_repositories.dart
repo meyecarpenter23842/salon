@@ -379,6 +379,42 @@ class GuardedInvoicesRepository
   ) => _delegate.updateInvoiceLineDiscount(lineId, discountAmount);
 
   @override
+  Future<InvoiceDraft> updateInvoiceLineEmployee(
+    String lineId,
+    String employeeId,
+  ) async {
+    final normalizedEmployeeId = employeeId.trim();
+    if (normalizedEmployeeId.isEmpty) {
+      throw StateError('Chọn nhân viên thực hiện dịch vụ.');
+    }
+
+    final database = await _database.database;
+    final rows = await database.query(
+      'employees',
+      columns: const ['full_name', 'status'],
+      where: 'id = ?',
+      whereArgs: [normalizedEmployeeId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      throw StateError('Nhân viên thực hiện không còn tồn tại.');
+    }
+    final status = rows.first['status']?.toString() ?? '';
+    if (status != 'Đang làm việc' && status != 'Sắp có lịch') {
+      final name = rows.first['full_name']?.toString() ?? 'Nhân viên';
+      throw StateError(
+        '$name đang ở trạng thái ${status.isEmpty ? 'không hoạt động' : status} '
+        'nên không thể được gán thực hiện dịch vụ.',
+      );
+    }
+
+    return _delegate.updateInvoiceLineEmployee(
+      lineId,
+      normalizedEmployeeId,
+    );
+  }
+
+  @override
   Future<InvoiceDraft> removeInvoiceLine(String lineId) =>
       _delegate.removeInvoiceLine(lineId);
 
