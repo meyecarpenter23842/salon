@@ -13,6 +13,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/models/customer_profile.dart';
 import '../../../../core/models/employee_upsert_input.dart';
+import '../../../../core/models/invoice_adjustment.dart';
 import '../../../../core/models/invoice_draft.dart';
 import '../../../../core/models/invoice_draft_line.dart';
 import '../../../../core/models/receipt_template_config.dart';
@@ -499,7 +500,7 @@ class _PosHeader extends ConsumerWidget {
           OutlinedButton.icon(
             key: const Key('billing-history-action'),
             onPressed: () =>
-                _showInvoiceHistoryDialog(context, history, customers),
+                _showInvoiceHistoryDialog(context, ref, history, customers),
             icon: const Icon(Icons.history_rounded, size: 17),
             label: const Text('Lịch sử hóa đơn'),
           ),

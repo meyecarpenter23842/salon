@@ -15,6 +15,7 @@ import 'data_backend_provider.dart';
 import '../repositories/billing_sessions_repository.dart';
 import '../repositories/fake_repositories.dart';
 import '../repositories/guarded_salon_repositories.dart';
+import '../repositories/invoice_adjustment_repository.dart';
 import '../repositories/invoice_line_actions_repository.dart';
 import '../repositories/reporting_overview_repository.dart';
 import '../repositories/repository_contracts.dart';
@@ -155,6 +156,14 @@ final invoiceLineActionsRepositoryProvider =
       final repository = ref.watch(invoicesRepositoryProvider);
       return repository is InvoiceLineActionsRepository
           ? repository as InvoiceLineActionsRepository
+          : null;
+    });
+
+final invoiceAdjustmentRepositoryProvider =
+    Provider<InvoiceAdjustmentRepository?>((ref) {
+      final repository = ref.watch(invoicesRepositoryProvider);
+      return repository is InvoiceAdjustmentRepository
+          ? repository as InvoiceAdjustmentRepository
           : null;
     });
 

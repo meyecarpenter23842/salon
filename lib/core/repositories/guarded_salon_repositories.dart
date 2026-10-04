@@ -4,7 +4,9 @@ import '../database/appointment_mapper.dart';
 import '../database/salon_database.dart';
 import '../models/appointment_entry.dart';
 import '../models/appointment_upsert_input.dart';
+import '../models/invoice_adjustment.dart';
 import '../models/invoice_draft.dart';
+import 'invoice_adjustment_repository.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
 
@@ -29,10 +31,13 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
     if (appointments.isEmpty) return appointments;
 
     final database = await _database.database;
-    final paidRows = await database.query(
-      'invoices',
-      columns: const ['appointment_id'],
-      where: 'appointment_id IS NOT NULL AND paid_at IS NOT NULL',
+    final paidRows = await database.rawQuery(
+      'SELECT i.appointment_id FROM invoices i '
+      'WHERE i.appointment_id IS NOT NULL AND i.paid_at IS NOT NULL '
+      'AND NOT EXISTS ('
+      "SELECT 1 FROM invoice_adjustments ia "
+      "WHERE ia.invoice_id = i.id AND ia.adjustment_type = 'void'"
+      ')',
     );
     final paidAppointmentIds = paidRows
         .map((row) => row['appointment_id']?.toString())
@@ -175,12 +180,14 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
     DatabaseExecutor database,
     String appointmentId,
   ) async {
-    final paid = await database.query(
-      'invoices',
-      columns: const ['id'],
-      where: 'appointment_id = ? AND paid_at IS NOT NULL',
-      whereArgs: [appointmentId],
-      limit: 1,
+    final paid = await database.rawQuery(
+      'SELECT i.id FROM invoices i '
+      'WHERE i.appointment_id = ? AND i.paid_at IS NOT NULL '
+      'AND NOT EXISTS ('
+      "SELECT 1 FROM invoice_adjustments ia "
+      "WHERE ia.invoice_id = i.id AND ia.adjustment_type = 'void'"
+      ') LIMIT 1',
+      [appointmentId],
     );
     if (paid.isNotEmpty) {
       throw StateError(
@@ -289,12 +296,16 @@ class GuardedAppointmentsRepository implements AppointmentsRepository {
 }
 
 class GuardedInvoicesRepository
-    implements InvoicesRepository, InvoiceLineActionsRepository {
+    implements
+        InvoicesRepository,
+        InvoiceLineActionsRepository,
+        InvoiceAdjustmentRepository {
   GuardedInvoicesRepository(this._database, this._delegate);
 
   final SalonDatabase _database;
   final InvoicesRepository _delegate;
   bool _checkoutInFlight = false;
+  final Set<String> _adjustmentsInFlight = <String>{};
 
   @override
   Future<InvoiceDraft> fetchInvoiceDraft() => _delegate.fetchInvoiceDraft();
@@ -309,6 +320,45 @@ class GuardedInvoicesRepository
     customerId: customerId,
     appointmentId: appointmentId,
   );
+
+  @override
+  Future<List<InvoiceAdjustment>> fetchInvoiceAdjustments({
+    String? invoiceId,
+    int? limit,
+  }) {
+    return _invoiceAdjustmentDelegate.fetchInvoiceAdjustments(
+      invoiceId: invoiceId,
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<InvoiceAdjustment> refundInvoice(
+    String invoiceId, {
+    required String reason,
+  }) {
+    return _runAdjustment(
+      invoiceId,
+      () => _invoiceAdjustmentDelegate.refundInvoice(
+        invoiceId,
+        reason: reason,
+      ),
+    );
+  }
+
+  @override
+  Future<InvoiceAdjustment> voidInvoice(
+    String invoiceId, {
+    required String reason,
+  }) {
+    return _runAdjustment(
+      invoiceId,
+      () => _invoiceAdjustmentDelegate.voidInvoice(
+        invoiceId,
+        reason: reason,
+      ),
+    );
+  }
 
   @override
   Future<InvoiceDraft> prefillDraftFromAppointment(
@@ -459,16 +509,46 @@ class GuardedInvoicesRepository
     );
   }
 
+  InvoiceAdjustmentRepository get _invoiceAdjustmentDelegate {
+    final delegate = _delegate;
+    if (delegate is! InvoiceAdjustmentRepository) {
+      throw UnsupportedError(
+        'Repository không hỗ trợ hoàn tiền hoặc hủy giao dịch.',
+      );
+    }
+    return delegate as InvoiceAdjustmentRepository;
+  }
+
+  Future<InvoiceAdjustment> _runAdjustment(
+    String invoiceId,
+    Future<InvoiceAdjustment> Function() action,
+  ) async {
+    final normalizedInvoiceId = invoiceId.trim();
+    if (normalizedInvoiceId.isEmpty) {
+      throw StateError('Không xác định được hóa đơn cần điều chỉnh.');
+    }
+    if (!_adjustmentsInFlight.add(normalizedInvoiceId)) {
+      throw StateError('Hóa đơn đang được điều chỉnh. Vui lòng không thao tác lặp.');
+    }
+    try {
+      return await action();
+    } finally {
+      _adjustmentsInFlight.remove(normalizedInvoiceId);
+    }
+  }
+
   Future<void> _ensureAppointmentNotPaid(
     DatabaseExecutor database,
     String appointmentId,
   ) async {
-    final paid = await database.query(
-      'invoices',
-      columns: const ['id'],
-      where: 'appointment_id = ? AND paid_at IS NOT NULL',
-      whereArgs: [appointmentId],
-      limit: 1,
+    final paid = await database.rawQuery(
+      'SELECT i.id FROM invoices i '
+      'WHERE i.appointment_id = ? AND i.paid_at IS NOT NULL '
+      'AND NOT EXISTS ('
+      "SELECT 1 FROM invoice_adjustments ia "
+      "WHERE ia.invoice_id = i.id AND ia.adjustment_type = 'void'"
+      ') LIMIT 1',
+      [appointmentId],
     );
     if (paid.isNotEmpty) {
       throw StateError('Lịch hẹn này đã có hóa đơn đã thanh toán.');

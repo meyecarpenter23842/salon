@@ -95,6 +95,9 @@ Future<List<AllocatedInvoiceLine>> loadAllocatedInvoiceLines(
     'FROM invoices i '
     'JOIN invoice_items ii ON ii.invoice_id = i.id '
     'WHERE i.paid_at IS NOT NULL AND i.paid_at >= ? AND i.paid_at < ? '
+    'AND NOT EXISTS ('
+    'SELECT 1 FROM invoice_adjustments ia WHERE ia.invoice_id = i.id'
+    ') '
     'ORDER BY i.id ASC, ii.id ASC',
     [start.toIso8601String(), end.toIso8601String()],
   );

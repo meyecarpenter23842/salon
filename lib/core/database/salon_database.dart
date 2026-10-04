@@ -356,6 +356,13 @@ class SalonDatabase {
           );
         }
 
+        if (oldVersion < 13) {
+          batch.execute(DatabaseSchema.createInvoiceAdjustmentsTable);
+          batch.execute(DatabaseSchema.createInvoiceAdjustmentsUpdateGuard);
+          batch.execute(DatabaseSchema.createInvoiceAdjustmentsDeleteGuard);
+          batch.execute(DatabaseSchema.createInvoiceAdjustmentsCreatedAtIndex);
+        }
+
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {
