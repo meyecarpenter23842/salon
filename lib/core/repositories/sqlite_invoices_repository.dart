@@ -6,13 +6,18 @@ import '../database/invoice_draft_mapper.dart';
 import '../database/invoice_mapper.dart';
 import '../database/salon_database.dart';
 import '../models/appointment_entry.dart';
+import '../models/invoice_adjustment.dart';
 import '../models/invoice_draft.dart';
 import '../models/invoice_draft_line.dart';
+import 'invoice_adjustment_repository.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
 
 class SqliteInvoicesRepository
-    implements InvoicesRepository, InvoiceLineActionsRepository {
+    implements
+        InvoicesRepository,
+        InvoiceLineActionsRepository,
+        InvoiceAdjustmentRepository {
   SqliteInvoicesRepository(
     this._database, [
     Object? _,
@@ -87,6 +92,47 @@ class SqliteInvoicesRepository
       results.add(await _loadInvoiceById(database, row['id'].toString()));
     }
     return results;
+  }
+
+  @override
+  Future<List<InvoiceAdjustment>> fetchInvoiceAdjustments({
+    String? invoiceId,
+    int? limit,
+  }) async {
+    final database = await _database.database;
+    final normalizedInvoiceId = invoiceId?.trim() ?? '';
+    final rows = await database.query(
+      'invoice_adjustments',
+      where: normalizedInvoiceId.isEmpty ? null : 'invoice_id = ?',
+      whereArgs: normalizedInvoiceId.isEmpty ? null : [normalizedInvoiceId],
+      orderBy: 'created_at DESC',
+      limit: limit,
+    );
+    return rows.map(_mapInvoiceAdjustment).toList(growable: false);
+  }
+
+  @override
+  Future<InvoiceAdjustment> refundInvoice(
+    String invoiceId, {
+    required String reason,
+  }) {
+    return _adjustPaidInvoice(
+      invoiceId,
+      type: InvoiceAdjustmentType.refund,
+      reason: reason,
+    );
+  }
+
+  @override
+  Future<InvoiceAdjustment> voidInvoice(
+    String invoiceId, {
+    required String reason,
+  }) {
+    return _adjustPaidInvoice(
+      invoiceId,
+      type: InvoiceAdjustmentType.voided,
+      reason: reason,
+    );
   }
 
   @override
@@ -595,6 +641,158 @@ class SqliteInvoicesRepository
     return _archiveAndResetDraft(database, draft);
   }
 
+  Future<InvoiceAdjustment> _adjustPaidInvoice(
+    String invoiceId, {
+    required InvoiceAdjustmentType type,
+    required String reason,
+  }) async {
+    final normalizedInvoiceId = invoiceId.trim();
+    final normalizedReason = reason.trim();
+    if (normalizedInvoiceId.isEmpty) {
+      throw StateError('Không xác định được hóa đơn cần điều chỉnh.');
+    }
+    if (normalizedReason.isEmpty) {
+      throw StateError('Bắt buộc nhập lý do hoàn tiền hoặc hủy giao dịch.');
+    }
+
+    final database = await _database.database;
+    return database.transaction((transaction) async {
+      final invoiceRows = await transaction.query(
+        'invoices',
+        where: 'id = ? AND paid_at IS NOT NULL',
+        whereArgs: [normalizedInvoiceId],
+        limit: 1,
+      );
+      if (invoiceRows.isEmpty) {
+        throw StateError('Chỉ hóa đơn đã thanh toán mới được điều chỉnh.');
+      }
+
+      final existingAdjustments = await transaction.query(
+        'invoice_adjustments',
+        columns: const ['adjustment_type'],
+        where: 'invoice_id = ?',
+        whereArgs: [normalizedInvoiceId],
+        limit: 1,
+      );
+      if (existingAdjustments.isNotEmpty) {
+        final existingType = InvoiceAdjustmentType.fromDatabase(
+          existingAdjustments.first['adjustment_type']?.toString() ?? '',
+        );
+        throw StateError(
+          'Hóa đơn này ${existingType.statusLabel.toLowerCase()} nên không thể điều chỉnh lần nữa.',
+        );
+      }
+
+      final invoice = invoiceRows.first;
+      final now = DateTime.now();
+      final customerId = invoice['customer_id']?.toString() ?? '';
+      final appointmentId = _nullableId(invoice['appointment_id']);
+      final totalAmount = _toInt(invoice['total_amount']);
+      final adjustment = InvoiceAdjustment(
+        id: 'invoice-adjustment-${now.microsecondsSinceEpoch}',
+        invoiceId: normalizedInvoiceId,
+        type: type,
+        reason: normalizedReason,
+        amount: totalAmount,
+        paymentMethod: invoice['payment_method']?.toString() ?? '',
+        customerId: customerId,
+        appointmentId: appointmentId,
+        createdAt: now,
+      );
+
+      await transaction.insert(
+        'invoice_adjustments',
+        {
+          'id': adjustment.id,
+          'invoice_id': adjustment.invoiceId,
+          'adjustment_type': adjustment.type.databaseValue,
+          'reason': adjustment.reason,
+          'amount': adjustment.amount,
+          'payment_method': adjustment.paymentMethod,
+          'customer_id': adjustment.customerId,
+          'appointment_id': adjustment.appointmentId,
+          'created_at': adjustment.createdAt.toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+
+      await _reverseCustomerCheckoutMetrics(transaction, adjustment);
+      return adjustment;
+    });
+  }
+
+  Future<void> _reverseCustomerCheckoutMetrics(
+    DatabaseExecutor database,
+    InvoiceAdjustment adjustment,
+  ) async {
+    if (adjustment.customerId.trim().isEmpty) {
+      return;
+    }
+
+    final customerRows = await database.query(
+      'customers',
+      where: 'id = ?',
+      whereArgs: [adjustment.customerId],
+      limit: 1,
+    );
+    if (customerRows.isEmpty) {
+      return;
+    }
+
+    final existing = customerRows.first;
+    final earnedPoints = adjustment.amount ~/ 10000;
+    final reducedPoints = _toInt(existing['loyalty_points']) - earnedPoints;
+    final reducedSpent = _toInt(existing['total_spent']) - adjustment.amount;
+    final values = <String, Object?>{
+      'loyalty_points': reducedPoints < 0 ? 0 : reducedPoints,
+      'total_spent': reducedSpent < 0 ? 0 : reducedSpent,
+      'updated_at': adjustment.createdAt.toIso8601String(),
+    };
+
+    if (adjustment.type == InvoiceAdjustmentType.voided) {
+      final reducedVisits = _toInt(existing['visit_count']) - 1;
+      final lastVisitRows = await database.rawQuery(
+        'SELECT MAX(i.paid_at) AS last_paid_at '
+        'FROM invoices i '
+        'WHERE i.customer_id = ? AND i.paid_at IS NOT NULL '
+        'AND NOT EXISTS ('
+        "SELECT 1 FROM invoice_adjustments ia "
+        "WHERE ia.invoice_id = i.id AND ia.adjustment_type = 'void'"
+        ')',
+        [adjustment.customerId],
+      );
+      values['visit_count'] = reducedVisits < 0 ? 0 : reducedVisits;
+      values['last_visit_at'] = lastVisitRows.isEmpty
+          ? null
+          : lastVisitRows.first['last_paid_at']?.toString();
+    }
+
+    await database.update(
+      'customers',
+      values,
+      where: 'id = ?',
+      whereArgs: [adjustment.customerId],
+    );
+  }
+
+  InvoiceAdjustment _mapInvoiceAdjustment(Map<String, Object?> row) {
+    return InvoiceAdjustment(
+      id: row['id']?.toString() ?? '',
+      invoiceId: row['invoice_id']?.toString() ?? '',
+      type: InvoiceAdjustmentType.fromDatabase(
+        row['adjustment_type']?.toString() ?? '',
+      ),
+      reason: row['reason']?.toString() ?? '',
+      amount: _toInt(row['amount']),
+      paymentMethod: row['payment_method']?.toString() ?? '',
+      customerId: row['customer_id']?.toString() ?? '',
+      appointmentId: _nullableId(row['appointment_id']),
+      createdAt:
+          DateTime.tryParse(row['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
   Future<InvoiceDraft> _loadDraft(Database database) async {
     final invoiceRows = await database.query(
       'invoices',
@@ -1009,6 +1207,11 @@ class SqliteInvoicesRepository
   int _lineTotal(int subtotal, int discountAmount) {
     final value = subtotal - discountAmount;
     return value < 0 ? 0 : value;
+  }
+
+  String? _nullableId(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
   }
 
   int _toInt(Object? value) {

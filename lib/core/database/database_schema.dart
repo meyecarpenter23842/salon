@@ -1,7 +1,45 @@
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 12;
+  static const int version = 13;
+
+  static const String createInvoiceAdjustmentsTable = '''
+    CREATE TABLE IF NOT EXISTS invoice_adjustments (
+      id TEXT PRIMARY KEY,
+      invoice_id TEXT NOT NULL UNIQUE,
+      adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('refund', 'void')),
+      reason TEXT NOT NULL CHECK(length(trim(reason)) > 0),
+      amount INTEGER NOT NULL CHECK(amount >= 0),
+      payment_method TEXT NOT NULL,
+      customer_id TEXT NOT NULL,
+      appointment_id TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+      FOREIGN KEY (customer_id) REFERENCES customers(id),
+      FOREIGN KEY (appointment_id) REFERENCES appointments(id)
+    )
+    ''';
+
+  static const String createInvoiceAdjustmentsUpdateGuard = '''
+    CREATE TRIGGER IF NOT EXISTS trg_invoice_adjustments_no_update
+    BEFORE UPDATE ON invoice_adjustments
+    BEGIN
+      SELECT RAISE(ABORT, 'invoice adjustments are immutable');
+    END
+    ''';
+
+  static const String createInvoiceAdjustmentsDeleteGuard = '''
+    CREATE TRIGGER IF NOT EXISTS trg_invoice_adjustments_no_delete
+    BEFORE DELETE ON invoice_adjustments
+    BEGIN
+      SELECT RAISE(ABORT, 'invoice adjustments are immutable');
+    END
+    ''';
+
+  static const String createInvoiceAdjustmentsCreatedAtIndex =
+      'CREATE INDEX IF NOT EXISTS idx_invoice_adjustments_created_at '
+      'ON invoice_adjustments(created_at)';
+
 
   static const List<String> createStatements = [
     '''
@@ -187,6 +225,9 @@ class DatabaseSchema {
       FOREIGN KEY (employee_id) REFERENCES employees(id)
     )
     ''',
+    createInvoiceAdjustmentsTable,
+    createInvoiceAdjustmentsUpdateGuard,
+    createInvoiceAdjustmentsDeleteGuard,
     '''
     CREATE TABLE app_settings (
       key TEXT PRIMARY KEY,
@@ -206,6 +247,7 @@ class DatabaseSchema {
     'CREATE INDEX idx_invoice_items_invoice_id ON invoice_items(invoice_id)',
     'CREATE INDEX idx_invoice_items_item_type ON invoice_items(item_type)',
     'CREATE INDEX idx_invoice_items_employee_id ON invoice_items(employee_id)',
+    createInvoiceAdjustmentsCreatedAtIndex,
     'CREATE INDEX idx_service_formulas_service_id ON service_formulas(service_id)',
     'CREATE INDEX idx_retail_products_type ON retail_products(product_type)',
     'CREATE INDEX idx_catalog_options_kind ON catalog_options(kind)',

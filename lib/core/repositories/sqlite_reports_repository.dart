@@ -124,7 +124,11 @@ class SqliteReportsRepository implements ReportsRepository {
     final rows = await db.rawQuery(
       'SELECT COALESCE(SUM(total_amount), 0) AS total '
       'FROM invoices '
-      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?',
+      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ')',
       [start.toIso8601String(), end.toIso8601String()],
     );
     return _toInt(rows.first['total']);
@@ -134,7 +138,11 @@ class SqliteReportsRepository implements ReportsRepository {
     final rows = await db.rawQuery(
       'SELECT COUNT(*) AS cnt '
       'FROM invoices '
-      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?',
+      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ')',
       [start.toIso8601String(), end.toIso8601String()],
     );
     return _toInt(rows.first['cnt']);
@@ -174,6 +182,10 @@ class SqliteReportsRepository implements ReportsRepository {
       'SELECT substr(paid_at, 1, 10) AS day_key, COALESCE(SUM(total_amount), 0) AS total '
       'FROM invoices '
       'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ') '
       'GROUP BY day_key '
       'ORDER BY day_key ASC',
       [start.toIso8601String(), end.toIso8601String()],

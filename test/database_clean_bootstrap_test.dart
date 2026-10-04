@@ -95,6 +95,7 @@ void main() {
       'appointment_services',
       'invoices',
       'invoice_items',
+      'invoice_adjustments',
     ]) {
       expect(
         await _countRows(database, table),

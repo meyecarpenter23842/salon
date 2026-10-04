@@ -47,9 +47,9 @@ void main() {
   test('top-level business tables giữ TEXT id + created_at/updated_at', () async {
     expect(
       DatabaseSchema.version,
-      12,
+      13,
       reason:
-          'Schema 12 bổ sung danh mục nhóm/thương hiệu mà không đổi identity bảng nghiệp vụ.',
+          'Schema 13 bổ sung audit hoàn tiền/hủy giao dịch mà không đổi identity bảng nghiệp vụ.',
     );
 
     final database = await SalonDatabase.instance.initialize();

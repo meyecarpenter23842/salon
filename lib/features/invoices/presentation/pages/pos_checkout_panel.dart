@@ -1084,90 +1084,370 @@ Future<void> _printPaidInvoice(
 
 Future<void> _showInvoiceHistoryDialog(
   BuildContext context,
+  WidgetRef ref,
   List<InvoiceDraft> history,
   List<CustomerProfile> customers,
 ) async {
+  final adjustmentRepository = ref.read(invoiceAdjustmentRepositoryProvider);
+  var adjustmentActionsAvailable = adjustmentRepository != null;
+  final adjustmentsByInvoice = <String, InvoiceAdjustment>{};
+
+  if (adjustmentRepository != null) {
+    try {
+      final adjustments = await adjustmentRepository.fetchInvoiceAdjustments(
+        limit: 100,
+      );
+      for (final adjustment in adjustments) {
+        adjustmentsByInvoice[adjustment.invoiceId] = adjustment;
+      }
+    } catch (error) {
+      adjustmentActionsAvailable = false;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Không tải được audit hoàn tiền/hủy giao dịch: '
+              '${_friendlyCheckoutError(error)}',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  if (!context.mounted) return;
   await showAppDialog<void>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Row(
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: const Row(
+          children: [
+            PremiumIconBadge(icon: Icons.history_rounded, size: 36),
+            SizedBox(width: 9),
+            Text('Hóa đơn gần đây'),
+          ],
+        ),
+        content: SizedBox(
+          width: adaptiveDialogWidth(dialogContext, 620),
+          height: 420,
+          child: history.isEmpty
+              ? const PremiumEmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Chưa có hóa đơn',
+                  message: 'Hóa đơn đã thanh toán sẽ xuất hiện tại đây.',
+                )
+              : ListView.separated(
+                  itemCount: history.length,
+                  separatorBuilder: (_, _) => const PremiumDivider(),
+                  itemBuilder: (context, index) {
+                    final invoice = history[index];
+                    final adjustment = adjustmentsByInvoice[invoice.id];
+                    final paidAt = invoice.paidAt;
+                    final time = paidAt == null
+                        ? ''
+                        : _invoiceTimeLabel(paidAt);
+                    final customer = _customerForInvoice(invoice, customers);
+                    final auditLine = adjustment == null
+                        ? ''
+                        : '\n${adjustment.type.statusLabel} · '
+                              '${adjustment.reason}';
+                    return ListTile(
+                      key: Key('invoice-history-${invoice.id}'),
+                      onTap: () => _showInvoiceReceiptDialog(
+                        dialogContext,
+                        invoice,
+                        customer,
+                      ),
+                      leading: PremiumIconBadge(
+                        icon: adjustment == null
+                            ? Icons.receipt_long_outlined
+                            : Icons.assignment_turned_in_outlined,
+                        size: 34,
+                      ),
+                      title: Text(
+                        _customerNameFor(invoice.customerId, customers),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        '$time · ${invoice.paymentMethod}\n'
+                        '${invoice.id}$auditLine',
+                        maxLines: adjustment == null ? 2 : 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      isThreeLine: adjustment != null,
+                      trailing: SizedBox(
+                        width: adjustmentActionsAvailable && adjustment == null
+                            ? 172
+                            : 132,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                _currency(invoice.totalAmount),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: adjustment == null
+                                      ? AppColors.copper
+                                      : AppColors.textMuted,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (adjustmentActionsAvailable &&
+                                adjustment == null) ...[
+                              const SizedBox(width: 4),
+                              PopupMenuButton<InvoiceAdjustmentType>(
+                                key: Key(
+                                  'invoice-adjustment-menu-${invoice.id}',
+                                ),
+                                tooltip: 'Điều chỉnh hóa đơn',
+                                onSelected: (type) async {
+                                  final created =
+                                      await _createInvoiceAdjustment(
+                                        dialogContext,
+                                        ref,
+                                        invoice,
+                                        type,
+                                      );
+                                  if (created == null ||
+                                      !dialogContext.mounted) {
+                                    return;
+                                  }
+                                  setDialogState(() {
+                                    adjustmentsByInvoice[invoice.id] = created;
+                                  });
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: InvoiceAdjustmentType.refund,
+                                    child: Text('Hoàn tiền toàn bộ'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: InvoiceAdjustmentType.voided,
+                                    child: Text('Hủy giao dịch'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<InvoiceAdjustment?> _createInvoiceAdjustment(
+  BuildContext context,
+  WidgetRef ref,
+  InvoiceDraft invoice,
+  InvoiceAdjustmentType type,
+) async {
+  final repository = ref.read(invoiceAdjustmentRepositoryProvider);
+  if (repository == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Backend hiện tại không hỗ trợ điều chỉnh hóa đơn.'),
+      ),
+    );
+    return null;
+  }
+
+  final reason = await showAppDialog<String>(
+    context: context,
+    builder: (_) => _InvoiceAdjustmentReasonDialog(
+      invoice: invoice,
+      type: type,
+    ),
+  );
+  if (reason == null || !context.mounted) {
+    return null;
+  }
+
+  try {
+    final adjustment = switch (type) {
+      InvoiceAdjustmentType.refund => await repository.refundInvoice(
+        invoice.id,
+        reason: reason,
+      ),
+      InvoiceAdjustmentType.voided => await repository.voidInvoice(
+        invoice.id,
+        reason: reason,
+      ),
+    };
+
+    if (!context.mounted) return adjustment;
+    ref.invalidate(invoiceHistoryProvider);
+    ref.invalidate(customerInvoiceHistoryProvider(invoice.customerId));
+    final appointmentId = invoice.appointmentId?.trim();
+    if (appointmentId != null && appointmentId.isNotEmpty) {
+      ref.invalidate(appointmentInvoiceHistoryProvider(appointmentId));
+    }
+    ref.read(customersRefreshProvider.notifier).state++;
+    ref.invalidate(customersRepositoryProvider);
+    ref.invalidate(customersViewProvider);
+    ref.invalidate(appointmentsRepositoryProvider);
+    ref.invalidate(appointmentsViewProvider);
+    ref.invalidate(overviewSummaryProvider);
+    ref.invalidate(reportsSummaryProvider);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${adjustment.type.statusLabel} '
+          '${_currency(adjustment.amount)}. Audit đã được lưu.',
+        ),
+      ),
+    );
+    return adjustment;
+  } catch (error) {
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Không thể ${type.actionLabel.toLowerCase()}: '
+          '${_friendlyCheckoutError(error)}',
+        ),
+      ),
+    );
+    return null;
+  }
+}
+
+class _InvoiceAdjustmentReasonDialog extends StatefulWidget {
+  const _InvoiceAdjustmentReasonDialog({
+    required this.invoice,
+    required this.type,
+  });
+
+  final InvoiceDraft invoice;
+  final InvoiceAdjustmentType type;
+
+  @override
+  State<_InvoiceAdjustmentReasonDialog> createState() =>
+      _InvoiceAdjustmentReasonDialogState();
+}
+
+class _InvoiceAdjustmentReasonDialogState
+    extends State<_InvoiceAdjustmentReasonDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isVoid = widget.type == InvoiceAdjustmentType.voided;
+    final impact = isVoid
+        ? 'Doanh thu, hoa hồng, điểm tích lũy và lượt checkout của giao dịch '
+              'sẽ được đảo; lịch hẹn có thể lập bill lại.'
+        : 'Doanh thu, hoa hồng và điểm tích lũy của giao dịch sẽ được đảo; '
+              'lượt phục vụ của khách vẫn được giữ.';
+
+    return AlertDialog(
+      key: Key(
+        'invoice-adjustment-dialog-${widget.type.databaseValue}',
+      ),
+      title: Row(
         children: [
-          PremiumIconBadge(icon: Icons.history_rounded, size: 36),
-          SizedBox(width: 9),
-          Text('Hóa đơn gần đây'),
+          const PremiumIconBadge(
+            icon: Icons.assignment_return_outlined,
+            size: 36,
+          ),
+          const SizedBox(width: 9),
+          Expanded(child: Text(widget.type.actionLabel)),
         ],
       ),
       content: SizedBox(
-        width: adaptiveDialogWidth(dialogContext, 560),
-        height: 380,
-        child: history.isEmpty
-            ? const PremiumEmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'Chưa có hóa đơn',
-                message: 'Hóa đơn đã thanh toán sẽ xuất hiện tại đây.',
-              )
-            : ListView.separated(
-                itemCount: history.length,
-                separatorBuilder: (_, _) => const PremiumDivider(),
-                itemBuilder: (context, index) {
-                  final invoice = history[index];
-                  final paidAt = invoice.paidAt;
-                  final time = paidAt == null
-                      ? ''
-                      : _invoiceTimeLabel(paidAt);
-                  final customer = _customerForInvoice(invoice, customers);
-                  return ListTile(
-                    key: Key('invoice-history-${invoice.id}'),
-                    onTap: () => _showInvoiceReceiptDialog(
-                      dialogContext,
-                      invoice,
-                      customer,
-                    ),
-                    leading: const PremiumIconBadge(
-                      icon: Icons.receipt_long_outlined,
-                      size: 34,
-                    ),
-                    title: Text(
-                      _customerNameFor(invoice.customerId, customers),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      '$time · ${invoice.paymentMethod}\n${invoice.id}',
-                    ),
-                    isThreeLine: true,
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          _currency(invoice.totalAmount),
-                          style: TextStyle(
-                            color: AppColors.copper,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.textMuted,
-                          size: 18,
-                        ),
-                      ],
-                    ),
-                  );
-                },
+        width: adaptiveDialogWidth(context, 500),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ReceiptInfoLine(
+                label: 'Hóa đơn',
+                value: widget.invoice.id,
               ),
+              _ReceiptInfoLine(
+                label: 'Số tiền',
+                value: _currency(widget.invoice.totalAmount),
+                strong: true,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                impact,
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('invoice-adjustment-reason'),
+                controller: _reasonController,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Lý do bắt buộc',
+                  hintText: 'Ví dụ: Khách yêu cầu hoàn tiền / Chốt nhầm bill',
+                ),
+                validator: (value) =>
+                    value == null || value.trim().isEmpty
+                    ? 'Nhập lý do để lưu audit'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Hóa đơn gốc không bị sửa hoặc xóa. Thao tác này chỉ tạo '
+                'một bản ghi audit bất biến và không thể thực hiện lần hai.',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Đóng'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Không thực hiện'),
+        ),
+        FilledButton(
+          key: Key(
+            'invoice-adjustment-confirm-${widget.type.databaseValue}',
+          ),
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.of(context).pop(_reasonController.text.trim());
+          },
+          child: Text(widget.type.actionLabel),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 CustomerProfile? _customerForInvoice(

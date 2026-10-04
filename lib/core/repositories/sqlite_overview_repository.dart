@@ -201,7 +201,11 @@ class SqliteOverviewRepository implements OverviewRepository {
   ) async {
     final rows = await database.rawQuery(
       'SELECT COUNT(*) AS total FROM invoices '
-      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?',
+      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ')',
       [start.toIso8601String(), end.toIso8601String()],
     );
     return _toInt(rows.first['total']);
@@ -215,7 +219,11 @@ class SqliteOverviewRepository implements OverviewRepository {
     final rows = await database.rawQuery(
       'SELECT COALESCE(SUM(total_amount), 0) AS total '
       'FROM invoices '
-      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?',
+      'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ')',
       [start.toIso8601String(), end.toIso8601String()],
     );
 
@@ -345,6 +353,10 @@ class SqliteOverviewRepository implements OverviewRepository {
       'INNER JOIN invoices ON invoices.id = invoice_items.invoice_id '
       'WHERE invoices.paid_at IS NOT NULL '
       'AND invoices.paid_at >= ? AND invoices.paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ') '
       'GROUP BY item_type, title '
       'ORDER BY revenue DESC, qty DESC, title ASC LIMIT 6',
       [start.toIso8601String(), end.toIso8601String()],
@@ -391,7 +403,11 @@ class SqliteOverviewRepository implements OverviewRepository {
       'WHERE a.starts_at >= ? AND a.starts_at < ? AND a.status = ? '
       'AND NOT EXISTS ('
       'SELECT 1 FROM invoices i '
-      'WHERE i.appointment_id = a.id AND i.paid_at IS NOT NULL) ',
+      'WHERE i.appointment_id = a.id AND i.paid_at IS NOT NULL '
+      'AND NOT EXISTS ('
+      "SELECT 1 FROM invoice_adjustments ia "
+      "WHERE ia.invoice_id = i.id AND ia.adjustment_type = 'void'"
+      ')) ',
       [startToday.toIso8601String(), startTomorrow.toIso8601String(), 'Hoàn thành'],
     );
     final draftRows = await database.rawQuery(
@@ -531,7 +547,11 @@ class SqliteOverviewRepository implements OverviewRepository {
     final rows = await database.rawQuery(
       'SELECT COALESCE(SUM(total_amount), 0) AS total '
       'FROM invoices '
-      'WHERE customer_id = ? AND paid_at IS NOT NULL AND paid_at >= ?',
+      'WHERE customer_id = ? AND paid_at IS NOT NULL AND paid_at >= ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ')',
       [customerId, startThisMonth.toIso8601String()],
     );
     return _toInt(rows.first['total']);
@@ -644,6 +664,10 @@ class SqliteOverviewRepository implements OverviewRepository {
       'SELECT substr(paid_at, 1, 10) AS day_key, COALESCE(SUM(total_amount), 0) AS total '
       'FROM invoices '
       'WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ? '
+      'AND NOT EXISTS ('
+      'SELECT 1 FROM invoice_adjustments ia '
+      'WHERE ia.invoice_id = invoices.id'
+      ') '
       'GROUP BY day_key ORDER BY day_key ASC',
       [
         start.toIso8601String(),
