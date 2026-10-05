@@ -283,7 +283,7 @@ class _ServiceCatalogList extends ConsumerWidget {
                   ? null
                   : () {
                       final repository = ref.read(invoicesRepositoryProvider);
-                      return _queueCatalogMutation(
+                      _queueCatalogMutation(
                         () => _addInvoiceService(
                           context, ref, service, employeeId,
                           targetRepository: repository,
@@ -364,7 +364,7 @@ class _ProductCatalogList extends ConsumerWidget {
                   ? null
                   : () {
                       final repository = ref.read(invoicesRepositoryProvider);
-                      return _queueCatalogMutation(
+                      _queueCatalogMutation(
                         () => _addInvoiceProduct(
                           context, ref, product,
                           targetRepository: repository,

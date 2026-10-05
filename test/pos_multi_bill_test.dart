@@ -8,7 +8,6 @@ import 'package:salonmanager/core/models/appointment_entry.dart';
 import 'package:salonmanager/core/models/invoice_draft.dart';
 import 'package:salonmanager/core/providers/repository_providers.dart';
 import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
-import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
 import 'package:salonmanager/core/settings/local_settings_store.dart';
 import 'package:salonmanager/features/invoices/presentation/pages/invoices_page.dart';
 

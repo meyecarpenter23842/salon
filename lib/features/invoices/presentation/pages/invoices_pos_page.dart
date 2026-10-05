@@ -126,8 +126,9 @@ Future<void> _addInvoiceService(
       : normalizedEmployeeId;
 
   try {
-    await (targetRepository ?? ref.read(invoicesRepositoryProvider))
-        .addInvoiceService(service.id, employeeId: effectiveEmployeeId);
+    final InvoicesRepository repository =
+        targetRepository ?? ref.read(invoicesRepositoryProvider);
+    await repository.addInvoiceService(service.id, employeeId: effectiveEmployeeId);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -148,8 +149,9 @@ Future<void> _addInvoiceProduct(
   InvoicesRepository? targetRepository,
 }) async {
   try {
-    await (targetRepository ?? ref.read(invoicesRepositoryProvider))
-        .addInvoiceProduct(product.id);
+    final InvoicesRepository repository =
+        targetRepository ?? ref.read(invoicesRepositoryProvider);
+    await repository.addInvoiceProduct(product.id);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
     ScaffoldMessenger.of(context).showSnackBar(
