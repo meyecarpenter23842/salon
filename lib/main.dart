@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app/app.dart';
 import 'core/database/database_bootstrap.dart';
+import 'core/lan/desktop_backend_scope.dart';
 import 'core/database/salon_database.dart';
 import 'core/license/license_api.dart';
 import 'core/license/license_config.dart';
@@ -55,7 +56,9 @@ Future<void> main(List<String> args) async {
         child: LicenseGate(
           controller: licenseCoordinator,
           launchStaffWindow: launchStaffWindow,
-          mainAppBuilder: (_) => const SalonManagerApp(),
+          mainAppBuilder: (_) => const DesktopBackendScope(
+            child: SalonManagerApp(),
+          ),
           staffAppBuilder: (_) => const StaffWindowApp(),
         ),
       ),

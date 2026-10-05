@@ -39,6 +39,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate TLS fixture for health integration
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/salon-health-tls"
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
+            -keyout "$RUNNER_TEMP/salon-health-tls/private-key.pem" \
+            -out "$RUNNER_TEMP/salon-health-tls/certificate.pem" \
+            -subj "/CN=Salon CI" -addext "subjectAltName=IP:127.0.0.1"
+          echo "SALON_TEST_TLS_DIR=$RUNNER_TEMP/salon-health-tls" >> "$GITHUB_ENV"
+
       - name: Analyze
         run: flutter analyze
 
@@ -68,6 +78,13 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Generate TLS fixture for health integration
+        shell: pwsh
+        run: |
+          $lanFixtureDirectory = Join-Path $env:RUNNER_TEMP 'salon-health-tls'
+          ./tools/windows/setup-lan-health.ps1 -Address 127.0.0.1 -Directory $lanFixtureDirectory
+          "SALON_TEST_TLS_DIR=$lanFixtureDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Test on Windows
         run: flutter test
