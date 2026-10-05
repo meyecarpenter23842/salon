@@ -173,7 +173,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                       decoration: const InputDecoration(
                         labelText: 'Mã xác minh máy salon',
                         helperText: 'Sao chép nguyên mã trong Cài đặt → Kết nối điện thoại.',
-                        helperMaxLines: 2,,
+                        helperMaxLines: 2,
                         border: OutlineInputBorder(),
                       ),
                       onChanged: _edited,

@@ -9,8 +9,10 @@ import 'desktop_phone_connection_panel.dart';
 
 class DesktopBackendStatus {
   const DesktopBackendStatus(
-    this.message, {this.apiUrl, this.certificateSha256},
-  );
+    this.message, {
+    this.apiUrl,
+    this.certificateSha256,
+  });
   final String message;
   final Uri? apiUrl;
   final String? certificateSha256;
