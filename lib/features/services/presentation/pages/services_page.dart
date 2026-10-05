@@ -59,10 +59,10 @@ Future<void> _openServiceEditor(
         _ServiceEditorDialog(service: service, existingServices: all),
   );
   if (input == null || !context.mounted) return;
-  final saved = await ref
+  final saved = await saveCatalogRecord(context, () => ref
       .read(servicesRepositoryProvider)
-      .saveService(input, existingId: service?.id);
-  if (!context.mounted) return;
+      .saveService(input, existingId: service?.id));
+  if (saved == null || !context.mounted) return;
   ref.read(serviceSearchQueryProvider.notifier).state = saved.name;
   ref.read(serviceCategoryFilterProvider.notifier).state = saved.category;
   ref.read(selectedServiceIndexProvider.notifier).state = 0;

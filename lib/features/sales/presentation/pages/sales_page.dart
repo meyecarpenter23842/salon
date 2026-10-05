@@ -115,10 +115,10 @@ class _SalesView extends ConsumerWidget {
     );
     if (input == null || !context.mounted) return;
 
-    final saved = await ref
+    final saved = await saveCatalogRecord(context, () => ref
         .read(retailProductsRepositoryProvider)
-        .saveProduct(input, existingId: existing?.id);
-    if (!context.mounted) return;
+        .saveProduct(input, existingId: existing?.id));
+    if (saved == null || !context.mounted) return;
 
     ref.read(salesProductQueryProvider.notifier).state = saved.name;
     ref.read(salesSelectedProductIndexProvider.notifier).state = 0;
@@ -555,10 +555,10 @@ class _ProductDetail extends ConsumerWidget {
     );
     if (input == null || !context.mounted) return;
 
-    await ref
+    final saved = await saveCatalogRecord(context, () => ref
         .read(retailProductsRepositoryProvider)
-        .saveProduct(input, existingId: existing.id);
-    if (!context.mounted) return;
+        .saveProduct(input, existingId: existing.id));
+    if (saved == null || !context.mounted) return;
     ref.read(salesProductRefreshNonceProvider.notifier).state++;
     ref.invalidate(retailProductsViewProvider);
     ScaffoldMessenger.of(context)

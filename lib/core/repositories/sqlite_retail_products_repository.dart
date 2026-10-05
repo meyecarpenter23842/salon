@@ -215,6 +215,9 @@ class SqliteRetailProductsRepository
     String productId,
     bool isActive,
   ) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteRetailProductsRepository(scope).updateProductActive(productId, isActive));
+    }
     final database = await _database.database;
     final existing = await _findById(database, productId);
     if (existing == null) {

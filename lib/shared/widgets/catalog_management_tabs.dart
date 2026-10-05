@@ -154,3 +154,17 @@ String _title(CatalogOptionKind kind) => switch (kind) {
   CatalogOptionKind.serviceGroup => 'Nhóm dịch vụ',
   CatalogOptionKind.productUnit => 'Đơn vị tính',
 };
+
+Future<T?> saveCatalogRecord<T>(BuildContext context, Future<T> Function() save) async {
+  try {
+    return await save();
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Chưa lưu được: $error'),
+        duration: const Duration(seconds: 6),
+      ));
+    }
+    return null;
+  }
+}

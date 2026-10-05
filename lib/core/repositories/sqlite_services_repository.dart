@@ -218,6 +218,9 @@ class SqliteServicesRepository
     String serviceId,
     bool isActive,
   ) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteServicesRepository(scope, const FakeSalonDataSource()).updateServiceActive(serviceId, isActive));
+    }
     final database = await _database.database;
     await _seed.seedServicesIfNeeded(database);
 
