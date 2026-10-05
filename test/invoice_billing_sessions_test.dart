@@ -5,6 +5,7 @@ import 'package:salonmanager/core/models/appointment_entry.dart';
 import 'package:salonmanager/core/models/invoice_draft.dart';
 import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
 import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
+import 'package:salonmanager/core/services/sensitive_action_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -151,6 +152,27 @@ void main() {
           .quantity,
       1,
     );
+  });
+
+  test('billing sessions share the owner authorization session', () async {
+    final security = SensitiveActionService(SalonDatabase.instance);
+    final repository = SqliteBillingSessionsRepository(
+      SalonDatabase.instance,
+      security,
+    );
+    final session = await repository.createWalkInSession();
+
+    await security.configureOwnerPin('2468');
+    security.lockOwnerSession();
+
+    await expectLater(
+      repository.updateDiscount(session.id, 0),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(await security.unlockOwner('2468'), isTrue);
+    final updated = await repository.updateDiscount(session.id, 0);
+    expect(updated.id, session.id);
   });
 
   test('same billing session rejects concurrent double checkout', () async {

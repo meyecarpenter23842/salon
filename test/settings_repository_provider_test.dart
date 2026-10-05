@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:salonmanager/core/providers/data_backend_provider.dart';
 import 'package:salonmanager/core/providers/repository_providers.dart';
 import 'package:salonmanager/core/repositories/fake_repositories.dart';
-import 'package:salonmanager/core/repositories/sqlite_settings_repository.dart';
+import 'package:salonmanager/core/repositories/guarded_settings_repository.dart';
 import 'package:salonmanager/core/settings/local_settings_store.dart';
 
 void main() {
@@ -17,7 +17,7 @@ void main() {
     addTearDown(sqliteContainer.dispose);
     expect(
       sqliteContainer.read(settingsRepositoryProvider),
-      isA<SqliteSettingsRepository>(),
+      isA<GuardedSettingsRepository>(),
     );
 
     final fakeContainer = ProviderContainer(

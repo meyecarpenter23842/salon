@@ -49,6 +49,14 @@ Future<void> _editInvoiceLineUnitPriceAction(
 ) async {
   final actions = ref.read(invoiceLineActionsRepositoryProvider);
   if (actions == null) return;
+  if (!await ensureSensitiveActionAuthorized(
+    context,
+    ref,
+    SensitiveAction.billPriceEdit,
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
 
   final unitPrice = await showAppDialog<int>(
     context: context,

@@ -5,11 +5,16 @@ import '../models/invoice_payment_allocation.dart';
 import 'billing_sessions_repository.dart';
 import 'guarded_salon_repositories.dart';
 import 'sqlite_invoices_repository.dart';
+import '../services/sensitive_action_service.dart';
 
 class SqliteBillingSessionsRepository implements BillingSessionsRepository {
-  SqliteBillingSessionsRepository(this._database);
+  SqliteBillingSessionsRepository(
+    this._database, [
+    SensitiveActionService? security,
+  ]) : _security = security ?? SensitiveActionService(_database);
 
   final SalonDatabase _database;
+  final SensitiveActionService _security;
   final Set<String> _checkoutInFlight = <String>{};
   int _walkInSequence = 0;
 
@@ -218,7 +223,11 @@ class SqliteBillingSessionsRepository implements BillingSessionsRepository {
   }
 
   GuardedInvoicesRepository _guarded(String sessionId) {
-    return GuardedInvoicesRepository(_database, _raw(sessionId));
+    return GuardedInvoicesRepository(
+      _database,
+      _raw(sessionId),
+      _security,
+    );
   }
 
   String _normalizeSessionId(String sessionId) {
