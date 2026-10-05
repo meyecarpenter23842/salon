@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'package:uuid/uuid.dart';
 
 /// PowerShell handoff used by the Windows self-updater.
 ///
@@ -15,7 +17,9 @@ param(
   [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$Executable,
   [Parameter(Mandatory = $true)][string]$InstallDir,
-  [Parameter(Mandatory = $true)][string]$LogPath
+  [Parameter(Mandatory = $true)][string]$LogPath,
+  [Parameter(Mandatory = $true)][string]$ReadyPath,
+  [Parameter(Mandatory = $true)][string]$ContinuePath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,6 +57,16 @@ function Wait-AllSalonProcessesExit([int]$TimeoutSeconds) {
 
 try {
   Write-UpdateLog "handoff_start installer=$Installer"
+  Set-Content -LiteralPath $ReadyPath -Encoding ASCII -Value $PID
+  $readyDeadline = (Get-Date).AddSeconds(15)
+  while (-not (Test-Path -LiteralPath $ContinuePath)) {
+    if ((Get-Date) -ge $readyDeadline) {
+      throw 'App did not acknowledge helper readiness; update aborted.'
+    }
+    Start-Sleep -Milliseconds 50
+  }
+  Remove-Item -LiteralPath $ReadyPath, $ContinuePath -ErrorAction SilentlyContinue
+  Write-UpdateLog 'handoff_ready_confirmed'
 
   # Match Key Manager's external handoff model: start outside Salon, wait
   # briefly for SQLite close/app exit, then close any remaining Salon windows.
@@ -139,14 +153,20 @@ class WindowsSelfUpdateHandoff {
     required String executable,
     required String installDir,
     required String logPath,
-  }) {
-    return Process.start(
+    Duration readyTimeout = const Duration(seconds: 8),
+  }) async {
+    final nonce = const Uuid().v4();
+    final ready = File(path.join(helper.parent.path, 'ready-$nonce.txt'));
+    final proceed = File(path.join(helper.parent.path, 'continue-$nonce.txt'));
+    final process = await Process.start(
       _powershellExecutable(),
       [
         '-NoProfile',
         '-NonInteractive',
         '-ExecutionPolicy',
         'Bypass',
+        '-WindowStyle',
+        'Hidden',
         '-File',
         helper.path,
         '-Installer',
@@ -157,9 +177,55 @@ class WindowsSelfUpdateHandoff {
         installDir,
         '-LogPath',
         logPath,
+        '-ReadyPath',
+        ready.path,
+        '-ContinuePath',
+        proceed.path,
       ],
-      mode: ProcessStartMode.detached,
+      // Windows PowerShell 5.1 cannot initialize its host with DETACHED_PROCESS
+      // on affected machines. A normal, hidden process survives Salon exit.
+      mode: ProcessStartMode.normal,
     );
+    process.stdout.listen((_) {}, onError: (Object _) {});
+    process.stderr.listen((_) {}, onError: (Object _) {});
+    int? exitCode;
+    unawaited(process.exitCode.then<void>((code) { exitCode = code; }));
+    final watch = Stopwatch()..start();
+    try {
+      while (watch.elapsed < readyTimeout) {
+        if (exitCode != null) {
+          throw StateError('Update helper exited before ready (code $exitCode).');
+        }
+        try {
+          if (await ready.exists() &&
+              int.tryParse((await ready.readAsString()).trim()) == process.pid) {
+            await proceed.writeAsString('continue', flush: true);
+            return process;
+          }
+        } on FileSystemException {
+          // Set-Content may still hold the marker while we poll.
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      throw StateError('Update helper did not become ready in time.');
+    } catch (_) {
+      // Stop only the helper we created. Salon and its open DB remain alive.
+      process.kill();
+      try {
+        await process.exitCode.timeout(const Duration(seconds: 2));
+      } catch (_) {}
+      rethrow;
+    } finally {
+      watch.stop();
+      // On success the helper owns marker cleanup after consuming ContinuePath.
+      if (exitCode != null) {
+        for (final file in [ready, proceed]) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   String _powershellExecutable() {
