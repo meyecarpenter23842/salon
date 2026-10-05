@@ -57,6 +57,7 @@ không hiển thị private key. Chỉ hiển thị thông tin khi host đã kh�
 host chưa cấu hình/lỗi/dừng sẽ không cung cấp thông tin cũ để người dùng nhập.
 
 Thiết lập host lần đầu vẫn theo [hướng dẫn LAN](lan-health-setup.md).
-Trong Cài đặt, chọn mạng và bấm **Bật kết nối điện thoại** để app tự tạo\nidentity và mở host ngay. Luồng này không tự thay đổi firewall.
+Trong Cài đặt, chọn mạng và bấm **Bật kết nối điện thoại** để app tự tạo
+identity và mở host ngay. Luồng này không tự thay đổi firewall.
 Giữ máy salon/app mở; thử cùng Wi-Fi trước. 4G/mạng khác cần truy cập từ xa được
 thiết lập riêng. Chức năng khách hàng/hóa đơn trên điện thoại chưa được mở.

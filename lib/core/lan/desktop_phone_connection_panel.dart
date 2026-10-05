@@ -69,7 +69,9 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
     try {
       if (!await ensureSensitiveActionAuthorized(
         context, ref, SensitiveAction.settingsEdit,
-      )) return;
+      )) {
+        return;
+      }
       if (!mounted) return;
       await callback(InternetAddress(address));
     } finally {

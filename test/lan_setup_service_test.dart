@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -151,4 +152,35 @@ void main() {
     }
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  test('closing main during setup prevents any delayed listener startup', () async {
+    final delayed = _DelayedSetup(root);
+    final status = ValueNotifier(const DesktopBackendStatus('Test'));
+    final controller = DesktopLanController(delayed, status);
+    final opening = controller.enable(InternetAddress.loopbackIPv4);
+    await delayed.started.future;
+    final closing = controller.stop();
+    delayed.finish.complete(LanHostConfig(address: InternetAddress.loopbackIPv4,
+      port: 8743, certificatePath: 'unused.pem', privateKeyPath: 'unused.key'));
+    await opening;
+    await closing;
+    expect(status.value.apiUrl, isNull);
+    expect(status.value.certificateSha256, isNull);
+    expect(status.value.busy, isFalse);
+    await controller.enable(InternetAddress.loopbackIPv4);
+    expect(status.value.message, contains('đã dừng'));
+    status.dispose();
+  });
+
+}
+
+class _DelayedSetup extends LanSetupService {
+  _DelayedSetup(super.directory);
+  final started = Completer<void>();
+  final finish = Completer<LanHostConfig>();
+
+  @override
+  Future<LanHostConfig> prepare(InternetAddress address) {
+    started.complete();
+    return finish.future;
+  }
 }
