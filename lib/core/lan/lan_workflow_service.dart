@@ -213,6 +213,14 @@ class LanWorkflowService implements LanWorkflowBackend {
     }
     final security = _DeviceSecurity(scope, phone.writeRole);
     final sessions = SqliteBillingSessionsRepository(scope, security);
+    if ([LanWriteOperation.sessionQuantity, LanWriteOperation.sessionRemoveLine,
+        LanWriteOperation.sessionAssignEmployee, LanWriteOperation.sessionPrice].contains(op)) {
+      final lineId = p.identity('lineId');
+      final bill = await sessions.fetchSession(id!);
+      if (!bill.lines.any((line) => line.id == lineId)) {
+        throw const PairingFailure(LanErrorCode.businessRule);
+      }
+    }
     InvoiceDraft saved;
     switch (op) {
       case LanWriteOperation.sessionCreate:

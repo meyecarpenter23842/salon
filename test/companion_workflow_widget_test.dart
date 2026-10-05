@@ -72,7 +72,9 @@ void main() {
     await tester.pumpAndSettle(); return commands;
   }
   Future<void> tap(WidgetTester tester, String key) async {
-    final finder = find.byKey(Key(key)); await tester.ensureVisible(finder); await tester.pump();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    final finder = find.byKey(Key(key)); await tester.ensureVisible(finder); await tester.pumpAndSettle();
     await tester.tap(finder); await tester.pumpAndSettle();
   }
   testWidgets('narrow Android customer and appointment forms send selected desktop ids and explicit date', (tester) async {

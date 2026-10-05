@@ -10,7 +10,6 @@ import 'package:salonmanager/core/lan/lan_write_contract.dart';
 import 'support/mobile_workflow_fixture.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
   final fixture = Platform.environment['SALON_TEST_TLS_DIR'];
   if (fixture == null) { test('CI supplies TLS fixture', () {}, skip: 'Requires SALON_TEST_TLS_DIR'); return; }
   late Directory root;
