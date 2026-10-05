@@ -319,7 +319,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
     if (_catalog case final page?) ...[
       if (page.items.isEmpty) const Text('Không có mục phù hợp.'),
       for (final item in page.items) ListTile(key: Key('catalog-${item.id}'),
-        title: Text(item.title), subtitle: Text(item.subtitle),
+        title: Text(item.title), subtitle: CompanionCatalogSubtitle(item: item),
         trailing: _pickerField == 'serviceIds' ? Icon((_values['serviceIds'] as List).contains(item.id) ?
           Icons.check_box : Icons.check_box_outline_blank) : const Icon(Icons.chevron_right),
         onTap: _locked ? null : () => _selected(item)),
@@ -375,4 +375,24 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
 
   @override
   void dispose() { _generation++; widget.commands.removeListener(_changed); _clearFields(); _search.dispose(); super.dispose(); }
+}
+
+/// Stock is a warning, never a disabled selection in the phone catalog.
+class CompanionCatalogSubtitle extends StatelessWidget {
+  const CompanionCatalogSubtitle({super.key, required this.item});
+  final LanCatalogItem item;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(item.subtitle),
+      if (item.stockOnHand != null) Row(children: [
+        if (item.isNegativeStock) const Padding(
+          padding: EdgeInsets.only(right: 4),
+          child: Icon(Icons.warning_amber_rounded, size: 16, color: Colors.redAccent)),
+        Flexible(child: Text('Tồn ${item.stockOnHand} • ${item.stockLabel}${item.isNegativeStock ? ' • Vẫn được bán' : ''}',
+          style: TextStyle(color: item.isNegativeStock ? Colors.redAccent : null))),
+      ]),
+    ],
+  );
 }

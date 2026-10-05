@@ -109,22 +109,27 @@ void main() {
     expect((await db.query('inventory_stock')).single['stock_on_hand'], 3);
   });
 
-  test('stock failure rolls back whole checkout and identical retry succeeds after replenishment', () async {
+  test('movement write failure rolls back negative checkout and identical retry succeeds', () async {
     final f = await mobileFixture();
     final id = (await f.run(LanWriteOperation.sessionCreate, {})).id;
     await f.run(LanWriteOperation.sessionSelectCustomer, {'customerId': 'customer-1'}, id: id);
     await f.run(LanWriteOperation.sessionAddProduct, {'productId': 'product-1'}, id: id);
     final command = await f.command(LanWriteOperation.sessionCheckout, {}, id: id);
     await f.db.update('inventory_stock', {'stock_on_hand': 0});
-    await expectLater(f.service.execute(workflowPhone(), command), fails(LanErrorCode.businessRule));
+    await f.db.execute("CREATE TRIGGER fail_stock_movement BEFORE INSERT ON inventory_movements BEGIN SELECT RAISE(ABORT, 'forced write failure'); END");
+    await expectLater(f.service.execute(workflowPhone(), command), fails(LanErrorCode.internal));
+    expect((await f.db.query('inventory_stock')).single['stock_on_hand'], 0);
+    expect(await f.db.query('inventory_movements'), isEmpty);
     expect(await f.db.query('invoices', where: 'paid_at IS NOT NULL'), isEmpty);
     expect(await f.service.result(workflowPhone().id, command.commandId), isNull);
     expect((await f.db.query('customers')).single['visit_count'], 0);
     expect((await f.service.editor('session', id)).values['lines'], hasLength(1));
-    await f.db.update('inventory_stock', {'stock_on_hand': 1});
+    await f.db.execute('DROP TRIGGER fail_stock_movement');
     final result = await f.service.execute(workflowPhone(), command);
     expect(result.type, 'invoice');
-    expect((await f.db.query('inventory_stock')).single['stock_on_hand'], 0);
+    expect((await f.db.query('inventory_stock')).single['stock_on_hand'], -1);
+    expect((await f.service.execute(workflowPhone(), command)).id, result.id);
+    expect((await f.db.query('inventory_stock')).single['stock_on_hand'], -1);
     expect(await f.db.query('inventory_movements'), hasLength(1));
   });
 

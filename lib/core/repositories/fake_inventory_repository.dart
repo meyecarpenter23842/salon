@@ -10,6 +10,30 @@ class FakeInventoryRepository implements InventoryRepository {
   static final List<InventoryMovementItem> _movements =
       <InventoryMovementItem>[];
 
+  /// Validate every product before mutating the shared fake stock.
+  Future<void> recordSale(String invoiceId, Map<String, int> quantities) async {
+    final products = await FakeRetailProductsRepository.shared().fetchProducts();
+    final byId = {for (final product in products) product.id: product};
+    for (final entry in quantities.entries) {
+      if (!byId.containsKey(entry.key) || entry.value <= 0) {
+        throw StateError('Sản phẩm hoặc số lượng không hợp lệ.');
+      }
+    }
+    for (final entry in quantities.entries) {
+      final movementId = 'stock-sale-$invoiceId-${entry.key}';
+      if (_movements.any((item) => item.id == movementId)) continue;
+      final before = _stock[entry.key] ?? 0;
+      final after = before - entry.value;
+      _stock[entry.key] = after;
+      _movements.insert(0, InventoryMovementItem(
+        id: movementId, productId: entry.key, productName: byId[entry.key]!.name,
+        movementType: 'sale', quantityDelta: -entry.value,
+        stockBefore: before, stockAfter: after, note: 'Bán theo hóa đơn $invoiceId',
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
   @override
   Future<List<InventoryProductItem>> fetchInventoryProducts({
     String? query,
@@ -189,6 +213,7 @@ class FakeInventoryRepository implements InventoryRepository {
       brand: product.brand,
       volumeLabel: product.volumeLabel,
       unitName: product.unitName,
+      lowStockThreshold: product.lowStockThreshold,
       productType: product.productType,
       stockOnHand: stockOnHand,
       isActive: product.isActive,

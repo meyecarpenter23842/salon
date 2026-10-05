@@ -1,3 +1,4 @@
+import '../../../../core/providers/inventory_providers.dart';
 import '../../../../shared/widgets/catalog_management_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -124,6 +125,7 @@ class _SalesView extends ConsumerWidget {
     ref.read(salesSelectedProductIndexProvider.notifier).state = 0;
     ref.read(salesProductRefreshNonceProvider.notifier).state++;
     ref.invalidate(retailProductsViewProvider);
+    ref.read(inventoryRefreshNonceProvider.notifier).state++;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -433,6 +435,7 @@ class _ProductDetail extends ConsumerWidget {
                     if (!context.mounted) return;
                     ref.read(salesProductRefreshNonceProvider.notifier).state++;
                     ref.invalidate(retailProductsViewProvider);
+    ref.read(inventoryRefreshNonceProvider.notifier).state++;
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(
@@ -561,6 +564,7 @@ class _ProductDetail extends ConsumerWidget {
     if (saved == null || !context.mounted) return;
     ref.read(salesProductRefreshNonceProvider.notifier).state++;
     ref.invalidate(retailProductsViewProvider);
+    ref.read(inventoryRefreshNonceProvider.notifier).state++;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Đã cập nhật sản phẩm')));
   }
@@ -634,6 +638,7 @@ class _RetailProductEditorDialogState
   late final TextEditingController _volumeController;
   late final TextEditingController _priceController;
   late final TextEditingController _commissionController;
+  late final TextEditingController _lowStockController;
   late String _brand;
   late String _unit;
   late String _type;
@@ -656,6 +661,7 @@ class _RetailProductEditorDialogState
     _commissionController = TextEditingController(
       text: existing == null ? '0' : _percent(existing.commissionPercent),
     );
+    _lowStockController = TextEditingController(text: (existing?.lowStockThreshold ?? 5).toString());
     _type =
         existing?.productType ?? RetailProductUpsertInput.productTypes.first;
     _isActive = existing?.isActive ?? true;
@@ -668,6 +674,7 @@ class _RetailProductEditorDialogState
     _volumeController.dispose();
     _priceController.dispose();
     _commissionController.dispose();
+    _lowStockController.dispose();
     super.dispose();
   }
 
@@ -740,6 +747,16 @@ class _RetailProductEditorDialogState
                   },
                 ),
                 const SizedBox(height: 12),
+                TextFormField(
+                  controller: _lowStockController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Ngưỡng sắp hết', helperText: 'Theo đơn vị của sản phẩm; 0 để tắt cảnh báo sắp hết.'),
+                  validator: (value) {
+                    final parsed = int.tryParse(value?.trim() ?? '');
+                    return parsed == null || parsed < 0 ? 'Nhập số nguyên không âm' : null;
+                  },
+                ),
+                const SizedBox(height: 12),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -789,6 +806,7 @@ class _RetailProductEditorDialogState
         unitOptionId: _unit == widget.existing?.unitName ? widget.existing?.unitOptionId : null,
         volumeLabel: _volumeController.text.trim(),
         unitName: _unit,
+        lowStockThreshold: int.parse(_lowStockController.text.trim()),
         productType: _type,
         salePrice: int.parse(_priceController.text.trim()),
         commissionPercent: double.parse(_commissionController.text.trim()),
