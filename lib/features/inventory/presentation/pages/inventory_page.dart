@@ -909,7 +909,7 @@ class _InventoryBatchMutationDialogState
       for (final product in widget.products)
         product.id: TextEditingController(
           text: widget.mode == _InventoryMutationMode.adjust
-              ? product.stockOnHand.toString()
+              ? (product.isNegativeStock ? '' : product.stockOnHand.toString())
               : '',
         ),
     };
@@ -981,7 +981,7 @@ class _InventoryBatchMutationDialogState
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: AppColors.textMuted,
+                                    color: product.isNegativeStock ? AppColors.danger : AppColors.textMuted,
                                     fontSize: 10.5,
                                   ),
                                 ),

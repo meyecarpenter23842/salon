@@ -16,6 +16,8 @@ import 'package:salonmanager/features/inventory/presentation/pages/inventory_pag
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
 import 'package:sqflite/sqflite.dart';
 import 'support/mobile_workflow_fixture.dart';
+import 'package:salonmanager/core/lan/lan_workflow_models.dart';
+import 'package:salonmanager/features/companion/companion_workspace.dart';
 
 RetailProductUpsertInput productInput({int threshold = 5}) => RetailProductUpsertInput(
   name: 'Dầu test', brand: '', volumeLabel: '', unitName: 'Chai',
@@ -99,6 +101,22 @@ void main() {
     final db = await SalonDatabase.instance.database;
     expect((await db.query('inventory_stock')).single['stock_on_hand'], -6);
     expect(await db.query('inventory_movements'), hasLength(2));
+    final catalog = await f.service.catalog('products', '', 0);
+    expect(catalog.items.single.stockOnHand, -6);
+    expect(catalog.items.single.isNegativeStock, isTrue);
+  });
+
+  testWidgets('phone catalog displays red negative warning and accepts older responses', (tester) async {
+    const item = LanCatalogItem('p', 'Product', '100000 đ / Chai', stockOnHand: -5);
+    expect(LanCatalogItem.fromJson(item.toJson()).stockOnHand, -5);
+    expect(LanCatalogItem.fromJson({'id': 'p', 'title': 'Old', 'subtitle': '100 đ'}).stockOnHand, isNull);
+    expect(() => LanCatalogItem.fromJson({'id': 'p', 'title': 'Bad', 'subtitle': '', 'stockOnHand': '-5'}), throwsFormatException);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: CompanionCatalogSubtitle(item: item))));
+    final text = find.text('Tồn -5 • Âm kho • Vẫn được bán');
+    expect(text, findsOneWidget);
+    expect(tester.widget<Text>(text).style!.color, Colors.redAccent);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('negative inventory is red with icon count and filter at narrow desktop size', (tester) async {

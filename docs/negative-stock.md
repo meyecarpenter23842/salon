@@ -7,3 +7,5 @@ Kho hàng phân biệt âm (đỏ, icon cảnh báo, nhãn Âm kho), hết (0), 
 Nhập kho phải dương nhưng được bù từng phần: -5 + 3 = -2. Kiểm kê nhập số tồn thực tế không âm. Hủy hóa đơn hoàn đúng lượng đã bán một lần; hoàn tiền chỉ hoàn tiền, không tự coi là hàng đã trả. Hóa đơn cũ không có sale movement không cộng tồn giả.
 
 CI kiểm tra nguồn, repository, journal, migration và widget; không thay thế kiểm thử trên điện thoại thật. Không chạy build/test app hoặc migration dữ liệu trên máy salon trong lô này.
+
+Danh sách chọn sản phẩm Android nhận tồn và ngưỡng từ desktop trong API catalog, hiển thị số âm đỏ cùng icon và nhãn Vẫn được bán. Trường stock là tùy chọn để client mới vẫn đọc phản hồi server cũ.

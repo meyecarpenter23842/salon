@@ -149,13 +149,17 @@ class LanWorkflowService implements LanWorkflowBackend {
           }
           where.add('(${clauses.join(' OR ')})');
         }
-        rows = await tx.query(table, columns: ['id', name, subtitle, if (kind == 'products') 'unit_name'],
+        rows = await tx.query(table, columns: ['id', name, subtitle, if (kind == 'products') ...['unit_name', 'low_stock_threshold']],
           where: where.isEmpty ? null : where.join(' AND '), whereArgs: args,
           orderBy: '$name COLLATE NOCASE, id', limit: 26, offset: offset);
         for (final row in rows.take(25)) {
+          final stock = kind == 'products' ? await tx.query('inventory_stock',
+            columns: ['stock_on_hand'], where: 'product_id = ?', whereArgs: [row['id']], limit: 1) : null;
           items.add(LanCatalogItem(row['id'] as String, row[name]?.toString() ?? '',
             '${row[subtitle] ?? ''}${['price', 'sale_price'].contains(subtitle) ? ' đ' : ''}'
-            '${kind == 'products' && (row['unit_name'] as String? ?? '').isNotEmpty ? ' / ${row['unit_name']}' : ''}'));
+            '${kind == 'products' && (row['unit_name'] as String? ?? '').isNotEmpty ? ' / ${row['unit_name']}' : ''}',
+            stockOnHand: stock == null ? null : stock.isEmpty ? 0 : stock.single['stock_on_hand'] as int,
+            lowStockThreshold: row['low_stock_threshold'] as int? ?? 5));
         }
       }
       return LanCatalogPage(items, database.runtimeEpoch, rows.length > 25 ? offset + 25 : null);

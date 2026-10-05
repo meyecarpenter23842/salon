@@ -26,16 +26,26 @@ class LanEditorSnapshot {
 }
 
 class LanCatalogItem {
-  const LanCatalogItem(this.id, this.title, this.subtitle);
+  const LanCatalogItem(this.id, this.title, this.subtitle, {this.stockOnHand, this.lowStockThreshold = 5});
   final String id;
   final String title;
   final String subtitle;
-  Map<String, String> toJson() => {'id': id, 'title': title, 'subtitle': subtitle};
+  final int? stockOnHand;
+  final int lowStockThreshold;
+  bool get isNegativeStock => (stockOnHand ?? 0) < 0;
+  String get stockLabel => isNegativeStock ? 'Âm kho' : stockOnHand == 0 ? 'Hết hàng' :
+      stockOnHand != null && stockOnHand! <= lowStockThreshold ? 'Sắp hết' : 'Còn hàng';
+  Map<String, Object?> toJson() => {'id': id, 'title': title, 'subtitle': subtitle,
+    if (stockOnHand != null) 'stockOnHand': stockOnHand,
+    if (stockOnHand != null) 'lowStockThreshold': lowStockThreshold};
   factory LanCatalogItem.fromJson(Map<String, dynamic> json) {
-    if (json['id'] is! String || json['title'] is! String || json['subtitle'] is! String) {
+    if (json['id'] is! String || json['title'] is! String || json['subtitle'] is! String ||
+        (json['stockOnHand'] != null && json['stockOnHand'] is! int) ||
+        (json['lowStockThreshold'] != null && (json['lowStockThreshold'] is! int || (json['lowStockThreshold'] as int) < 0))) {
       throw const FormatException('Invalid catalog item');
     }
-    return LanCatalogItem(json['id'] as String, json['title'] as String, json['subtitle'] as String);
+    return LanCatalogItem(json['id'] as String, json['title'] as String, json['subtitle'] as String,
+      stockOnHand: json['stockOnHand'] as int?, lowStockThreshold: json['lowStockThreshold'] as int? ?? 5);
   }
 }
 
