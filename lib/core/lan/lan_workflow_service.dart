@@ -149,12 +149,13 @@ class LanWorkflowService implements LanWorkflowBackend {
           }
           where.add('(${clauses.join(' OR ')})');
         }
-        rows = await tx.query(table, columns: ['id', name, subtitle],
+        rows = await tx.query(table, columns: ['id', name, subtitle, if (kind == 'products') 'unit_name'],
           where: where.isEmpty ? null : where.join(' AND '), whereArgs: args,
           orderBy: '$name COLLATE NOCASE, id', limit: 26, offset: offset);
         for (final row in rows.take(25)) {
           items.add(LanCatalogItem(row['id'] as String, row[name]?.toString() ?? '',
-            '${row[subtitle] ?? ''}${['price', 'sale_price'].contains(subtitle) ? ' đ' : ''}'));
+            '${row[subtitle] ?? ''}${['price', 'sale_price'].contains(subtitle) ? ' đ' : ''}'
+            '${kind == 'products' && (row['unit_name'] as String? ?? '').isNotEmpty ? ' / ${row['unit_name']}' : ''}'));
         }
       }
       return LanCatalogPage(items, database.runtimeEpoch, rows.length > 25 ? offset + 25 : null);

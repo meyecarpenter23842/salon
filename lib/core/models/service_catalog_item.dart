@@ -6,6 +6,7 @@ class ServiceCatalogItem {
   ServiceCatalogItem({
     required this.id,
     required this.name,
+    this.groupOptionId,
     required this.category,
     required this.durationMinutes,
     required this.price,
@@ -18,6 +19,7 @@ class ServiceCatalogItem {
 
   final String id;
   final String name;
+  final String? groupOptionId;
   final String category;
   final int durationMinutes;
   final int price;
@@ -37,6 +39,7 @@ class ServiceCatalogItem {
   ServiceCatalogItem copyWith({
     String? id,
     String? name,
+    String? groupOptionId,
     String? category,
     int? durationMinutes,
     int? price,
@@ -49,6 +52,7 @@ class ServiceCatalogItem {
     return ServiceCatalogItem(
       id: id ?? this.id,
       name: name ?? this.name,
+      groupOptionId: groupOptionId ?? this.groupOptionId,
       category: category ?? this.category,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       price: price ?? this.price,
@@ -69,6 +73,7 @@ class ServiceCatalogItem {
     return ServiceCatalogItem(
       id: id,
       name: input.name,
+      groupOptionId: input.groupOptionId,
       category: input.category,
       durationMinutes: input.durationMinutes,
       price: input.price,

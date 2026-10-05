@@ -3,6 +3,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/retail_product_mapper.dart';
 import '../database/salon_database.dart';
+import '../database/catalog_schema.dart';
+import '../models/catalog_option.dart';
 import '../models/entity_id.dart';
 import '../models/retail_product_item.dart';
 import '../models/retail_product_upsert_input.dart';
@@ -146,6 +148,9 @@ class SqliteRetailProductsRepository
     RetailProductUpsertInput input, {
     String? existingId,
   }) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteRetailProductsRepository(scope).saveProduct(input, existingId: existingId));
+    }
     final database = await _database.database;
     final existing = existingId == null
         ? null
@@ -162,6 +167,27 @@ class SqliteRetailProductsRepository
       updatedAt: now,
     );
     final row = RetailProductMapper.toDatabase(item);
+    final previousRows = existingId == null ? <Map<String, Object?>>[] :
+      await database.query('retail_products', where: 'id = ?', whereArgs: [existingId]);
+    final previous = previousRows.isEmpty ? <String, Object?>{} : previousRows.single;
+    final option0 = await CatalogSchema.resolve(database, CatalogOptionKind.productGroup, input.productType, previousId: previous['group_option_id'], requestedId: input.groupOptionId);
+    row['group_option_id'] = option0?['id'];
+    row['product_type'] = option0?['name'] ?? '';
+    final option1 = await CatalogSchema.resolve(database, CatalogOptionKind.productBrand, input.brand, previousId: previous['brand_option_id'], requestedId: input.brandOptionId);
+    row['brand_option_id'] = option1?['id'];
+    row['brand'] = option1?['name'] ?? '';
+    final option2 = await CatalogSchema.resolve(database, CatalogOptionKind.productUnit, input.unitName, previousId: previous['unit_option_id'], requestedId: input.unitOptionId);
+    row['unit_option_id'] = option2?['id'];
+    row['unit_name'] = option2?['name'] ?? '';
+    if (existing != null && existing.unitName.isNotEmpty && previous['unit_option_id'] != row['unit_option_id']) {
+      final used = await database.rawQuery(
+        'SELECT 1 FROM inventory_movements WHERE product_id = ? UNION ALL '
+        'SELECT 1 FROM invoice_items WHERE product_id = ? UNION ALL '
+        'SELECT 1 FROM inventory_stock WHERE product_id = ? AND stock_on_hand <> 0 LIMIT 1',
+        [existing.id, existing.id, existing.id]);
+      if (used.isNotEmpty) throw StateError('Sản phẩm đã có giao dịch. Không đổi đơn vị tính; hãy tạo sản phẩm riêng cho đơn vị khác.');
+    }
+
 
     if (existing == null) {
       await database.insert(
@@ -181,7 +207,7 @@ class SqliteRetailProductsRepository
       }
     }
 
-    return item;
+    return RetailProductMapper.fromDatabase(row);
   }
 
   @override

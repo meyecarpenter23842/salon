@@ -1,3 +1,4 @@
+import '../../../../shared/widgets/catalog_management_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,6 +23,7 @@ final selectedServiceIndexProvider = StateProvider<int>((ref) => 0);
 final filteredServicesProvider = FutureProvider<List<ServiceCatalogItem>>((
   ref,
 ) async {
+  ref.watch(catalogOptionsRefreshNonceProvider);
   final services = await ref
       .watch(servicesRepositoryProvider)
       .fetchServicesView();
@@ -96,11 +98,14 @@ Future<void> _toggleService(
   );
 }
 
-class ServicesPage extends ConsumerWidget {
-  const ServicesPage({super.key});
+class _ServicesContent extends ConsumerWidget {
+  const _ServicesContent();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(catalogOptionsRefreshNonceProvider, (_, next) {
+      ref.read(serviceCategoryFilterProvider.notifier).state = 'Tất cả';
+    });
     return ref
         .watch(filteredServicesProvider)
         .when(
@@ -164,10 +169,10 @@ class _Toolbar extends ConsumerWidget {
     final selectedCategory = ref.watch(serviceCategoryFilterProvider);
     final selectedStatus = ref.watch(serviceStatusFilterProvider);
     final categoryNamesState = ref.watch(
-      catalogOptionNamesProvider(CatalogOptionKind.serviceGroup),
+      catalogOptionsProvider(CatalogOptionKind.serviceGroup),
     );
     final categoryNames =
-        categoryNamesState.value ?? CatalogOptionKind.serviceGroup.defaultNames;
+        categoryNamesState.value?.map((o) => o.name).toList() ?? CatalogOptionKind.serviceGroup.defaultNames;
 
     final search = TextFormField(
       initialValue: ref.watch(serviceSearchQueryProvider),
@@ -799,9 +804,7 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
     );
     price = TextEditingController(text: service?.price.toString() ?? '300000');
     description = TextEditingController(text: service?.description ?? '');
-    category = ServiceUpsertInput.normalizeCategory(
-      service?.category ?? 'Chăm sóc',
-    );
+    category = service?.category ?? 'Chăm sóc';
     popularity = ServiceUpsertInput.normalizePopularityLabel(
       service?.popularityLabel ?? 'Ổn định',
     );
@@ -849,6 +852,7 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
                 ),
                 const SizedBox(height: 12),
                 CatalogOptionPicker(
+                  allowRetainedValue: widget.service != null,
                   kind: CatalogOptionKind.serviceGroup,
                   labelText: 'Nhóm dịch vụ',
                   value: category,
@@ -940,6 +944,7 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
       ServiceUpsertInput.normalized(
         name: name.text.trim(),
         category: category,
+        groupOptionId: category == widget.service?.category ? widget.service?.groupOptionId : null,
         durationMinutes: int.parse(duration.text.trim()),
         price: int.parse(price.text.trim()),
         description: description.text,
@@ -948,4 +953,12 @@ class _ServiceEditorDialogState extends State<_ServiceEditorDialog> {
       ),
     );
   }
+}
+
+class ServicesPage extends StatelessWidget {
+  const ServicesPage({super.key});
+  @override
+  Widget build(BuildContext context) => const CatalogManagementTabs(
+    listLabel: 'Danh sách', kinds: [CatalogOptionKind.serviceGroup],
+    child: _ServicesContent());
 }

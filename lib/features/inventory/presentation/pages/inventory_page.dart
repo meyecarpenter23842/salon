@@ -1,3 +1,6 @@
+import '../../../../core/providers/catalog_options_providers.dart';
+import '../../../../core/models/catalog_option.dart';
+import '../../../../shared/widgets/catalog_management_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,14 +11,14 @@ import '../../../../core/repositories/inventory_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/compact_management.dart';
 
-class InventoryPage extends ConsumerStatefulWidget {
-  const InventoryPage({super.key});
+class _InventoryContent extends ConsumerStatefulWidget {
+  const _InventoryContent();
 
   @override
-  ConsumerState<InventoryPage> createState() => _InventoryPageState();
+  ConsumerState<_InventoryContent> createState() => __InventoryContentState();
 }
 
-class _InventoryPageState extends ConsumerState<InventoryPage> {
+class __InventoryContentState extends ConsumerState<_InventoryContent> {
   String _query = '';
   String? _groupFilter;
   String? _brandFilter;
@@ -24,6 +27,9 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(catalogOptionsRefreshNonceProvider, (_, next) {
+      setState(() { _groupFilter = null; _brandFilter = null; });
+    });
     final productsState = ref.watch(inventoryProductsViewProvider);
     final movementsState = ref.watch(inventoryMovementsViewProvider);
 
@@ -68,10 +74,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
             : movements
                 .where((item) => item.productId == selected.id)
                 .toList(growable: false);
-        final totalUnits = products.fold<int>(
-          0,
-          (sum, item) => sum + item.stockOnHand,
-        );
+        final unsetUnits = products.where((item) => item.unitName.isEmpty).length;
         final lowStockCount = products.where((item) => item.isLowStock).length;
         final outOfStockCount =
             products.where((item) => item.isOutOfStock).length;
@@ -98,7 +101,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
               CompactManagementSummary(
                 items: [
                   '${products.length} sản phẩm',
-                  '$totalUnits đơn vị tồn',
+                  '$unsetUnits chưa thiết lập đơn vị',
                   '$lowStockCount sắp hết',
                   '$outOfStockCount hết hàng',
                 ],
@@ -1137,4 +1140,12 @@ class _InventoryConfirmDialog extends StatelessWidget {
       ],
     );
   }
+}
+
+class InventoryPage extends StatelessWidget {
+  const InventoryPage({super.key});
+  @override
+  Widget build(BuildContext context) => const CatalogManagementTabs(
+    listLabel: 'Tồn kho', kinds: [CatalogOptionKind.productUnit, CatalogOptionKind.productGroup, CatalogOptionKind.productBrand],
+    child: _InventoryContent());
 }

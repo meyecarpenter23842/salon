@@ -4,6 +4,7 @@ class InventoryProductItem {
     required this.name,
     required this.brand,
     required this.volumeLabel,
+    this.unitName = '',
     required this.productType,
     required this.stockOnHand,
     required this.isActive,
@@ -13,6 +14,7 @@ class InventoryProductItem {
   final String name;
   final String brand;
   final String volumeLabel;
+  final String unitName;
   final String productType;
   final int stockOnHand;
   final bool isActive;
@@ -22,6 +24,7 @@ class InventoryProductItem {
 
   String get metaLabel => [
     productType,
+    if (unitName.isNotEmpty) unitName,
     if (brand.trim().isNotEmpty) brand.trim(),
     if (volumeLabel.trim().isNotEmpty) volumeLabel.trim(),
   ].join(' • ');

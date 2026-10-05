@@ -12,6 +12,7 @@ class CatalogOptionPicker extends ConsumerWidget {
     required this.value,
     required this.onChanged,
     this.allowEmpty = false,
+    this.allowRetainedValue = true,
     this.emptyLabel = 'Không chọn',
   });
 
@@ -20,14 +21,16 @@ class CatalogOptionPicker extends ConsumerWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
   final bool allowEmpty;
+  final bool allowRetainedValue;
   final String emptyLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final optionsState = ref.watch(catalogOptionNamesProvider(kind));
-    final options = [...(optionsState.value ?? kind.defaultNames)];
+    final options = [...(optionsState.value ?? const <String>[])];
     final current = normalizeCatalogOptionName(value ?? '');
-    if (current.isNotEmpty &&
+    final retained = current.isNotEmpty && !options.any((item) => item.toLowerCase() == current.toLowerCase());
+    if (allowRetainedValue && current.isNotEmpty &&
         !options.any((item) => item.toLowerCase() == current.toLowerCase())) {
       options.add(current);
     }
@@ -54,7 +57,9 @@ class CatalogOptionPicker extends ConsumerWidget {
             isExpanded: true,
             decoration: InputDecoration(
               labelText: labelText,
-              helperText: optionsState.isLoading ? 'Đang tải danh mục…' : null,
+              helperText: optionsState.isLoading ? 'Đang tải danh mục…' :
+                optionsState.hasError ? 'Không tải được danh mục. Mở lại để thử lại.' :
+                retained ? 'Mục hiện tại được giữ cho dữ liệu cũ.' : null,
             ),
             validator: (selected) {
               if (!allowEmpty && (selected == null || selected.trim().isEmpty)) {
@@ -72,7 +77,7 @@ class CatalogOptionPicker extends ConsumerWidget {
                 ),
               ),
             ],
-            onChanged: onChanged,
+            onChanged: optionsState.isLoading || optionsState.hasError ? null : onChanged,
           ),
         ),
         const SizedBox(width: 8),

@@ -1,3 +1,4 @@
+import '../../../../shared/widgets/catalog_management_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,6 +25,7 @@ final salesFilteredProductsProvider = FutureProvider<List<RetailProductItem>>((
   ref,
 ) async {
   ref.watch(salesProductRefreshNonceProvider);
+  ref.watch(catalogOptionsRefreshNonceProvider);
   final query = ref.watch(salesProductQueryProvider).trim();
   final type = ref.watch(salesProductTypeProvider);
   final status = ref.watch(salesProductStatusProvider);
@@ -39,11 +41,14 @@ final salesFilteredProductsProvider = FutureProvider<List<RetailProductItem>>((
       .toList(growable: false);
 });
 
-class SalesPage extends ConsumerWidget {
-  const SalesPage({super.key});
+class _SalesContent extends ConsumerWidget {
+  const _SalesContent();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(catalogOptionsRefreshNonceProvider, (_, next) {
+      ref.read(salesProductTypeProvider.notifier).state = null;
+    });
     final productsState = ref.watch(salesFilteredProductsProvider);
     return productsState.when(
       loading: () => const PremiumLoadingState(label: 'Đang tải sản phẩm…'),
@@ -136,10 +141,10 @@ class _SalesToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedStatus = ref.watch(salesProductStatusProvider);
     final groupNamesState = ref.watch(
-      catalogOptionNamesProvider(CatalogOptionKind.productGroup),
+      catalogOptionsProvider(CatalogOptionKind.productGroup),
     );
     final groupNames =
-        groupNamesState.value ?? CatalogOptionKind.productGroup.defaultNames;
+        groupNamesState.value?.map((o) => o.name).toList() ?? CatalogOptionKind.productGroup.defaultNames;
     final search = TextFormField(
       initialValue: ref.watch(salesProductQueryProvider),
       onChanged: (value) {
@@ -319,7 +324,7 @@ class _ProductList extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${item.productType}${item.brand.isEmpty ? '' : ' • ${item.brand}'}${item.volumeLabel.isEmpty ? '' : ' • ${item.volumeLabel}'}',
+                              '${item.productType} • ${item.unitName.isEmpty ? 'Chưa thiết lập đơn vị' : item.unitName}${item.brand.isEmpty ? '' : ' • ${item.brand}'}${item.volumeLabel.isEmpty ? '' : ' • ${item.volumeLabel}'}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -400,7 +405,7 @@ class _ProductDetail extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${item.productType}${item.brand.isEmpty ? '' : ' • ${item.brand}'}',
+                        '${item.productType} • ${item.unitName.isEmpty ? 'Chưa thiết lập đơn vị' : item.unitName}${item.brand.isEmpty ? '' : ' • ${item.brand}'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: AppColors.textMuted),
@@ -630,6 +635,7 @@ class _RetailProductEditorDialogState
   late final TextEditingController _priceController;
   late final TextEditingController _commissionController;
   late String _brand;
+  late String _unit;
   late String _type;
   late bool _isActive;
   late bool _isHiddenFromStaff;
@@ -640,6 +646,7 @@ class _RetailProductEditorDialogState
     final existing = widget.existing;
     _nameController = TextEditingController(text: existing?.name ?? '');
     _brand = existing?.brand ?? '';
+    _unit = existing?.unitName ?? 'Cái';
     _volumeController = TextEditingController(
       text: existing?.volumeLabel ?? '',
     );
@@ -685,12 +692,23 @@ class _RetailProductEditorDialogState
                 ),
                 const SizedBox(height: 12),
                 CatalogOptionPicker(
+                  allowRetainedValue: widget.existing != null,
                   kind: CatalogOptionKind.productBrand,
                   labelText: 'Thương hiệu',
                   value: _brand.isEmpty ? null : _brand,
                   allowEmpty: true,
                   emptyLabel: 'Không thương hiệu',
                   onChanged: (value) => setState(() => _brand = value ?? ''),
+                ),
+                const SizedBox(height: 12),
+                CatalogOptionPicker(
+                  allowRetainedValue: widget.existing != null,
+                  kind: CatalogOptionKind.productUnit,
+                  labelText: 'Đơn vị tính',
+                  value: _unit.isEmpty ? null : _unit,
+                  allowEmpty: widget.existing != null && widget.existing!.unitName.isEmpty,
+                  emptyLabel: 'Chưa thiết lập',
+                  onChanged: (value) => setState(() => _unit = value ?? ''),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -701,6 +719,7 @@ class _RetailProductEditorDialogState
                 ),
                 const SizedBox(height: 12),
                 CatalogOptionPicker(
+                  allowRetainedValue: widget.existing != null,
                   kind: CatalogOptionKind.productGroup,
                   labelText: 'Nhóm sản phẩm',
                   value: _type,
@@ -765,7 +784,11 @@ class _RetailProductEditorDialogState
       RetailProductUpsertInput(
         name: _nameController.text.trim(),
         brand: _brand,
+        brandOptionId: _brand == widget.existing?.brand ? widget.existing?.brandOptionId : null,
+        groupOptionId: _type == widget.existing?.productType ? widget.existing?.groupOptionId : null,
+        unitOptionId: _unit == widget.existing?.unitName ? widget.existing?.unitOptionId : null,
         volumeLabel: _volumeController.text.trim(),
+        unitName: _unit,
         productType: _type,
         salePrice: int.parse(_priceController.text.trim()),
         commissionPercent: double.parse(_commissionController.text.trim()),
@@ -777,3 +800,11 @@ class _RetailProductEditorDialogState
 }
 
 String _percent(double value) => value.toStringAsFixed(value % 1 == 0 ? 0 : 1);
+
+class SalesPage extends StatelessWidget {
+  const SalesPage({super.key});
+  @override
+  Widget build(BuildContext context) => const CatalogManagementTabs(
+    listLabel: 'Danh sách', kinds: [CatalogOptionKind.productGroup, CatalogOptionKind.productBrand, CatalogOptionKind.productUnit],
+    child: _SalesContent());
+}

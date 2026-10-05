@@ -3,6 +3,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../data/fake/fake_salon_data_source.dart';
 import '../database/salon_database.dart';
+import '../database/catalog_schema.dart';
+import '../models/catalog_option.dart';
 import '../database/salon_database_seed.dart';
 import '../database/service_mapper.dart';
 import '../models/entity_id.dart';
@@ -161,6 +163,9 @@ class SqliteServicesRepository
     ServiceUpsertInput input, {
     String? existingId,
   }) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteServicesRepository(scope, const FakeSalonDataSource()).saveService(input, existingId: existingId));
+    }
     final database = await _database.database;
     await _seed.seedServicesIfNeeded(database);
 
@@ -179,6 +184,13 @@ class SqliteServicesRepository
       updatedAt: now,
     );
     final row = ServiceMapper.toDatabase(service);
+    final previousRows = existingId == null ? <Map<String, Object?>>[] :
+      await database.query('services', where: 'id = ?', whereArgs: [existingId]);
+    final previous = previousRows.isEmpty ? <String, Object?>{} : previousRows.single;
+    final option0 = await CatalogSchema.resolve(database, CatalogOptionKind.serviceGroup, input.category, previousId: previous['group_option_id'], requestedId: input.groupOptionId);
+    row['group_option_id'] = option0?['id'];
+    row['category'] = option0?['name'] ?? '';
+
 
     if (existing == null) {
       await database.insert(
@@ -198,7 +210,7 @@ class SqliteServicesRepository
       }
     }
 
-    return service;
+    return ServiceMapper.fromDatabase(row);
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'catalog_options_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/inventory_item.dart';
@@ -20,6 +21,7 @@ final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {
 final inventoryProductsViewProvider =
     FutureProvider<List<InventoryProductItem>>((ref) {
       ref.watch(inventoryRefreshNonceProvider);
+      ref.watch(catalogOptionsRefreshNonceProvider);
       return ref.watch(inventoryRepositoryProvider).fetchInventoryProducts();
     });
 

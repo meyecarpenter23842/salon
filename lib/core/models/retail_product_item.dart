@@ -4,8 +4,12 @@ class RetailProductItem {
   const RetailProductItem({
     required this.id,
     required this.name,
+    this.unitOptionId,
+    this.brandOptionId,
+    this.groupOptionId,
     required this.brand,
     required this.volumeLabel,
+    this.unitName = '',
     required this.productType,
     required this.salePrice,
     required this.commissionPercent,
@@ -17,8 +21,12 @@ class RetailProductItem {
 
   final String id;
   final String name;
+  final String? unitOptionId;
+  final String? brandOptionId;
+  final String? groupOptionId;
   final String brand;
   final String volumeLabel;
+  final String unitName;
   final String productType;
   final int salePrice;
   final double commissionPercent;
@@ -33,8 +41,12 @@ class RetailProductItem {
   RetailProductItem copyWith({
     String? id,
     String? name,
+    String? unitOptionId,
+    String? brandOptionId,
+    String? groupOptionId,
     String? brand,
     String? volumeLabel,
+    String? unitName,
     String? productType,
     int? salePrice,
     double? commissionPercent,
@@ -46,8 +58,12 @@ class RetailProductItem {
     return RetailProductItem(
       id: id ?? this.id,
       name: name ?? this.name,
+      unitOptionId: unitOptionId ?? this.unitOptionId,
+      brandOptionId: brandOptionId ?? this.brandOptionId,
+      groupOptionId: groupOptionId ?? this.groupOptionId,
       brand: brand ?? this.brand,
       volumeLabel: volumeLabel ?? this.volumeLabel,
+      unitName: unitName ?? this.unitName,
       productType: productType ?? this.productType,
       salePrice: salePrice ?? this.salePrice,
       commissionPercent: commissionPercent ?? this.commissionPercent,

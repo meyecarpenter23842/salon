@@ -346,6 +346,7 @@ class _ProductCatalogList extends ConsumerWidget {
             final quantity = _productQuantityInDraft(draft, product.id);
             final metaParts = <String>[
               product.productType,
+              if (product.unitName.isNotEmpty) product.unitName,
               if (product.brand.isNotEmpty) product.brand,
               if (product.volumeLabel.isNotEmpty) product.volumeLabel,
             ];
