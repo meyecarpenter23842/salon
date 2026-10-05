@@ -50,3 +50,8 @@ app.*.map.json
 # Generated portable/test Windows bundles must never be committed or launched as source artifacts.
 /dist/salonmanager-windows-test-*/
 /dist/salonmanager-windows-test-*.zip
+
+# Machine caches, local SDK paths and preserved Android Studio scratch project.
+/.gradle/
+/local.properties
+/local-only/
