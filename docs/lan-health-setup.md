@@ -41,9 +41,9 @@ curl --cacert certificate.pem https://192.168.1.20:8743/api/staff/v1/health
 ```
 
 Use the certificate copied from the owner desktop, not an arbitrary downloaded
-certificate. Do not use curl -k or a trust-all mobile callback. The Android app
-will support endpoint-specific pinning in a later PR; this host PR does not
-provide an installable companion app or a QR pairing implementation.
+certificate. Do not use curl -k or a trust-all mobile callback. The Android connection shell now supports endpoint-specific pinning; see
+android-companion-test.md for running main.dart or the CI debug APK. QR pairing
+and business access are still separate follow-up work.
 
 Only GET health with no body/query is served. All customer/bill/checkout routes
 remain unavailable. HTTPS protects transport but does not grant business access.
