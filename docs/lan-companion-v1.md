@@ -104,6 +104,6 @@ Pure Dart contract/policy tests run in existing Ubuntu and Windows Flutter CI.
 CI additionally exercises a real HTTPS listener with a generated certificate,
 trusted/untrusted clients, unsupported routes, startup/stop races, port conflicts
 and another-process OS lock exclusion on Ubuntu and Windows. This proves host
-behavior, not connectivity from a real phone. Remaining work is Android pinning/
-discovery and network bootstrap isolated from Windows credential/license/SQLite
-startup, followed by an actual Android-to-desktop LAN check. Pairing/auth and business routes follow Batch 3.
+behavior, not connectivity from a real phone. Android now has a separate network bootstrap and URL/fingerprint health shell,
+with real TLS client tests and a CI debug APK. Remaining work is QR discovery
+and an actual Android-to-desktop LAN check; see android-companion-test.md. Pairing/auth and business routes follow Batch 3.

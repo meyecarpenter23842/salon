@@ -1,0 +1,45 @@
+# Run Android connection shell
+
+Open the Flutter project root (the directory with pubspec.yaml) in Android Studio,
+choose an Android device/emulator and run lib/main.dart. Android enters the
+companion shell before any Windows license, desktop settings or business SQLite
+initialization. Windows keeps the existing desktop/license flow.
+
+CI builds a debug APK under the artifact salon-companion-debug-apk on the PR's
+Flutter CI run. This is a test build using the existing debug signing configuration;
+it is not a store release. No application ID/dependencies were changed.
+
+## Try connecting
+
+1. Configure desktop HTTPS once following lan-health-setup.md and keep the licensed
+   main app open.
+2. Get the API URL from desktop Settings → Kết nối điện thoại.
+3. Enter that URL on Android plus the SHA-256 certificate fingerprint printed by
+   the desktop setup script. Obtain this fingerprint directly from the owner PC,
+   not from an unknown server. Do not copy the private key to the phone.
+4. Tap Kiểm tra kết nối. Success means the desktop health endpoint responded with
+   API version 1; it does not grant staff access or pair the device.
+
+The Android shell remembers the successfully checked URL and fingerprint using
+device preferences; it does not store salon business data. It forgets the success
+indicator on app background/reopen or edited input, so it never promises continued
+connectivity from a stale health check. Pairing/revocation and business access are
+later Batch 3 work.
+
+The client uses HTTPS, endpoint-specific certificate fingerprint and certificate
+validity checks. It rejects redirects, different certificates, wrong API version,
+oversized responses and timeouts. The fingerprint must still be verified even
+with a certificate signed by a public CA. There is no accept-all TLS callback.
+
+For a same-router phone use desktop's private LAN address. For an emulator use an
+address it can reach; localhost refers to the emulator itself. Use the same
+certificate pin for the desktop address verified by the owner. Wi-Fi client
+isolation or a firewall may block even correct URL/pin. A 4G/other-network client
+requires a separately configured reachable private network/HTTPS endpoint.
+
+## Remaining evidence
+
+Widget/client integration tests on Ubuntu/Windows and Android APK compilation do
+not prove a real phone's network connection. Batch 2 remains open until an Android
+device runs the shell and reaches the owner desktop over the intended transport.
+No QR pairing, customer/bill routes, offline mutation queue or SQLite on the phone.
