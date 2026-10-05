@@ -1,3 +1,4 @@
+import '../../../../core/providers/data_backend_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -112,10 +113,18 @@ Future<void> _openCustomerBilling(
   WidgetRef ref,
   CustomerProfile customer,
 ) async {
-  await ref.read(invoicesRepositoryProvider).selectInvoiceCustomer(customer.id);
+  if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+    final sessions = ref.read(billingSessionsRepositoryProvider);
+    final bill = await sessions.createWalkInSession();
+    await sessions.selectCustomer(bill.id, customer.id);
+    ref.read(selectedInvoiceSessionIdProvider.notifier).state = bill.id;
+  } else {
+    await ref.read(invoicesRepositoryProvider).selectInvoiceCustomer(customer.id);
+  }
   if (!context.mounted) return;
 
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text('Đã mở tính tiền cho ${customer.fullName}')),

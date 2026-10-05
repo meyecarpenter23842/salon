@@ -6,6 +6,7 @@ Future<void> _editInvoiceLineEmployeeAction(
   InvoiceDraftLine line,
 ) async {
   if (!line.isService) return;
+  final repository = ref.read(invoicesRepositoryProvider);
 
   final employeeId = await _chooseInvoiceEmployee(
     context,
@@ -16,15 +17,14 @@ Future<void> _editInvoiceLineEmployeeAction(
 
   try {
     await _queueCatalogMutation(
-      () => ref
-          .read(invoicesRepositoryProvider)
-          .updateInvoiceLineEmployee(
+      () => repository.updateInvoiceLineEmployee(
             line.id,
             employeeId.isEmpty ? null : employeeId,
           ),
     );
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -70,6 +70,7 @@ Future<void> _editInvoiceLineUnitPriceAction(
     );
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -97,6 +98,7 @@ Future<void> _splitInvoiceLineAction(
     await _queueCatalogMutation(() => actions.splitInvoiceLine(line.id));
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -130,6 +132,7 @@ Future<void> _clearInvoiceDraft(
   }
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ScaffoldMessenger.of(
     context,
   ).showSnackBar(const SnackBar(content: Text('Đã xóa toàn bộ mục khỏi bill')));

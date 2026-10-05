@@ -1,3 +1,4 @@
+import '../../../../core/providers/data_backend_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -289,6 +290,7 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
       if (draft == null) return;
       await ref.read(invoicesRepositoryProvider).addInvoiceService(service.id);
       ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
       if (widget.standalone) {
         await _openStandaloneBilling();
       } else {
@@ -323,6 +325,7 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
       if (draft == null) return;
       await ref.read(invoicesRepositoryProvider).addInvoiceProduct(product.id);
       ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
       if (widget.standalone) {
         await _openStandaloneBilling();
       } else {
@@ -349,12 +352,18 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
   Future<InvoiceDraft?> _prepareDraftForAppointment(
     AppointmentEntry appointment,
   ) async {
+    if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+      final prepared = await openAppointmentInvoice(ref, appointment);
+      return prepared;
+    }
+
     final repository = ref.read(invoicesRepositoryProvider);
     final draft = await repository.fetchInvoiceDraft();
 
     if (!_staffHasDraftWork(draft)) {
       final prepared = await repository.prefillDraftFromAppointment(appointment);
       ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
       return prepared;
     }
 
@@ -368,6 +377,7 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
     if (canReuseEmptyCustomerSelection) {
       final prepared = await repository.prefillDraftFromAppointment(appointment);
       ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
       return prepared;
     }
 

@@ -23,6 +23,9 @@ import '../../../../core/models/retail_product_item.dart';
 import '../../../../core/models/retail_product_upsert_input.dart';
 import '../../../../core/models/service_catalog_item.dart';
 import '../../../../core/providers/inventory_providers.dart';
+import '../../../../core/providers/data_backend_provider.dart';
+import '../../../../core/repositories/repository_contracts.dart';
+import '../../../../core/repositories/sqlite_invoices_repository.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/settings/receipt_template_store.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -32,6 +35,7 @@ import '../../../../shared/widgets/premium_workspace.dart';
 import '../../../../shared/widgets/sensitive_action_authorization.dart';
 
 part 'pos_bill_panel.dart';
+part 'billing_sessions_bar.dart';
 part 'pos_catalog_panel.dart';
 part 'pos_checkout_panel.dart';
 part 'pos_dialogs.dart';
@@ -55,6 +59,7 @@ Future<void> _selectInvoiceCustomer(
   await ref.read(invoicesRepositoryProvider).selectInvoiceCustomer(customer.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text('Đã chọn khách ${customer.fullName} cho hóa đơn')),
   );
@@ -70,6 +75,7 @@ Future<void> _updateInvoicePaymentMethod(
       .updateInvoicePaymentMethod(paymentMethod);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
 }
 
 Future<void> _updateInvoicePaymentAllocations(
@@ -83,6 +89,7 @@ Future<void> _updateInvoicePaymentAllocations(
         .updateInvoicePaymentAllocations(allocations);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -112,8 +119,9 @@ Future<void> _addInvoiceService(
   BuildContext context,
   WidgetRef ref,
   ServiceCatalogItem service,
-  String? employeeId,
-) async {
+  String? employeeId, {
+  InvoicesRepository? targetRepository,
+}) async {
   final normalizedEmployeeId = employeeId?.trim();
   final effectiveEmployeeId =
       normalizedEmployeeId == null || normalizedEmployeeId.isEmpty
@@ -121,11 +129,12 @@ Future<void> _addInvoiceService(
       : normalizedEmployeeId;
 
   try {
-    await ref
-        .read(invoicesRepositoryProvider)
-        .addInvoiceService(service.id, employeeId: effectiveEmployeeId);
+    final InvoicesRepository repository =
+        targetRepository ?? ref.read(invoicesRepositoryProvider);
+    await repository.addInvoiceService(service.id, employeeId: effectiveEmployeeId);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Đã thêm ${service.name} vào bill')),
     );
@@ -140,12 +149,16 @@ Future<void> _addInvoiceService(
 Future<void> _addInvoiceProduct(
   BuildContext context,
   WidgetRef ref,
-  RetailProductItem product,
-) async {
+  RetailProductItem product, {
+  InvoicesRepository? targetRepository,
+}) async {
   try {
-    await ref.read(invoicesRepositoryProvider).addInvoiceProduct(product.id);
+    final InvoicesRepository repository =
+        targetRepository ?? ref.read(invoicesRepositoryProvider);
+    await repository.addInvoiceProduct(product.id);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Đã thêm ${product.name} vào bill')),
     );
@@ -173,6 +186,7 @@ Future<void> _updateInvoiceLineQuantity(
         .updateInvoiceLineQuantity(line.id, quantity);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -193,6 +207,7 @@ Future<void> _removeInvoiceLine(
   await ref.read(invoicesRepositoryProvider).removeInvoiceLine(line.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text('Đã xóa ${line.title} khỏi bill')));
 }
@@ -221,6 +236,7 @@ Future<void> _openDiscountEditor(
   await ref.read(invoicesRepositoryProvider).updateInvoiceDiscount(discount);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
 }
 
 Future<void> _openLineDiscountEditor(
@@ -249,6 +265,7 @@ Future<void> _openLineDiscountEditor(
       .updateInvoiceLineDiscount(line.id, discount);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
 }
 
 Future<RetailProductItem?> _openRetailProductEditor(
@@ -425,7 +442,7 @@ class InvoicesPage extends ConsumerWidget {
   }
 }
 
-class _BillingView extends StatelessWidget {
+class _BillingView extends ConsumerWidget {
   const _BillingView({
     required this.draft,
     required this.history,
@@ -443,7 +460,7 @@ class _BillingView extends StatelessWidget {
   final AsyncValue<List<Map<String, Object?>>> employeesState;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     CustomerProfile? selectedCustomer;
     for (final customer in customers) {
       if (customer.id == draft.customerId) {
@@ -452,6 +469,7 @@ class _BillingView extends StatelessWidget {
       }
     }
 
+    final multiBill = ref.watch(appDataBackendProvider) == AppDataBackend.sqlite;
     return LayoutBuilder(
       builder: (context, constraints) {
         final dense =
@@ -467,6 +485,10 @@ class _BillingView extends StatelessWidget {
               customers: customers,
               dense: dense,
             ),
+            if (multiBill) ...[
+              const SizedBox(height: 8),
+              _BillingSessionsBar(draft: draft, customers: customers),
+            ],
             SizedBox(height: gap),
             Expanded(
               child: Row(

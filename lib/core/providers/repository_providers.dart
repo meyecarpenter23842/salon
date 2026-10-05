@@ -153,17 +153,47 @@ final securityAuditEventsProvider = FutureProvider(
   (ref) => ref.watch(sensitiveActionServiceProvider).fetchAuditEvents(limit: 50),
 );
 
+// Selection belongs to this UI process; persisted bill contents live in SQLite.
+final selectedInvoiceSessionIdProvider = StateProvider<String>(
+  (ref) => SqliteInvoicesRepository.legacyDraftInvoiceId,
+);
+
+// Cache a guarded repository per explicit target so pending actions and
+// concurrent checkout guards do not move when another bill is selected.
+final invoiceRepositoryForSessionProvider =
+    Provider.family<InvoicesRepository, String>((ref, sessionId) {
+      return GuardedInvoicesRepository(
+        SalonDatabase.instance,
+        SqliteInvoicesRepository(SalonDatabase.instance, null, sessionId),
+        ref.watch(sensitiveActionServiceProvider),
+      );
+    });
+
+Future<InvoiceDraft> openAppointmentInvoice(
+  WidgetRef ref,
+  AppointmentEntry appointment,
+) async {
+  if (ref.read(appDataBackendProvider) != AppDataBackend.sqlite) {
+    return ref.read(invoicesRepositoryProvider)
+        .prefillDraftFromAppointment(appointment);
+  }
+  final draft = await ref.read(billingSessionsRepositoryProvider)
+      .openAppointmentSession(appointment);
+  ref.read(selectedInvoiceSessionIdProvider.notifier).state = draft.id;
+  ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
+  return draft;
+}
+
 final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
   final backend = ref.watch(appDataBackendProvider);
   final fakeDataSource = ref.watch(fakeSalonDataSourceProvider);
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return GuardedInvoicesRepository(
-        SalonDatabase.instance,
-        SqliteInvoicesRepository(SalonDatabase.instance, fakeDataSource),
-        ref.watch(sensitiveActionServiceProvider),
-      );
+      return ref.watch(invoiceRepositoryForSessionProvider(
+        ref.watch(selectedInvoiceSessionIdProvider),
+      ));
     case AppDataBackend.fake:
       return FakeInvoicesRepository(fakeDataSource);
   }

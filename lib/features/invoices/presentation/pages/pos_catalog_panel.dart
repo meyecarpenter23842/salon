@@ -281,14 +281,15 @@ class _ServiceCatalogList extends ConsumerWidget {
                   : 'Thêm ${service.name} vào bill',
               onTap: draft.isPaid
                   ? null
-                  : () => _queueCatalogMutation(
+                  : () {
+                      final repository = ref.read(invoicesRepositoryProvider);
+                      _queueCatalogMutation(
                         () => _addInvoiceService(
-                          context,
-                          ref,
-                          service,
-                          employeeId,
+                          context, ref, service, employeeId,
+                          targetRepository: repository,
                         ),
-                      ),
+                      );
+                    },
             );
           },
         );
@@ -361,9 +362,15 @@ class _ProductCatalogList extends ConsumerWidget {
                   : 'Thêm ${product.name} vào bill',
               onTap: draft.isPaid
                   ? null
-                  : () => _queueCatalogMutation(
-                        () => _addInvoiceProduct(context, ref, product),
-                      ),
+                  : () {
+                      final repository = ref.read(invoicesRepositoryProvider);
+                      _queueCatalogMutation(
+                        () => _addInvoiceProduct(
+                          context, ref, product,
+                          targetRepository: repository,
+                        ),
+                      );
+                    },
             );
           },
         );

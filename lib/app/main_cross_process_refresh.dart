@@ -145,6 +145,7 @@ class _MainCrossProcessRefreshGateState
     ref.invalidate(appointmentsViewProvider);
     ref.read(customersRefreshProvider.notifier).state++;
     ref.invalidate(invoiceDraftProvider);
+    ref.invalidate(activeInvoiceSessionsProvider);
     ref.invalidate(invoiceHistoryProvider);
     ref.invalidate(overviewSummaryProvider);
     ref.invalidate(reportsSummaryProvider);

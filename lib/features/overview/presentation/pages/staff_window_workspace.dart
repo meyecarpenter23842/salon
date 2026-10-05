@@ -1,3 +1,4 @@
+import '../../../../core/providers/data_backend_provider.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -144,6 +145,7 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
     ref.invalidate(servicesViewProvider);
     ref.invalidate(retailProductsViewProvider);
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ref.invalidate(overviewSummaryProvider);
   }
 
@@ -195,6 +197,11 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
   Future<InvoiceDraft?> _prepareDraftForAppointment(
     AppointmentEntry appointment,
   ) async {
+    if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+      final prepared = await openAppointmentInvoice(ref, appointment);
+      return prepared;
+    }
+
     final repository = ref.read(invoicesRepositoryProvider);
     final draft = await repository.fetchInvoiceDraft();
 

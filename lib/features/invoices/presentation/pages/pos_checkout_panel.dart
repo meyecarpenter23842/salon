@@ -285,17 +285,14 @@ Future<void> _checkoutAndShowReceipt(
   if (confirmed != true || !context.mounted) return;
 
   ref.read(_invoiceCheckoutBusyProvider.notifier).state = true;
+  final repository = ref.read(invoicesRepositoryProvider);
   InvoiceDraft? paidInvoice;
   try {
-    await ref.read(invoicesRepositoryProvider).checkoutInvoice();
+    await repository.checkoutInvoice();
 
     final recent = draft.appointmentId == null
-        ? await ref
-              .read(invoicesRepositoryProvider)
-              .fetchRecentInvoices(limit: 5, customerId: draft.customerId)
-        : await ref
-              .read(invoicesRepositoryProvider)
-              .fetchRecentInvoices(
+        ? await repository.fetchRecentInvoices(limit: 5, customerId: draft.customerId)
+        : await repository.fetchRecentInvoices(
                 limit: 5,
                 appointmentId: draft.appointmentId,
               );
@@ -303,14 +300,23 @@ Future<void> _checkoutAndShowReceipt(
     if (recent.isNotEmpty) {
       paidInvoice = recent.firstWhere(
         (invoice) =>
-            invoice.totalAmount == draft.totalAmount &&
-            invoice.customerId == draft.customerId,
+            invoice.customerId == draft.customerId &&
+            draft.lines.every((sourceLine) => invoice.lines.any(
+              (paidLine) => paidLine.id == sourceLine.id ||
+                  paidLine.id.endsWith('-${sourceLine.id}'),
+            )),
         orElse: () => recent.first,
       );
     }
 
     if (!context.mounted) return;
+    if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+      ref.read(selectedInvoiceSessionIdProvider.notifier).state =
+          SqliteInvoicesRepository.legacyDraftInvoiceId;
+      ref.invalidate(activeInvoiceSessionsProvider);
+    }
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ref.invalidate(invoiceHistoryProvider);
     ref.invalidate(customerInvoiceHistoryProvider(draft.customerId));
     if (draft.appointmentId != null) {
