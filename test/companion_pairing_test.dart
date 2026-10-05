@@ -103,6 +103,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('companion-pair-code')));
     await tester.enterText(find.byKey(const Key('companion-pair-code')), '12345678');
     await tester.ensureVisible(find.byKey(const Key('companion-request')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('companion-request')));
     await tester.pumpAndSettle();
   }
@@ -171,6 +172,8 @@ void main() {
     client.delayed!.complete();
     await tester.pumpAndSettle();
     expect(find.text('Salon — Trang chính'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
     expect(find.text('Salon — Trang chính'), findsOneWidget);
