@@ -234,7 +234,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
           const SizedBox(height: 12),
           Text(_message!, key: const Key('companion-access-status')),
         ],
-          if (_phone!.canReadSalon && _online && _foreground && _credential != null)
+        if (approved && _phone!.canReadSalon && _online && _foreground && _credential != null)
             CompanionDataPanel(
               key: ValueKey(_credential!.token), connection: widget.connection,
               token: _credential!.token, client: widget.readClient,
