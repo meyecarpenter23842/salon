@@ -7,12 +7,16 @@ import '../../core/lan/lan_health_client.dart';
 import '../../core/lan/lan_pairing.dart';
 import '../../core/lan/lan_pairing_client.dart';
 import 'companion_credential_store.dart';
+import 'companion_data_panel.dart';
+import '../../core/lan/lan_read_client.dart';
 
 class CompanionAccessPanel extends StatefulWidget {
   const CompanionAccessPanel({super.key, required this.connection,
-    required this.client, required this.store, required this.onAccess});
+    required this.client, required this.store, required this.onAccess,
+    this.readClient = const PinnedSalonReadClient()});
   final LanConnection connection;
   final LanPairingClient client;
+  final SalonReadClient readClient;
   final CompanionCredentialStore store;
   final ValueChanged<bool> onAccess;
   @override
@@ -207,7 +211,9 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
           const SizedBox(height: 12),
           const Text('Điện thoại đã được chủ salon duyệt.'),
           const SizedBox(height: 16),
-          const Text('Khách hàng và hóa đơn sẽ được bổ sung ở bước tiếp theo.'),
+          if (!_phone!.canReadSalon)
+            const Text('Chủ salon cần bật “Cho xem dữ liệu salon” cho điện thoại này '
+                'trong Cài đặt → Kết nối điện thoại.'),
         ],
         if (!approved && !pending && !_loading) ...[
           const Text('Trên máy salon, mở Cài đặt → Kết nối điện thoại '
@@ -228,6 +234,17 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
           const SizedBox(height: 12),
           Text(_message!, key: const Key('companion-access-status')),
         ],
+        if (approved && _phone!.canReadSalon && _online && _foreground && _credential != null)
+            CompanionDataPanel(
+              key: ValueKey(_credential!.token), connection: widget.connection,
+              token: _credential!.token, client: widget.readClient,
+              onDenied: () {
+                if (!mounted) return;
+                setState(() => _online = false);
+                _refresh();
+              },
+            ),
+
         if (approved || pending || _credential != null)
           TextButton.icon(key: const Key('companion-access-refresh'),
             onPressed: _busy ? null : _refresh,

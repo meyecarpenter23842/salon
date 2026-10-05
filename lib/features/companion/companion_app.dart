@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/lan/lan_health_client.dart';
 import '../../core/lan/lan_pairing_client.dart';
+import '../../core/lan/lan_read_client.dart';
 import 'companion_access_panel.dart';
 import 'companion_credential_store.dart';
 
@@ -11,10 +12,12 @@ class SalonCompanionApp extends StatelessWidget {
     super.key,
     this.checker = const PinnedLanHealthClient(),
     this.pairingClient = const PinnedLanPairingClient(),
+    this.readClient = const PinnedSalonReadClient(),
     this.credentialStore = const AndroidCompanionCredentialStore(),
   });
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
+  final SalonReadClient readClient;
   final CompanionCredentialStore credentialStore;
 
   @override
@@ -25,15 +28,16 @@ class SalonCompanionApp extends StatelessWidget {
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF805A45)),
     ),
-    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore),
+    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient),
   );
 }
 
 class _ConnectionPage extends StatefulWidget {
-  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore});
+  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient});
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final CompanionCredentialStore credentialStore;
+  final SalonReadClient readClient;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();
@@ -223,13 +227,13 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 CompanionAccessPanel(
                   key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
                   connection: _connection!, client: widget.pairingClient,
-                  store: widget.credentialStore,
+                  store: widget.credentialStore, readClient: widget.readClient,
                   onAccess: (value) { if (mounted) setState(() => _authorized = value); },
                 ),
               const SizedBox(height: 24),
               const Text(
-                'Có thể ghép quyền và kiểm tra kết nối. Chức năng khách hàng và '
-                'hóa đơn trên điện thoại đang được phát triển.',
+                'Sau khi chủ salon bật quyền xem, điện thoại có thể xem khách hàng, '
+                'hóa đơn và lịch hẹn từ máy salon.',
               ),
               const SizedBox(height: 8),
               const Text(

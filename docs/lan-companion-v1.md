@@ -2,8 +2,9 @@
 
 Tracking: #86, Batch 2 #89. Contract/policy landed in #90. The licensed Windows
 main app starts HTTPS after in-app setup. Device pairing, owner approval/revocation
-and a connection-only Android home bootstrap are implemented; see phone-pairing.md.
-No DB migration, customer/bill API or business permissions are enabled.
+and Android home bootstrap are implemented; see phone-pairing.md.
+Read-only customers, paid invoices and appointments use a separate desktop Owner grant;
+see [phone-data-read.md](phone-data-read.md). No DB migration or business writes are enabled.
 Firewall rules remain an explicit setup action.
 
 ## Ownership and lifecycle decision
@@ -54,10 +55,13 @@ name, device ID, version of SQLite, path, PIN or customer data.
 Implemented device routes: POST /pair/exchange consumes one expiring code and creates
 an idempotent pending request; GET /pair/status returns only that token's state.
 GET /bootstrap requires desktop-approved device authority and returns its identity
-with permissions: [connection]. It has no business snapshot, epoch or event cursor yet.
+with permissions: [connection], plus customers.read/invoices.read/appointments.read
+only when the owner enables read access for that individual phone. It has no business snapshot, epoch or event cursor yet.
 Owner decisions are desktop-only; no HTTP administration routes exist.
 
-Business route families and richer bootstrap planned for later implementation:
+Implemented GET /customers, /invoices and /appointments use bounded presentation DTOs
+and the existing desktop domain mappers. Business route families and richer bootstrap
+planned for later implementation:
 
 | Route | Purpose |
 | --- | --- |
@@ -112,5 +116,5 @@ trusted/untrusted clients, unsupported routes, startup/stop races, port conflict
 and another-process OS lock exclusion on Ubuntu and Windows. This proves host
 behavior, not connectivity from a real phone. Android now has a separate network bootstrap and URL/fingerprint health shell,
 with real TLS client tests and a CI debug APK. Remaining work is QR discovery
-and an actual Android-to-desktop LAN check; see android-companion-test.md. Device pairing/approval/revoke is implemented in PR #100. Business role guards, routes,
+and an actual Android-to-desktop LAN check; see android-companion-test.md. Device pairing/approval/revoke is implemented in PR #100. General business roles, mutation routes,
 revision/idempotency and events remain separate Batch 3 work.

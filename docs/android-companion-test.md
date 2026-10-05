@@ -23,7 +23,7 @@ The Android shell remembers the successfully checked URL and fingerprint using
 device preferences; it does not store salon business data. It forgets the success
 indicator on app background/reopen or edited input, so it never promises continued
 connectivity from a stale health check. Pairing and owner approval/revocation now follow the health check; see
-[phone-pairing.md](phone-pairing.md). Business access remains later work.
+[phone-pairing.md](phone-pairing.md). Read-only salon access requires a separate owner grant; see [phone-data-read.md](phone-data-read.md).
 
 The client uses HTTPS, endpoint-specific certificate fingerprint and certificate
 validity checks. It rejects redirects, different certificates, wrong API version,
@@ -42,7 +42,7 @@ Widget/client integration tests on Ubuntu/Windows and Android APK compilation do
 not prove a real phone's network connection. Batch 2 remains open until an Android
 device runs the shell and reaches the owner desktop over the intended transport.
 Owner reported health success on an emulator; this does not close the physical-phone gate.
-No QR discovery, customer/bill routes, offline mutation queue or business SQLite on the phone.
+Read-only customer/invoice/appointment routes are implemented. QR discovery, offline mutation queue and business writes remain future work. No business SQLite is opened on the phone.
 
 ## Người dùng lấy hai thông tin ở đâu?
 
@@ -60,4 +60,4 @@ Có thể xem thêm [hướng dẫn LAN](lan-health-setup.md).
 Trong Cài đặt, chọn mạng và bấm **Bật kết nối điện thoại** để app tự tạo
 identity và mở host ngay. Luồng này không tự thay đổi firewall.
 Giữ máy salon/app mở; thử cùng Wi-Fi trước. 4G/mạng khác cần truy cập từ xa được
-thiết lập riêng. Chức năng khách hàng/hóa đơn trên điện thoại chưa được mở.
+thiết lập riêng. Chủ salon bật **Cho xem dữ liệu salon** cho từng điện thoại đã duyệt để xem khách hàng, hóa đơn và lịch hẹn.
