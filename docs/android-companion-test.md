@@ -43,3 +43,20 @@ Widget/client integration tests on Ubuntu/Windows and Android APK compilation do
 not prove a real phone's network connection. Batch 2 remains open until an Android
 device runs the shell and reaches the owner desktop over the intended transport.
 No QR pairing, customer/bill routes, offline mutation queue or SQLite on the phone.
+
+## Người dùng lấy hai thông tin ở đâu?
+
+Trên máy salon: **Cài đặt → Kết nối điện thoại** (hoặc nút Kết nối điện thoại trên
+thanh trên cùng). Khi host đã mở, màn hình hiển thị **Địa chỉ máy salon** và
+**Mã xác minh máy salon**, mỗi giá trị có nút sao chép. Nhập nguyên hai giá trị vào
+các ô cùng tên trên Android. Địa chỉ trong ví dụ không phải địa chỉ máy người dùng.
+
+Mã xác minh được app tính SHA-256 trên DER của chứng chỉ server (chứng chỉ đầu tiên
+trong PEM), cùng cách Android kiểm tra. Không băm văn bản PEM hoặc private key,
+không hiển thị private key. Chỉ hiển thị thông tin khi host đã khởi động thành công;
+host chưa cấu hình/lỗi/dừng sẽ không cung cấp thông tin cũ để người dùng nhập.
+
+Thiết lập host lần đầu vẫn theo [hướng dẫn LAN](lan-health-setup.md).
+Mục Cài đặt hiển thị thông tin kết nối, chưa tự tạo chứng chỉ hoặc mở firewall.
+Giữ máy salon/app mở; thử cùng Wi-Fi trước. 4G/mạng khác cần truy cập từ xa được
+thiết lập riêng. Chức năng khách hàng/hóa đơn trên điện thoại chưa được mở.

@@ -35,7 +35,7 @@ void main() {
       await tester.tap(find.byKey(const Key('companion-check')));
       await tester.pumpAndSettle();
       expect(checker.calls, 0);
-      expect(find.textContaining('Nhập URL HTTPS'), findsOneWidget);
+      expect(find.textContaining('Sao chép đầy đủ địa chỉ'), findsOneWidget);
     });
 
   testWidgets('success saves endpoint and pin; reopened shell restores inputs',

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/lan/desktop_phone_connection_panel.dart';
 import '../../../../core/models/offline_update_summary.dart';
 import '../../../../core/models/audit_event.dart';
 import '../../../../core/models/settings_upsert_input.dart';
@@ -133,6 +134,19 @@ class _SettingsView extends ConsumerWidget {
         offlineUpdateSummary.valueOrNull?.manifest?.latestVersion ?? 'Chưa có';
 
     final hubItems = [
+      _SettingsHubItem(
+        keyName: 'phone',
+        icon: Icons.phonelink_outlined,
+        title: 'Kết nối điện thoại',
+        subtitle: 'Lấy địa chỉ và mã xác minh để nhập trên điện thoại.',
+        metrics: const ['Máy salon', 'Điện thoại'],
+        onTap: () => _showSettingsHubDialog(
+          context,
+          icon: Icons.phonelink_outlined,
+          title: 'Kết nối điện thoại',
+          child: const DesktopPhoneConnectionPanel(),
+        ),
+      ),
       _SettingsHubItem(
         keyName: 'theme',
         icon: Icons.palette_outlined,

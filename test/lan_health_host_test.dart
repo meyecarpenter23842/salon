@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:crypto/crypto.dart';
 import 'package:salonmanager/core/lan/lan_health_host.dart';
 
 void main() {
@@ -60,6 +61,17 @@ void main() {
     final url = Uri.parse('${config.apiUrl}$suffix');
     return (await client.openUrl(method, url)).close();
   }
+
+  test('displayed verification matches certificate served to the phone', () async {
+    await host.start(config);
+    final response = await request('GET', '/health');
+    expect(response.statusCode, 200);
+    expect(
+      await config.certificateSha256(),
+      sha256.convert(response.certificate!.der).toString(),
+    );
+    await response.drain<void>();
+  });
 
   test('HTTPS health responds without database; unsupported routes refuse', () async {
     await host.start(config);
