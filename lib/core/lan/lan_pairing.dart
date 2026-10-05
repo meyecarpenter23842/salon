@@ -68,7 +68,7 @@ class LanPairingRegistry extends ChangeNotifier {
 
   Future<T> _serial<T>(Future<T> Function() operation) {
     final next = _queue.then((_) => operation());
-    _queue = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _queue = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
   }
 

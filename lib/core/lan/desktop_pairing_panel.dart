@@ -24,9 +24,11 @@ class _DesktopPairingPanelState extends ConsumerState<DesktopPairingPanel> {
   @override
   void initState() {
     super.initState();
-    if (desktopPhoneRegistry.value != null) _timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) setState(() {});
-    });
+    if (desktopPhoneRegistry.value != null) {
+      _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   Future<void> _act(String target, Future<void> Function() operation) async {
