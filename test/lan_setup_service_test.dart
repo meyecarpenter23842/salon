@@ -48,6 +48,10 @@ void main() {
       await const PinnedLanHealthClient().check(LanConnection(url, pin));
       await expectLater(const PinnedLanHealthClient().check(
         LanConnection(url, '0' * 64)), throwsA(isA<Object>()));
+      final previousConfig = await File('${root.path}/config.json').readAsString();
+      await expectLater(setup.prepare(InternetAddress('192.168.1.30')),
+        throwsStateError);
+      expect(await File('${root.path}/config.json').readAsString(), previousConfig);
       final loaded = await setup.load();
       expect(loaded!.certificatePath, config.certificatePath);
       expect(await loaded.certificateSha256(), pin);

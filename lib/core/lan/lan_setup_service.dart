@@ -104,12 +104,20 @@ class LanSetupService {
     final lockPath = lockFile.absolute.path;
     if (!_ownedPaths.add(lockPath)) throw StateError('Setup already running');
     RandomAccessFile? lock;
+    RandomAccessFile? backendLock;
     Directory? createdIdentity;
     File? pending;
     var committed = false;
     try {
       lock = await lockFile.open(mode: FileMode.append);
       await lock.lock(FileLock.exclusive, 0, 1);
+      // Configuration may only change while no main process owns the backend.
+      final backendFile = File('${directory.path}/backend.lock');
+      if (LanHealthHost.ownsLockFile(backendFile)) {
+        throw StateError('Backend already owned');
+      }
+      backendLock = await backendFile.open(mode: FileMode.append);
+      await backendLock.lock(FileLock.exclusive, 0, 1);
       final existing = await load();
       LanHostConfig config;
       if (existing != null) {
@@ -139,6 +147,7 @@ class LanSetupService {
       committed = true;
       return config;
     } finally {
+      await backendLock?.close();
       await lock?.close();
       _ownedPaths.remove(lockPath);
       if (pending != null && await pending.exists()) await pending.delete();
