@@ -39,6 +39,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify committed dependency lock
+        shell: bash
+        run: |
+          if ! git diff --quiet -- pubspec.lock; then
+            printf 'RESOLVED_LOCKFILE_BASE64='
+            base64 -w0 pubspec.lock
+            printf '\\n'
+            echo "::error::Commit the resolved pubspec.lock so local and CI share dependencies."
+            exit 1
+          fi
+
       - name: Generate TLS fixture for health integration
         shell: bash
         run: |
