@@ -2,13 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/lan/lan_health_client.dart';
+import '../../core/lan/lan_pairing_client.dart';
+import 'companion_access_panel.dart';
+import 'companion_credential_store.dart';
 
 class SalonCompanionApp extends StatelessWidget {
   const SalonCompanionApp({
     super.key,
     this.checker = const PinnedLanHealthClient(),
+    this.pairingClient = const PinnedLanPairingClient(),
+    this.credentialStore = const AndroidCompanionCredentialStore(),
   });
   final LanHealthChecker checker;
+  final LanPairingClient pairingClient;
+  final CompanionCredentialStore credentialStore;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -18,13 +25,15 @@ class SalonCompanionApp extends StatelessWidget {
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF805A45)),
     ),
-    home: _ConnectionPage(checker: checker),
+    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore),
   );
 }
 
 class _ConnectionPage extends StatefulWidget {
-  const _ConnectionPage({required this.checker});
+  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore});
   final LanHealthChecker checker;
+  final LanPairingClient pairingClient;
+  final CompanionCredentialStore credentialStore;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();
@@ -41,6 +50,8 @@ class _ConnectionPageState extends State<_ConnectionPage>
   bool _busy = false;
   String? _message;
   int _generation = 0;
+  LanConnection? _connection;
+  bool _authorized = false;
 
   @override
   void initState() {
@@ -55,6 +66,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
       if (!mounted) return;
       _url.text = preferences.getString(_urlKey) ?? '';
       _pin.text = preferences.getString(_pinKey) ?? '';
+      try { _connection = LanConnection(_url.text, _pin.text); } catch (_) {}
     } catch (_) {
       // Connection can still be entered if preferences are unavailable.
     } finally {
@@ -76,7 +88,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
   }
 
   void _edited(String _) {
-    setState(() => _message = null);
+    setState(() { _message = null; _connection = null; _authorized = false; });
   }
 
   Future<void> _check() async {
@@ -99,9 +111,12 @@ class _ConnectionPageState extends State<_ConnectionPage>
         saved = false;
       }
       if (!mounted || generation != _generation) return;
-      setState(() => _message = saved
+      setState(() {
+        _connection = connection;
+        _message = saved
         ? 'Máy salon đang phản hồi. Đã lưu cấu hình kết nối.'
-        : 'Máy salon đang phản hồi. Chưa lưu được cấu hình.');
+        : 'Máy salon đang phản hồi. Chưa lưu được cấu hình.';
+      });
     } catch (_) {
       if (mounted && generation == _generation) {
         setState(() => _message =
@@ -126,13 +141,14 @@ class _ConnectionPageState extends State<_ConnectionPage>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Kết nối máy salon')),
+    appBar: AppBar(title: Text(_authorized ? 'Salon — Trang chính' : 'Kết nối máy salon')),
     body: SafeArea(
       child: _loading
         ? const Center(child: CircularProgressIndicator())
         : ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              if (!_authorized) ...[
               const Text(
                 'Trên máy salon, mở Cài đặt → Kết nối điện thoại. '
                 'Lấy địa chỉ và mã xác minh rồi nhập vào hai ô bên dưới.',
@@ -202,9 +218,17 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 const SizedBox(height: 16),
                 Text(_message!, key: const Key('companion-result')),
               ],
+              ],
+              if (_connection != null)
+                CompanionAccessPanel(
+                  key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
+                  connection: _connection!, client: widget.pairingClient,
+                  store: widget.credentialStore,
+                  onAccess: (value) { if (mounted) setState(() => _authorized = value); },
+                ),
               const SizedBox(height: 24),
               const Text(
-                'Hiện có thể kiểm tra kết nối. Chức năng khách hàng và '
+                'Có thể ghép quyền và kiểm tra kết nối. Chức năng khách hàng và '
                 'hóa đơn trên điện thoại đang được phát triển.',
               ),
               const SizedBox(height: 8),

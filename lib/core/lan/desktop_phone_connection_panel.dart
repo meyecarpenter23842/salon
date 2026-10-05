@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../models/audit_event.dart';
 import '../../shared/widgets/sensitive_action_authorization.dart';
 import 'desktop_lan_controller.dart';
+import 'desktop_pairing_panel.dart';
 import 'lan_setup_service.dart';
 
 /// One view for Settings and the desktop toolbar, following live host status.
@@ -174,6 +175,7 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Chọn mạng rồi bấm Bật kết nối điện thoại trên app chính của máy salon.',
             ),
           ],
+          const DesktopPairingPanel(),
           const SizedBox(height: 16),
           const Text(
             'Giữ máy salon và app này mở khi dùng điện thoại. '
@@ -185,7 +187,7 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Nếu điện thoại chưa vào được, kiểm tra Tường lửa Windows và mạng Wi-Fi.'),
           const SizedBox(height: 8),
           const Text(
-            'Hiện có thể kiểm tra kết nối; chức năng khách hàng và hóa đơn '
+            'Có thể ghép quyền và thu hồi điện thoại; chức năng khách hàng và hóa đơn '
             'trên điện thoại đang được phát triển.',
           ),
         ],

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'lan_health_client.dart';
 import 'lan_health_host.dart';
+import 'lan_pairing.dart';
 import 'lan_setup_service.dart';
 
 class DesktopBackendStatus {
@@ -20,11 +21,15 @@ final desktopBackendStatus = ValueNotifier<DesktopBackendStatus>(
   const DesktopBackendStatus('Chưa cấu hình kết nối điện thoại'),
 );
 
+final desktopPhoneRegistry = ValueNotifier<LanPairingRegistry?>(null);
+
 // Registered only while the licensed desktop main scope is alive.
 Future<void> Function(InternetAddress)? enableDesktopPhoneConnection;
 
 class DesktopLanController {
-  DesktopLanController(this.setup, this.status);
+  DesktopLanController(this.setup, this.status)
+      : pairing = LanPairingRegistry(file: File('${setup.directory.path}/devices.json'));
+  final LanPairingRegistry pairing;
   final LanSetupService setup;
   final ValueNotifier<DesktopBackendStatus> status;
   LanHealthHost? _host;
@@ -48,6 +53,7 @@ class DesktopLanController {
     try {
       await _host?.stop();
       _host = null;
+      pairing.setActive(false);
       if (_closed) return;
       final config = await prepare();
       if (_closed) return;
@@ -57,7 +63,7 @@ class DesktopLanController {
       }
       final fingerprint = await config.certificateSha256();
       if (_closed) return;
-      final host = LanHealthHost(lockFile: File('${setup.directory.path}/backend.lock'));
+      final host = LanHealthHost(lockFile: File('${setup.directory.path}/backend.lock'), pairing: pairing);
       _host = host;
       await host.start(config);
       if (_closed) {
@@ -88,6 +94,7 @@ class DesktopLanController {
 
   Future<void> stop() async {
     _closed = true;
+    pairing.setActive(false);
     await _operation;
     await _host?.stop();
     status.value = const DesktopBackendStatus('Kết nối điện thoại đã dừng');

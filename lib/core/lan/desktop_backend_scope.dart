@@ -32,6 +32,7 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
         _controller = DesktopLanController(
         LanSetupService(desktopLanDirectory()), desktopBackendStatus,
       );
+      desktopPhoneRegistry.value = _controller!.pairing;
       _enable = _controller!.enable;
       enableDesktopPhoneConnection = _enable;
         unawaited(_controller!.startSaved());
@@ -46,6 +47,9 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
   Future<void> _stop() async {
     if (identical(enableDesktopPhoneConnection, _enable)) {
       enableDesktopPhoneConnection = null;
+    }
+    if (identical(desktopPhoneRegistry.value, _controller?.pairing)) {
+      desktopPhoneRegistry.value = null;
     }
     await _controller?.stop();
   }
