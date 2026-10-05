@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/services/sensitive_action_service.dart';
+import 'package:salonmanager/core/providers/repository_providers.dart';
 import 'package:salonmanager/core/lan/desktop_lan_controller.dart';
 import 'package:salonmanager/core/lan/desktop_pairing_panel.dart';
 import 'package:salonmanager/core/lan/lan_contract.dart';
@@ -74,6 +77,14 @@ class _PanelRegistry extends LanPairingRegistry {
     entries[index] = entries[index].withState(state);
     notifyListeners();
   }
+}
+
+class _LockedSecurity extends SensitiveActionService {
+  _LockedSecurity() : super(SalonDatabase.instance);
+  @override
+  bool get isOwnerSessionActive => false;
+  @override
+  Future<bool> isProtectionConfigured() async => true;
 }
 
 void main() {
@@ -191,4 +202,27 @@ void main() {
       registry.dispose();
     }
   });
+  testWidgets('locked desktop Owner must authorize before a phone can be approved', (tester) async {
+    final registry = _PanelRegistry();
+    final old = desktopPhoneRegistry.value;
+    desktopPhoneRegistry.value = registry;
+    try {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [sensitiveActionServiceProvider.overrideWithValue(_LockedSecurity())],
+        child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: DesktopPairingPanel())))));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('phone-approve-${'a' * 64}')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('owner-authorization-dialog')), findsOneWidget);
+      expect(registry.phones.first.state, PhoneAccess.pending);
+      await tester.tap(find.text('Hủy'));
+      await tester.pumpAndSettle();
+      expect(registry.phones.first.state, PhoneAccess.pending);
+      await tester.pumpWidget(const SizedBox());
+    } finally {
+      desktopPhoneRegistry.value = old;
+      registry.dispose();
+    }
+  });
+
 }
