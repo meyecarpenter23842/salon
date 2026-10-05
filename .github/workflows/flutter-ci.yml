@@ -45,7 +45,7 @@ jobs:
           if ! git diff --quiet -- pubspec.lock; then
             printf 'RESOLVED_LOCKFILE_BASE64='
             base64 -w0 pubspec.lock
-            printf '\\n'
+            printf '\n'
             echo "::error::Commit the resolved pubspec.lock so local and CI share dependencies."
             exit 1
           fi
