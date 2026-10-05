@@ -370,6 +370,24 @@ class SalonDatabase {
           batch.execute('CREATE INDEX IF NOT EXISTS idx_cash_movements_shift_id ON cash_movements(shift_id)');
         }
 
+        if (oldVersion < 15) {
+          batch.execute(DatabaseSchema.createInvoicePaymentsTable);
+          batch.execute(DatabaseSchema.createInvoicePaymentsInvoiceIdIndex);
+          batch.execute(
+            'INSERT OR IGNORE INTO invoice_payments '
+            '(id, invoice_id, payment_method, amount, created_at) '
+            "SELECT 'payment-legacy-' || id, id, "
+            "CASE payment_method "
+            "WHEN 'Tiền mặt' THEN 'Tiền mặt' "
+            "WHEN 'Chuyển khoản' THEN 'Chuyển khoản' "
+            "WHEN 'Thẻ' THEN 'Thẻ' "
+            "ELSE 'Tiền mặt' END, "
+            'total_amount, COALESCE(paid_at, updated_at, created_at) '
+            'FROM invoices '
+            'WHERE paid_at IS NOT NULL AND total_amount > 0',
+          );
+        }
+
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {

@@ -68,11 +68,69 @@ class _CheckoutPanel extends ConsumerWidget {
             ),
             SizedBox(height: dense ? 4 : 7),
             _PaymentMethodSelector(
-              selected: draft.paymentMethod,
+              selected: draft.hasSplitPayment ? '' : draft.paymentMethod,
               locked: draft.isPaid || busy,
               onSelected: (method) =>
                   _updateInvoicePaymentMethod(context, ref, method),
             ),
+            const SizedBox(height: 7),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const Key('billing-split-payment-action'),
+                onPressed: draft.isPaid || busy || draft.totalAmount <= 0
+                    ? null
+                    : () => _openSplitPaymentEditor(context, ref, draft),
+                icon: const Icon(Icons.call_split_rounded, size: 17),
+                label: Text(
+                  draft.hasSplitPayment
+                      ? 'Sửa chia thanh toán'
+                      : 'Chia thanh toán',
+                ),
+              ),
+            ),
+            if (draft.paymentAllocations.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              Container(
+                key: const Key('billing-split-payment-summary'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.panelRaised,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: draft.paymentAllocationMatchesTotal
+                        ? AppColors.cardBorder
+                        : AppColors.warning,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _paymentBreakdownLabel(draft),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (!draft.paymentAllocationMatchesTotal) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        draft.paymentAllocationDifference > 0
+                            ? 'Còn thiếu ${_currency(draft.paymentAllocationDifference)}'
+                            : 'Đang vượt ${_currency(-draft.paymentAllocationDifference)}',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             if (draft.paidAt != null) ...[
               const SizedBox(height: 9),
               PremiumStatusPill(
@@ -88,7 +146,11 @@ class _CheckoutPanel extends ConsumerWidget {
               height: dense ? 38 : 44,
               child: FilledButton.icon(
                 key: const Key('billing-checkout-action'),
-                onPressed: busy || draft.isPaid || draft.lines.isEmpty
+                onPressed:
+                    busy ||
+                        draft.isPaid ||
+                        draft.lines.isEmpty ||
+                        !draft.paymentAllocationMatchesTotal
                     ? null
                     : () => _checkoutAndShowReceipt(
                         context,
@@ -122,6 +184,13 @@ class _CheckoutPanel extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 'Chọn khách hàng trước khi thanh toán.',
+                style: TextStyle(fontSize: 10.5, color: AppColors.warning),
+              ),
+            ],
+            if (!draft.paymentAllocationMatchesTotal) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Cập nhật lại chia thanh toán để khớp tổng bill.',
                 style: TextStyle(fontSize: 10.5, color: AppColors.warning),
               ),
             ],
@@ -184,7 +253,10 @@ Future<void> _checkoutAndShowReceipt(
               label: 'Tổng tiền',
               value: _currency(draft.totalAmount),
             ),
-            _ReceiptInfoLine(label: 'Thanh toán', value: draft.paymentMethod),
+            _ReceiptInfoLine(
+              label: 'Thanh toán',
+              value: _paymentBreakdownLabel(draft),
+            ),
             _ReceiptInfoLine(
               label: 'Số hạng mục',
               value: '${draft.lines.length}',
@@ -463,6 +535,202 @@ class _AmountLine extends StatelessWidget {
   }
 }
 
+Future<void> _openSplitPaymentEditor(
+  BuildContext context,
+  WidgetRef ref,
+  InvoiceDraft draft,
+) async {
+  final allocations = await showAppDialog<List<InvoicePaymentAllocation>>(
+    context: context,
+    builder: (_) => _SplitPaymentDialog(draft: draft),
+  );
+  if (allocations == null || !context.mounted) return;
+  await _updateInvoicePaymentAllocations(context, ref, allocations);
+}
+
+class _SplitPaymentDialog extends StatefulWidget {
+  const _SplitPaymentDialog({required this.draft});
+
+  final InvoiceDraft draft;
+
+  @override
+  State<_SplitPaymentDialog> createState() => _SplitPaymentDialogState();
+}
+
+class _SplitPaymentDialogState extends State<_SplitPaymentDialog> {
+  late final Map<String, TextEditingController> _controllers;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialAmounts = <String, int>{
+      for (final method in InvoiceDraft.paymentMethods) method: 0,
+    };
+    if (widget.draft.paymentAllocations.isNotEmpty) {
+      for (final allocation in widget.draft.paymentAllocations) {
+        initialAmounts[allocation.paymentMethod] = allocation.amount;
+      }
+    } else {
+      initialAmounts[widget.draft.paymentMethod] = widget.draft.totalAmount;
+    }
+    _controllers = {
+      for (final method in InvoiceDraft.paymentMethods)
+        method: TextEditingController(
+          text: (initialAmounts[method] ?? 0) > 0
+              ? (initialAmounts[method] ?? 0).toString()
+              : '',
+        ),
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allocations = _currentAllocations();
+    final allocated = allocations.fold(
+      0,
+      (sum, allocation) => sum + allocation.amount,
+    );
+    final difference = widget.draft.totalAmount - allocated;
+
+    return AlertDialog(
+      key: const Key('billing-split-payment-dialog'),
+      title: const Row(
+        children: [
+          PremiumIconBadge(icon: Icons.call_split_rounded, size: 36),
+          SizedBox(width: 9),
+          Text('Chia thanh toán'),
+        ],
+      ),
+      content: SizedBox(
+        width: adaptiveDialogWidth(context, 440),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ReceiptInfoLine(
+              label: 'Tổng bill',
+              value: _currency(widget.draft.totalAmount),
+              strong: true,
+            ),
+            const SizedBox(height: 8),
+            for (final method in InvoiceDraft.paymentMethods) ...[
+              TextField(
+                key: Key(_fieldKey(method)),
+                controller: _controllers[method],
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: method,
+                  suffixText: 'đ',
+                ),
+                onChanged: (_) => setState(() => _error = null),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                difference == 0
+                    ? 'Đã khớp tổng bill'
+                    : difference > 0
+                    ? 'Còn thiếu ${_currency(difference)}'
+                    : 'Đang vượt ${_currency(-difference)}',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: difference == 0
+                      ? AppColors.success
+                      : AppColors.warning,
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _error!,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          key: const Key('billing-split-payment-save'),
+          onPressed: _submit,
+          child: const Text('Lưu chia tiền'),
+        ),
+      ],
+    );
+  }
+
+  List<InvoicePaymentAllocation> _currentAllocations() {
+    final allocations = <InvoicePaymentAllocation>[];
+    for (final method in InvoiceDraft.paymentMethods) {
+      final amount = _parseAmount(_controllers[method]?.text ?? '');
+      if (amount > 0) {
+        allocations.add(
+          InvoicePaymentAllocation(
+            paymentMethod: method,
+            amount: amount,
+          ),
+        );
+      }
+    }
+    return allocations;
+  }
+
+  int _parseAmount(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits) ?? 0;
+  }
+
+  String _fieldKey(String method) {
+    if (method == 'Tiền mặt') return 'billing-split-cash';
+    if (method == 'Chuyển khoản') return 'billing-split-transfer';
+    return 'billing-split-card';
+  }
+
+  void _submit() {
+    final allocations = _currentAllocations();
+    if (allocations.length < 2) {
+      setState(() {
+        _error = 'Chọn ít nhất hai phương thức có số tiền lớn hơn 0.';
+      });
+      return;
+    }
+    final total = allocations.fold(
+      0,
+      (sum, allocation) => sum + allocation.amount,
+    );
+    if (total != widget.draft.totalAmount) {
+      setState(() {
+        _error = 'Tổng các phương thức phải bằng đúng tổng bill.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(allocations);
+  }
+}
+
 class _PaymentMethodSelector extends StatelessWidget {
   const _PaymentMethodSelector({
     required this.selected,
@@ -587,6 +855,18 @@ Future<void> _showConfiguredPaymentQrDialog(
   InvoiceDraft draft,
   CustomerProfile? customer,
 ) async {
+  final transferAmount = draft.hasSplitPayment
+      ? draft.paymentAmountFor('Chuyển khoản')
+      : draft.totalAmount;
+  if (transferAmount <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Bill này không có phần thanh toán chuyển khoản.'),
+      ),
+    );
+    return;
+  }
+
   try {
     final config = await ref.read(paymentConfigProvider.future);
     if (!context.mounted) return;
@@ -597,8 +877,12 @@ Future<void> _showConfiguredPaymentQrDialog(
         .replaceAll('SĐT khách', customerPhone)
         .trim();
     final payload = config.hasRequiredBankFields
-        ? 'SALON_TRANSFER|BANK=${config.bankName}|ACCOUNT=${config.accountNumber}|HOLDER=${config.accountHolder}|AMOUNT=${draft.totalAmount}|CONTENT=$transferContent'
-        : _buildPaymentQrPayload(draft, customer);
+        ? 'SALON_TRANSFER|BANK=${config.bankName}|ACCOUNT=${config.accountNumber}|HOLDER=${config.accountHolder}|AMOUNT=$transferAmount|CONTENT=$transferContent'
+        : _buildPaymentQrPayload(
+            draft,
+            customer,
+            amount: transferAmount,
+          );
 
     await showAppDialog<void>(
       context: context,
@@ -631,7 +915,7 @@ Future<void> _showConfiguredPaymentQrDialog(
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  _currency(draft.totalAmount),
+                  _currency(transferAmount),
                   style: Theme.of(dialogContext).textTheme.displayMedium
                       ?.copyWith(color: AppColors.copper),
                 ),
@@ -680,7 +964,12 @@ Future<void> _showConfiguredPaymentQrDialog(
     );
   } catch (_) {
     if (!context.mounted) return;
-    await _showPaymentQrDialog(context, draft, customer);
+    await _showPaymentQrDialog(
+      context,
+      draft,
+      customer,
+      amount: transferAmount,
+    );
   }
 }
 
@@ -724,7 +1013,7 @@ Future<void> _showCheckoutSuccessDialog(
             ),
             _ReceiptInfoLine(
               label: 'Thanh toán',
-              value: invoice.paymentMethod,
+              value: _paymentBreakdownLabel(invoice),
             ),
             _ReceiptInfoLine(
               label: 'Thời gian',
@@ -811,7 +1100,7 @@ Future<void> _showInvoiceReceiptDialog(
             _ReceiptInfoLine(
               label: 'Thanh toán',
               value:
-                  '${invoice.paymentMethod} · ${_invoiceTimeLabel(invoice.paidAt ?? invoice.updatedAt)}',
+                  '${_paymentBreakdownLabel(invoice)} · ${_invoiceTimeLabel(invoice.paidAt ?? invoice.updatedAt)}',
             ),
             const SizedBox(height: 8),
             const PremiumDivider(),
@@ -1172,7 +1461,7 @@ Future<void> _showInvoiceHistoryDialog(
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        '$time · ${invoice.paymentMethod}\n'
+                        '$time · ${_paymentBreakdownLabel(invoice)}\n'
                         '${invoice.id}$auditLine',
                         maxLines: adjustment == null ? 2 : 3,
                         overflow: TextOverflow.ellipsis,

@@ -1,4 +1,5 @@
 import '../models/invoice_draft.dart';
+import '../models/invoice_payment_allocation.dart';
 
 class InvoiceMapper {
   const InvoiceMapper._();
@@ -6,6 +7,7 @@ class InvoiceMapper {
   static InvoiceDraft fromDatabase(
     Map<String, Object?> row, {
     required List<dynamic> lines,
+    List<InvoicePaymentAllocation> paymentAllocations = const [],
   }) {
     return InvoiceDraft(
       id: row['id'].toString(),
@@ -15,6 +17,7 @@ class InvoiceMapper {
       paymentMethod: InvoiceDraft.normalizePaymentMethod(
         row['payment_method']?.toString() ?? '',
       ),
+      paymentAllocations: paymentAllocations,
       paidAt: _parseDateTime(row['paid_at']),
       createdAt: _parseDateTime(row['created_at']) ?? DateTime.now(),
       updatedAt: _parseDateTime(row['updated_at']) ?? DateTime.now(),

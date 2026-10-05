@@ -9,6 +9,7 @@ import '../models/appointment_entry.dart';
 import '../models/invoice_adjustment.dart';
 import '../models/invoice_draft.dart';
 import '../models/invoice_draft_line.dart';
+import '../models/invoice_payment_allocation.dart';
 import 'invoice_adjustment_repository.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
@@ -239,6 +240,27 @@ class SqliteInvoicesRepository
       database,
       draft.copyWith(
         paymentMethod: InvoiceDraft.normalizePaymentMethod(paymentMethod),
+        clearPaymentAllocations: true,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Future<InvoiceDraft> updateInvoicePaymentAllocations(
+    List<InvoicePaymentAllocation> allocations,
+  ) async {
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    final normalized = _normalizePaymentAllocations(
+      allocations,
+      expectedTotal: draft.totalAmount,
+    );
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        paymentMethod: normalized.first.paymentMethod,
+        paymentAllocations: normalized,
         updatedAt: DateTime.now(),
       ),
     );
@@ -662,6 +684,7 @@ class SqliteInvoicesRepository
     if (draft.lines.isEmpty) {
       throw StateError('Hóa đơn chưa có dịch vụ hoặc sản phẩm.');
     }
+    _ensureCheckoutPaymentAllocations(draft);
     return _archiveAndResetDraft(database, draft);
   }
 
@@ -712,13 +735,18 @@ class SqliteInvoicesRepository
       final customerId = invoice['customer_id']?.toString() ?? '';
       final appointmentId = _nullableId(invoice['appointment_id']);
       final totalAmount = _toInt(invoice['total_amount']);
+      final paymentSummary = await _paymentSummaryForInvoice(
+        transaction,
+        normalizedInvoiceId,
+        invoice['payment_method']?.toString() ?? '',
+      );
       final adjustment = InvoiceAdjustment(
         id: 'invoice-adjustment-${now.microsecondsSinceEpoch}',
         invoiceId: normalizedInvoiceId,
         type: type,
         reason: normalizedReason,
         amount: totalAmount,
-        paymentMethod: invoice['payment_method']?.toString() ?? '',
+        paymentMethod: paymentSummary,
         customerId: customerId,
         appointmentId: appointmentId,
         createdAt: now,
@@ -892,7 +920,27 @@ class SqliteInvoicesRepository
     final lines = rows
         .map(InvoiceDraftMapper.fromDatabase)
         .toList(growable: false);
-    return InvoiceMapper.fromDatabase(invoiceRows.first, lines: lines);
+    final paymentRows = await database.query(
+      'invoice_payments',
+      where: 'invoice_id = ?',
+      whereArgs: [invoiceId],
+      orderBy: 'id ASC',
+    );
+    final paymentAllocations = paymentRows
+        .map(
+          (row) => InvoicePaymentAllocation(
+            paymentMethod: InvoiceDraft.normalizePaymentMethod(
+              row['payment_method']?.toString() ?? '',
+            ),
+            amount: _toInt(row['amount']),
+          ),
+        )
+        .toList(growable: false);
+    return InvoiceMapper.fromDatabase(
+      invoiceRows.first,
+      lines: lines,
+      paymentAllocations: paymentAllocations,
+    );
   }
 
   Future<InvoiceDraft> _saveDraft(
@@ -965,6 +1013,8 @@ class SqliteInvoicesRepository
         }
       }
 
+      await _replaceDraftPaymentAllocations(transaction, draft);
+
       await transaction.delete(
         'app_settings',
         where: 'key = ?',
@@ -1001,6 +1051,11 @@ class SqliteInvoicesRepository
         'invoices',
         InvoiceMapper.toDatabase(archivedDraft),
         conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await _insertArchivedPaymentAllocations(
+        transaction,
+        archivedDraft,
+        now,
       );
 
       for (final line in draft.lines) {
@@ -1049,6 +1104,144 @@ class SqliteInvoicesRepository
     return _loadDraft(database);
   }
 
+
+  Future<void> _replaceDraftPaymentAllocations(
+    DatabaseExecutor database,
+    InvoiceDraft draft,
+  ) async {
+    await database.delete(
+      'invoice_payments',
+      where: 'invoice_id = ?',
+      whereArgs: [draft.id],
+    );
+    if (draft.paymentAllocations.isEmpty) {
+      return;
+    }
+    await _insertInvoicePaymentAllocations(
+      database,
+      invoiceId: draft.id,
+      allocations: draft.paymentAllocations,
+      createdAt: draft.updatedAt,
+    );
+  }
+
+  Future<void> _insertArchivedPaymentAllocations(
+    DatabaseExecutor database,
+    InvoiceDraft draft,
+    DateTime createdAt,
+  ) async {
+    if (draft.totalAmount <= 0) {
+      return;
+    }
+    await _insertInvoicePaymentAllocations(
+      database,
+      invoiceId: draft.id,
+      allocations: draft.effectivePaymentAllocations,
+      createdAt: createdAt,
+    );
+  }
+
+  Future<void> _insertInvoicePaymentAllocations(
+    DatabaseExecutor database, {
+    required String invoiceId,
+    required List<InvoicePaymentAllocation> allocations,
+    required DateTime createdAt,
+  }) async {
+    for (var index = 0; index < allocations.length; index++) {
+      final allocation = allocations[index];
+      await database.insert(
+        'invoice_payments',
+        {
+          'id': 'payment-$invoiceId-$index',
+          'invoice_id': invoiceId,
+          'payment_method': allocation.paymentMethod,
+          'amount': allocation.amount,
+          'created_at': createdAt.toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    }
+  }
+
+  List<InvoicePaymentAllocation> _normalizePaymentAllocations(
+    List<InvoicePaymentAllocation> allocations, {
+    required int expectedTotal,
+  }) {
+    final normalized = <InvoicePaymentAllocation>[];
+    final seen = <String>{};
+
+    for (final allocation in allocations) {
+      String? method;
+      final rawMethod = allocation.paymentMethod.trim().toLowerCase();
+      for (final candidate in InvoiceDraft.paymentMethods) {
+        if (candidate.toLowerCase() == rawMethod) {
+          method = candidate;
+          break;
+        }
+      }
+      if (method == null) {
+        throw StateError('Phương thức thanh toán không hợp lệ.');
+      }
+      if (allocation.amount <= 0) {
+        throw StateError('Số tiền của mỗi phương thức phải lớn hơn 0.');
+      }
+      if (!seen.add(method)) {
+        throw StateError('Mỗi phương thức chỉ được xuất hiện một lần.');
+      }
+      normalized.add(
+        InvoicePaymentAllocation(
+          paymentMethod: method,
+          amount: allocation.amount,
+        ),
+      );
+    }
+
+    if (normalized.length < 2) {
+      throw StateError('Chia thanh toán cần ít nhất hai phương thức.');
+    }
+    final total = normalized.fold(
+      0,
+      (sum, allocation) => sum + allocation.amount,
+    );
+    if (total != expectedTotal) {
+      throw StateError('Tổng số tiền chia phải bằng tổng hóa đơn.');
+    }
+    return normalized;
+  }
+
+  void _ensureCheckoutPaymentAllocations(InvoiceDraft draft) {
+    if (draft.paymentAllocations.isEmpty) {
+      return;
+    }
+    _normalizePaymentAllocations(
+      draft.paymentAllocations,
+      expectedTotal: draft.totalAmount,
+    );
+  }
+
+  Future<String> _paymentSummaryForInvoice(
+    DatabaseExecutor database,
+    String invoiceId,
+    String fallbackMethod,
+  ) async {
+    final rows = await database.query(
+      'invoice_payments',
+      columns: const ['payment_method'],
+      where: 'invoice_id = ?',
+      whereArgs: [invoiceId],
+      orderBy: 'id ASC',
+    );
+    if (rows.isEmpty) {
+      return InvoiceDraft.normalizePaymentMethod(fallbackMethod);
+    }
+    return rows
+        .map(
+          (row) => InvoiceDraft.normalizePaymentMethod(
+            row['payment_method']?.toString() ?? '',
+          ),
+        )
+        .join(' + ');
+  }
 
   Future<void> _deductInventoryForCheckout(
     DatabaseExecutor database,
@@ -1321,6 +1514,13 @@ class SqliteInvoicesRepository
       'customerId': draft.customerId,
       'discountAmount': draft.discountAmount,
       'paymentMethod': draft.paymentMethod,
+      'paymentAllocations': [
+        for (final allocation in draft.paymentAllocations)
+          {
+            'paymentMethod': allocation.paymentMethod,
+            'amount': allocation.amount,
+          },
+      ],
       'paidAt': draft.paidAt?.toIso8601String(),
       'createdAt': draft.createdAt.toIso8601String(),
       'updatedAt': draft.updatedAt.toIso8601String(),
@@ -1363,6 +1563,24 @@ class SqliteInvoicesRepository
         ? null
         : DateTime.tryParse(paidAtRaw);
 
+    final paymentAllocations = <InvoicePaymentAllocation>[];
+    final rawPaymentAllocations = decoded['paymentAllocations'];
+    if (rawPaymentAllocations is List) {
+      for (final rawPayment in rawPaymentAllocations) {
+        if (rawPayment is! Map) continue;
+        final amount = _toInt(rawPayment['amount']);
+        if (amount <= 0) continue;
+        paymentAllocations.add(
+          InvoicePaymentAllocation(
+            paymentMethod: InvoiceDraft.normalizePaymentMethod(
+              rawPayment['paymentMethod']?.toString() ?? '',
+            ),
+            amount: amount,
+          ),
+        );
+      }
+    }
+
     final lines = <InvoiceDraftLine>[];
     for (final rawLine in rawLines) {
       if (rawLine is! Map) {
@@ -1393,6 +1611,7 @@ class SqliteInvoicesRepository
       paymentMethod: InvoiceDraft.normalizePaymentMethod(
         decoded['paymentMethod']?.toString() ?? '',
       ),
+      paymentAllocations: paymentAllocations,
       paidAt: paidAt,
       createdAt: createdAt,
       updatedAt: updatedAt,

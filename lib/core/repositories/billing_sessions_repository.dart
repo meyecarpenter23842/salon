@@ -1,5 +1,6 @@
 import '../models/appointment_entry.dart';
 import '../models/invoice_draft.dart';
+import '../models/invoice_payment_allocation.dart';
 
 abstract interface class BillingSessionsRepository {
   Future<List<InvoiceDraft>> fetchActiveSessions();
@@ -15,6 +16,11 @@ abstract interface class BillingSessionsRepository {
   Future<InvoiceDraft> updatePaymentMethod(
     String sessionId,
     String paymentMethod,
+  );
+
+  Future<InvoiceDraft> updatePaymentAllocations(
+    String sessionId,
+    List<InvoicePaymentAllocation> allocations,
   );
 
   Future<InvoiceDraft> updateDiscount(String sessionId, int discountAmount);

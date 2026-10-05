@@ -16,6 +16,7 @@ import '../../../../core/models/employee_upsert_input.dart';
 import '../../../../core/models/invoice_adjustment.dart';
 import '../../../../core/models/invoice_draft.dart';
 import '../../../../core/models/invoice_draft_line.dart';
+import '../../../../core/models/invoice_payment_allocation.dart';
 import '../../../../core/models/receipt_template_config.dart';
 import '../../../../core/models/retail_product_item.dart';
 import '../../../../core/models/retail_product_upsert_input.dart';
@@ -67,6 +68,42 @@ Future<void> _updateInvoicePaymentMethod(
       .updateInvoicePaymentMethod(paymentMethod);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+}
+
+Future<void> _updateInvoicePaymentAllocations(
+  BuildContext context,
+  WidgetRef ref,
+  List<InvoicePaymentAllocation> allocations,
+) async {
+  try {
+    await ref
+        .read(invoicesRepositoryProvider)
+        .updateInvoicePaymentAllocations(allocations);
+    if (!context.mounted) return;
+    ref.invalidate(invoiceDraftProvider);
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Không chia được thanh toán: ${_friendlyCheckoutError(error)}',
+        ),
+      ),
+    );
+  }
+}
+
+String _paymentBreakdownLabel(InvoiceDraft draft) {
+  final allocations = draft.effectivePaymentAllocations;
+  if (allocations.length <= 1) {
+    return draft.paymentMethod;
+  }
+  return allocations
+      .map(
+        (allocation) =>
+            '${allocation.paymentMethod} ${_currency(allocation.amount)}',
+      )
+      .join(' + ');
 }
 
 Future<void> _addInvoiceService(
@@ -216,18 +253,29 @@ Future<void> _createProductAndAdd(BuildContext context, WidgetRef ref) async {
   await _addInvoiceProduct(context, ref, product);
 }
 
-String _buildPaymentQrPayload(InvoiceDraft draft, CustomerProfile? customer) {
+String _buildPaymentQrPayload(
+  InvoiceDraft draft,
+  CustomerProfile? customer, {
+  int? amount,
+}) {
   final customerName = customer?.fullName ?? draft.customerId;
   final timestamp = DateTime.now().millisecondsSinceEpoch;
-  return 'SALONPAY|invoice=${draft.id}|customer=$customerName|amount=${draft.totalAmount}|method=${draft.paymentMethod}|ts=$timestamp';
+  final payableAmount = amount ?? draft.totalAmount;
+  return 'SALONPAY|invoice=${draft.id}|customer=$customerName|amount=$payableAmount|method=${draft.paymentSummary}|ts=$timestamp';
 }
 
 Future<void> _showPaymentQrDialog(
   BuildContext context,
   InvoiceDraft draft,
-  CustomerProfile? customer,
-) async {
-  final payload = _buildPaymentQrPayload(draft, customer);
+  CustomerProfile? customer, {
+  int? amount,
+}) async {
+  final payableAmount = amount ?? draft.totalAmount;
+  final payload = _buildPaymentQrPayload(
+    draft,
+    customer,
+    amount: payableAmount,
+  );
   await showAppDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -258,7 +306,7 @@ Future<void> _showPaymentQrDialog(
             ),
             const SizedBox(height: 14),
             Text(
-              _currency(draft.totalAmount),
+              _currency(payableAmount),
               style: Theme.of(dialogContext).textTheme.displayMedium
                   ?.copyWith(color: AppColors.copper),
             ),

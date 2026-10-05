@@ -1,7 +1,7 @@
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 14;
+  static const int version = 15;
 
   static const String createInvoiceAdjustmentsTable = '''
     CREATE TABLE IF NOT EXISTS invoice_adjustments (
@@ -57,6 +57,22 @@ class DatabaseSchema {
       FOREIGN KEY (shift_id) REFERENCES cashier_shifts(id) ON DELETE RESTRICT
     )
     ''';
+
+  static const String createInvoicePaymentsTable = '''
+    CREATE TABLE IF NOT EXISTS invoice_payments (
+      id TEXT PRIMARY KEY,
+      invoice_id TEXT NOT NULL,
+      payment_method TEXT NOT NULL CHECK(payment_method IN ('Tiền mặt', 'Chuyển khoản', 'Thẻ')),
+      amount INTEGER NOT NULL CHECK(amount > 0),
+      created_at TEXT NOT NULL,
+      UNIQUE(invoice_id, payment_method),
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    )
+    ''';
+
+  static const String createInvoicePaymentsInvoiceIdIndex =
+      'CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice_id '
+      'ON invoice_payments(invoice_id)';
 
   static const List<String> createStatements = [
     '''
@@ -242,6 +258,7 @@ class DatabaseSchema {
       FOREIGN KEY (employee_id) REFERENCES employees(id)
     )
     ''',
+    createInvoicePaymentsTable,
     createInvoiceAdjustmentsTable,
     createInvoiceAdjustmentsUpdateGuard,
     createInvoiceAdjustmentsDeleteGuard,
@@ -266,6 +283,7 @@ class DatabaseSchema {
     'CREATE INDEX idx_invoice_items_invoice_id ON invoice_items(invoice_id)',
     'CREATE INDEX idx_invoice_items_item_type ON invoice_items(item_type)',
     'CREATE INDEX idx_invoice_items_employee_id ON invoice_items(employee_id)',
+    createInvoicePaymentsInvoiceIdIndex,
     createInvoiceAdjustmentsCreatedAtIndex,
     'CREATE UNIQUE INDEX idx_cashier_shifts_single_open ON cashier_shifts((1)) WHERE closed_at IS NULL',
     'CREATE INDEX idx_cash_movements_shift_id ON cash_movements(shift_id)',
