@@ -20,7 +20,7 @@ class AndroidCompanionCredentialStore implements CompanionCredentialStore {
   static const _channel = MethodChannel('salon/companion_credentials');
   @override
   Future<CompanionCredential?> read() async {
-    final text = await _channel.invokeMethod<String>('read');
+    final text = await _channel.invokeMethod<String>('read').timeout(const Duration(seconds: 3));
     if (text == null) return null;
     final json = jsonDecode(text) as Map;
     final pin = json['pin'] as String;
@@ -36,7 +36,7 @@ class AndroidCompanionCredentialStore implements CompanionCredentialStore {
   Future<void> write(CompanionCredential credential) =>
       _channel.invokeMethod<void>('write', jsonEncode({
         'pin': credential.pin, 'token': credential.token,
-      }));
+      })).timeout(const Duration(seconds: 3));
   @override
-  Future<void> clear() => _channel.invokeMethod<void>('clear');
+  Future<void> clear() => _channel.invokeMethod<void>('clear').timeout(const Duration(seconds: 3));
 }
