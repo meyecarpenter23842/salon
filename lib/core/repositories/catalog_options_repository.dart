@@ -115,7 +115,9 @@ class FakeCatalogOptionsRepository implements CatalogOptionsRepository {
     if (old == null) throw StateError('Danh mục không còn tồn tại.');
     final normalized = _validateName(name);
     if (_options.values.any((o) => o.id != id && o.kind == old.kind &&
-        catalogNameKey(o.name) == catalogNameKey(normalized))) throw StateError('Tên danh mục đã tồn tại.');
+        catalogNameKey(o.name) == catalogNameKey(normalized))) {
+      throw StateError('Tên danh mục đã tồn tại.');
+    }
     _options[id] = CatalogOption(id: id, kind: old.kind, name: normalized, isActive: old.isActive);
   }
   @override

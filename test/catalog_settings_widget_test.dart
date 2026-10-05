@@ -17,7 +17,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(overrides: [
       catalogOptionsRepositoryProvider.overrideWithValue(repository),
     ], child: const MaterialApp(home: Scaffold(body: CatalogManagementTabs(
-      kinds: [CatalogOptionKind.productUnit], child: Text('Danh sách sản phẩm')))))));
+      kinds: [CatalogOptionKind.productUnit], child: Text('Danh sách sản phẩm'))))));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Thiết lập'));
     await tester.pumpAndSettle();
