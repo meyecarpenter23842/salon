@@ -388,6 +388,14 @@ class SalonDatabase {
           );
         }
 
+
+        if (oldVersion < 16) {
+          batch.execute(DatabaseSchema.createAuditEventsTable);
+          batch.execute(DatabaseSchema.createAuditEventsUpdateGuard);
+          batch.execute(DatabaseSchema.createAuditEventsDeleteGuard);
+          batch.execute(DatabaseSchema.createAuditEventsCreatedAtIndex);
+        }
+
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {

@@ -47,7 +47,7 @@ void main() {
   test('top-level business tables giữ TEXT id + created_at/updated_at', () async {
     expect(
       DatabaseSchema.version,
-      15,
+      16,
       reason:
           'Schema 15 bổ sung phân bổ thanh toán mà không đổi identity bảng nghiệp vụ.',
     );

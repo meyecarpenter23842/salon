@@ -9,7 +9,7 @@ Hair Spa Manager là ứng dụng Flutter desktop-first để quản lý vận h
 - Các màn hình Khách hàng, Lịch hẹn, Dịch vụ, Nhân sự, Hóa đơn và Thiết lập đã có luồng thao tác chính.
 - Lịch hẹn hỗ trợ nhiều dịch vụ trong một booking và hóa đơn có thể prefill từ toàn bộ dịch vụ của lịch hẹn.
 - Lịch đã thanh toán được khóa khỏi các thay đổi nghiệp vụ có thể làm lệch hóa đơn; lịch hủy không còn được tính như lịch active/upcoming.
-- POS lưu bền bill dở, bảo vệ checkout trùng, ghi nhận nhân viên theo dòng dịch vụ, hỗ trợ refund/void có audit, nối tồn kho thật, chốt ca thu ngân và chia thanh toán nhiều phương thức trên một bill.
+- POS lưu bền bill dở, bảo vệ checkout trùng, ghi nhận nhân viên theo dòng dịch vụ, hỗ trợ refund/void, nối tồn kho thật, chốt ca thu ngân, split payment và Owner PIN + audit bất biến cho thao tác nhạy cảm.
 - Overview đã tổng hợp KPI và khối tổng quan từ SQLite runtime.
 - Reports đọc dữ liệu thật từ SQLite runtime; database mới/rỗng giữ trạng thái rỗng và không tự seed dữ liệu mẫu.
 - Reports period selector đã nối query thật theo kỳ: Hôm nay, 7 ngày, 30 ngày, Tháng này.
@@ -186,7 +186,7 @@ Từ bản hiện tại, ứng dụng sẽ hiển thị màn hình lỗi khởi 
 
 ## Hạn chế còn lại
 
-- Chưa có permission/audit đầy đủ cho toàn bộ thao tác nhạy cảm.
+- Owner PIN hiện bảo vệ giảm giá, sửa giá bill, refund/void và các save settings qua runtime repository; chưa có đăng nhập/phân quyền nhiều actor theo nhân viên.
 - Chưa có payroll/chấm công hoàn chỉnh.
 - Release tooling hỗ trợ Authenticode code signing. Bản phát hành chính thức phải dùng certificate hợp lệ và package với `-RequireCodeSigning`; source/CI không chứa private key.
 

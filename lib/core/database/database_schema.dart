@@ -1,7 +1,7 @@
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 15;
+  static const int version = 16;
 
   static const String createInvoiceAdjustmentsTable = '''
     CREATE TABLE IF NOT EXISTS invoice_adjustments (
@@ -73,6 +73,40 @@ class DatabaseSchema {
   static const String createInvoicePaymentsInvoiceIdIndex =
       'CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice_id '
       'ON invoice_payments(invoice_id)';
+
+
+  static const String createAuditEventsTable = '''
+    CREATE TABLE IF NOT EXISTS audit_events (
+      id TEXT PRIMARY KEY,
+      actor_name TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL DEFAULT '',
+      result TEXT NOT NULL CHECK(result IN ('success', 'failure', 'denied')),
+      detail TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    )
+    ''';
+
+  static const String createAuditEventsUpdateGuard = '''
+    CREATE TRIGGER IF NOT EXISTS trg_audit_events_no_update
+    BEFORE UPDATE ON audit_events
+    BEGIN
+      SELECT RAISE(ABORT, 'audit events are immutable');
+    END
+    ''';
+
+  static const String createAuditEventsDeleteGuard = '''
+    CREATE TRIGGER IF NOT EXISTS trg_audit_events_no_delete
+    BEFORE DELETE ON audit_events
+    BEGIN
+      SELECT RAISE(ABORT, 'audit events are immutable');
+    END
+    ''';
+
+  static const String createAuditEventsCreatedAtIndex =
+      'CREATE INDEX IF NOT EXISTS idx_audit_events_created_at '
+      'ON audit_events(created_at)';
 
   static const List<String> createStatements = [
     '''
@@ -262,6 +296,9 @@ class DatabaseSchema {
     createInvoiceAdjustmentsTable,
     createInvoiceAdjustmentsUpdateGuard,
     createInvoiceAdjustmentsDeleteGuard,
+    createAuditEventsTable,
+    createAuditEventsUpdateGuard,
+    createAuditEventsDeleteGuard,
     createCashierShiftsTable,
     createCashMovementsTable,
     '''
@@ -285,6 +322,7 @@ class DatabaseSchema {
     'CREATE INDEX idx_invoice_items_employee_id ON invoice_items(employee_id)',
     createInvoicePaymentsInvoiceIdIndex,
     createInvoiceAdjustmentsCreatedAtIndex,
+    createAuditEventsCreatedAtIndex,
     'CREATE UNIQUE INDEX idx_cashier_shifts_single_open ON cashier_shifts((1)) WHERE closed_at IS NULL',
     'CREATE INDEX idx_cash_movements_shift_id ON cash_movements(shift_id)',
     'CREATE INDEX idx_service_formulas_service_id ON service_formulas(service_id)',

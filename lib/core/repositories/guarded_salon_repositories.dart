@@ -6,10 +6,12 @@ import '../models/appointment_entry.dart';
 import '../models/appointment_upsert_input.dart';
 import '../models/invoice_adjustment.dart';
 import '../models/invoice_draft.dart';
+import '../models/audit_event.dart';
 import '../models/invoice_payment_allocation.dart';
 import 'invoice_adjustment_repository.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
+import '../services/sensitive_action_service.dart';
 
 /// Runtime guards for appointment invariants that span appointments, invoices,
 /// and overview reads. The SQLite repositories remain focused on persistence;
@@ -301,10 +303,15 @@ class GuardedInvoicesRepository
         InvoicesRepository,
         InvoiceLineActionsRepository,
         InvoiceAdjustmentRepository {
-  GuardedInvoicesRepository(this._database, this._delegate);
+  GuardedInvoicesRepository(
+    this._database,
+    this._delegate, [
+    SensitiveActionService? security,
+  ]) : _security = security ?? SensitiveActionService(_database);
 
   final SalonDatabase _database;
   final InvoicesRepository _delegate;
+  final SensitiveActionService _security;
   bool _checkoutInFlight = false;
   final Set<String> _adjustmentsInFlight = <String>{};
 
@@ -338,11 +345,16 @@ class GuardedInvoicesRepository
     String invoiceId, {
     required String reason,
   }) {
-    return _runAdjustment(
-      invoiceId,
-      () => _invoiceAdjustmentDelegate.refundInvoice(
+    return _security.runSensitive(
+      action: SensitiveAction.invoiceAdjustment,
+      targetType: 'invoice',
+      targetId: invoiceId,
+      operation: () => _runAdjustment(
         invoiceId,
-        reason: reason,
+        () => _invoiceAdjustmentDelegate.refundInvoice(
+          invoiceId,
+          reason: reason,
+        ),
       ),
     );
   }
@@ -352,11 +364,16 @@ class GuardedInvoicesRepository
     String invoiceId, {
     required String reason,
   }) {
-    return _runAdjustment(
-      invoiceId,
-      () => _invoiceAdjustmentDelegate.voidInvoice(
+    return _security.runSensitive(
+      action: SensitiveAction.invoiceAdjustment,
+      targetType: 'invoice',
+      targetId: invoiceId,
+      operation: () => _runAdjustment(
         invoiceId,
-        reason: reason,
+        () => _invoiceAdjustmentDelegate.voidInvoice(
+          invoiceId,
+          reason: reason,
+        ),
       ),
     );
   }
@@ -384,8 +401,15 @@ class GuardedInvoicesRepository
   ) => _delegate.updateInvoicePaymentAllocations(allocations);
 
   @override
-  Future<InvoiceDraft> updateInvoiceDiscount(int discountAmount) =>
-      _delegate.updateInvoiceDiscount(discountAmount);
+  Future<InvoiceDraft> updateInvoiceDiscount(int discountAmount) async {
+    final draft = await _delegate.fetchInvoiceDraft();
+    return _security.runSensitive(
+      action: SensitiveAction.billDiscount,
+      targetType: 'invoice',
+      targetId: draft.id,
+      operation: () => _delegate.updateInvoiceDiscount(discountAmount),
+    );
+  }
 
   @override
   Future<InvoiceDraft> addInvoiceService(
@@ -432,7 +456,17 @@ class GuardedInvoicesRepository
   Future<InvoiceDraft> updateInvoiceLineDiscount(
     String lineId,
     int discountAmount,
-  ) => _delegate.updateInvoiceLineDiscount(lineId, discountAmount);
+  ) {
+    return _security.runSensitive(
+      action: SensitiveAction.billDiscount,
+      targetType: 'invoice_line',
+      targetId: lineId,
+      operation: () => _delegate.updateInvoiceLineDiscount(
+        lineId,
+        discountAmount,
+      ),
+    );
+  }
 
   @override
   Future<InvoiceDraft> updateInvoiceLineEmployee(
@@ -509,9 +543,12 @@ class GuardedInvoicesRepository
     if (_delegate is! InvoiceLineActionsRepository) {
       throw UnsupportedError('Repository không hỗ trợ sửa đơn giá.');
     }
-    return (_delegate as InvoiceLineActionsRepository).updateInvoiceLineUnitPrice(
-      lineId,
-      unitPrice,
+    return _security.runSensitive(
+      action: SensitiveAction.billPriceEdit,
+      targetType: 'invoice_line',
+      targetId: lineId,
+      operation: () => (_delegate as InvoiceLineActionsRepository)
+          .updateInvoiceLineUnitPrice(lineId, unitPrice),
     );
   }
 

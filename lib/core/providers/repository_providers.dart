@@ -16,6 +16,7 @@ import '../repositories/billing_sessions_repository.dart';
 import '../repositories/cashier_shift_repository.dart';
 import '../repositories/fake_repositories.dart';
 import '../repositories/guarded_salon_repositories.dart';
+import '../repositories/guarded_settings_repository.dart';
 import '../repositories/invoice_adjustment_repository.dart';
 import '../repositories/invoice_line_actions_repository.dart';
 import '../repositories/reporting_overview_repository.dart';
@@ -33,6 +34,7 @@ import '../repositories/sqlite_service_formula_repository.dart';
 import '../repositories/sqlite_services_repository.dart';
 import '../repositories/sqlite_settings_repository.dart';
 import '../services/backup_service.dart';
+import '../services/sensitive_action_service.dart';
 import '../services/offline_update_service.dart';
 import '../settings/local_settings_store.dart';
 
@@ -138,6 +140,19 @@ final retailProductsRepositoryProvider = Provider<RetailProductsRepository>((
   }
 });
 
+
+final sensitiveActionServiceProvider = Provider<SensitiveActionService>(
+  (ref) => SensitiveActionService(SalonDatabase.instance),
+);
+
+final securityProtectionConfiguredProvider = FutureProvider<bool>(
+  (ref) => ref.watch(sensitiveActionServiceProvider).isProtectionConfigured(),
+);
+
+final securityAuditEventsProvider = FutureProvider(
+  (ref) => ref.watch(sensitiveActionServiceProvider).fetchAuditEvents(limit: 50),
+);
+
 final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
   final backend = ref.watch(appDataBackendProvider);
   final fakeDataSource = ref.watch(fakeSalonDataSourceProvider);
@@ -147,6 +162,7 @@ final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
       return GuardedInvoicesRepository(
         SalonDatabase.instance,
         SqliteInvoicesRepository(SalonDatabase.instance, fakeDataSource),
+        ref.watch(sensitiveActionServiceProvider),
       );
     case AppDataBackend.fake:
       return FakeInvoicesRepository(fakeDataSource);
@@ -177,7 +193,10 @@ final billingSessionsRepositoryProvider =
           'Billing sessions are only available on the SQLite runtime backend.',
         );
       }
-      return SqliteBillingSessionsRepository(SalonDatabase.instance);
+      return SqliteBillingSessionsRepository(
+        SalonDatabase.instance,
+        ref.watch(sensitiveActionServiceProvider),
+      );
     });
 
 final cashierShiftRepositoryProvider = Provider<CashierShiftRepository>((ref) {
@@ -216,9 +235,12 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return SqliteSettingsRepository(
-        SalonDatabase.instance,
-        LocalSettingsStore.instance,
+      return GuardedSettingsRepository(
+        SqliteSettingsRepository(
+          SalonDatabase.instance,
+          LocalSettingsStore.instance,
+        ),
+        ref.watch(sensitiveActionServiceProvider),
       );
     case AppDataBackend.fake:
       return FakeSettingsRepository(

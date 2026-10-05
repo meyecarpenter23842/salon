@@ -1557,6 +1557,15 @@ Future<InvoiceAdjustment?> _createInvoiceAdjustment(
     return null;
   }
 
+  if (!await ensureSensitiveActionAuthorized(
+    context,
+    ref,
+    SensitiveAction.invoiceAdjustment,
+  )) {
+    return null;
+  }
+  if (!context.mounted) return null;
+
   final reason = await showAppDialog<String>(
     context: context,
     builder: (_) => _InvoiceAdjustmentReasonDialog(

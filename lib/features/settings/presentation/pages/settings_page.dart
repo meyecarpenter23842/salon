@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/offline_update_summary.dart';
+import '../../../../core/models/audit_event.dart';
 import '../../../../core/models/settings_upsert_input.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/services/backup_service.dart';
@@ -12,6 +13,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/salon_theme_template.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
+import '../../../../shared/widgets/sensitive_action_authorization.dart';
 import 'windows_update_panel.dart';
 
 Future<void> _openLocalSettingsEditor(
@@ -19,6 +21,14 @@ Future<void> _openLocalSettingsEditor(
   WidgetRef ref,
   Map<String, Object?> summary,
 ) async {
+  if (!await ensureSensitiveActionAuthorized(
+    context,
+    ref,
+    SensitiveAction.settingsEdit,
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
   final input = await showDialog<SettingsUpsertInput>(
     context: context,
     builder: (_) => _LocalSettingsEditorDialog(summary: summary),
@@ -51,6 +61,14 @@ Future<void> _openPaymentConfigEditor(
   WidgetRef ref,
   Map<String, Object?> summary,
 ) async {
+  if (!await ensureSensitiveActionAuthorized(
+    context,
+    ref,
+    SensitiveAction.settingsEdit,
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
   final input = await showDialog<SettingsUpsertInput>(
     context: context,
     builder: (_) => _PaymentConfigEditorDialog(summary: summary),
@@ -158,6 +176,20 @@ class _SettingsView extends ConsumerWidget {
           icon: Icons.point_of_sale_outlined,
           title: 'Thanh toán',
           child: _PaymentConfigPanel(summary: summary),
+        ),
+      ),
+      _SettingsHubItem(
+        keyName: 'security',
+        icon: Icons.admin_panel_settings_outlined,
+        title: 'Quyền & Audit',
+        subtitle:
+            'PIN Owner bảo vệ giảm giá, sửa giá bill, hoàn/hủy và cài đặt nhạy cảm.',
+        metrics: const ['Owner PIN', 'Audit bất biến'],
+        onTap: () => _showSettingsHubDialog(
+          context,
+          icon: Icons.admin_panel_settings_outlined,
+          title: 'Quyền & Audit',
+          child: const _SecurityAccessPanel(),
         ),
       ),
       _SettingsHubItem(
@@ -1542,4 +1574,323 @@ double _responsiveDialogWidth(BuildContext context, double preferred) {
   final viewport = MediaQuery.sizeOf(context).width;
   final safe = viewport * 0.9;
   return safe < preferred ? safe : preferred;
+}
+
+
+class _SecurityAccessPanel extends ConsumerWidget {
+  const _SecurityAccessPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final configured = ref.watch(securityProtectionConfiguredProvider);
+    final audit = ref.watch(securityAuditEventsProvider);
+    final service = ref.watch(sensitiveActionServiceProvider);
+
+    return PremiumSectionCard(
+      key: const Key('settings-security-access-panel'),
+      icon: Icons.admin_panel_settings_outlined,
+      title: 'Bảo vệ thao tác nhạy cảm',
+      subtitle:
+          'PIN Owner mở quyền trong 5 phút. PIN chỉ lưu dạng hash; audit không lưu PIN.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          configured.when(
+            data: (enabled) => Row(
+              children: [
+                PremiumStatusPill(
+                  label: enabled ? 'Đã bật PIN Owner' : 'Chưa bật bảo vệ',
+                  tone: enabled ? AppColors.success : AppColors.warning,
+                ),
+                const Spacer(),
+                if (!enabled)
+                  FilledButton.icon(
+                    key: const Key('security-configure-owner-pin'),
+                    onPressed: () => _configureOwnerPin(context, ref),
+                    icon: const Icon(Icons.password_rounded),
+                    label: const Text('Thiết lập PIN'),
+                  )
+                else ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _changeOwnerPin(context, ref),
+                    icon: const Icon(Icons.password_rounded),
+                    label: const Text('Đổi PIN'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: service.isOwnerSessionActive
+                        ? () {
+                            service.lockOwnerSession();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Đã khóa phiên Owner.'),
+                              ),
+                            );
+                          }
+                        : null,
+                    icon: const Icon(Icons.lock_outline_rounded),
+                    label: const Text('Khóa phiên'),
+                  ),
+                ],
+              ],
+            ),
+            loading: () => const LinearProgressIndicator(),
+            error: (error, _) => Text('Không đọc được trạng thái bảo vệ: $error'),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Nhật ký gần đây',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 260,
+            child: audit.when(
+              data: (events) => events.isEmpty
+                  ? const Center(child: Text('Chưa có sự kiện audit.'))
+                  : ListView.separated(
+                      itemCount: events.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final event = events[index];
+                        final time = event.createdAt;
+                        final timestamp =
+                            '${time.day.toString().padLeft(2, '0')}/'
+                            '${time.month.toString().padLeft(2, '0')} '
+                            '${time.hour.toString().padLeft(2, '0')}:'
+                            '${time.minute.toString().padLeft(2, '0')}';
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            event.result == 'success'
+                                ? Icons.check_circle_outline_rounded
+                                : event.result == 'denied'
+                                ? Icons.block_outlined
+                                : Icons.error_outline_rounded,
+                          ),
+                          title: Text(
+                            '${event.actorName} · ${event.action}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${event.targetType} ${event.targetId} · $timestamp',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Text(event.result),
+                        );
+                      },
+                    ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(
+                child: Text('Không tải được audit: $error'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _configureOwnerPin(BuildContext context, WidgetRef ref) async {
+  final input = await showDialog<({String actorName, String pin})>(
+    context: context,
+    builder: (_) => const _OwnerPinSetupDialog(),
+  );
+  if (input == null || !context.mounted) return;
+  try {
+    await ref.read(sensitiveActionServiceProvider).configureOwnerPin(
+      input.pin,
+      actorName: input.actorName,
+    );
+    ref.invalidate(securityProtectionConfiguredProvider);
+    ref.invalidate(securityAuditEventsProvider);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã bật bảo vệ PIN Owner.')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không thiết lập được PIN: $error')),
+    );
+  }
+}
+
+Future<void> _changeOwnerPin(BuildContext context, WidgetRef ref) async {
+  final input = await showDialog<({String currentPin, String newPin})>(
+    context: context,
+    builder: (_) => const _OwnerPinChangeDialog(),
+  );
+  if (input == null || !context.mounted) return;
+  final ok = await ref.read(sensitiveActionServiceProvider).changeOwnerPin(
+    currentPin: input.currentPin,
+    newPin: input.newPin,
+  );
+  ref.invalidate(securityAuditEventsProvider);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(ok ? 'Đã đổi PIN Owner.' : 'PIN hiện tại không đúng.'),
+    ),
+  );
+}
+
+class _OwnerPinSetupDialog extends StatefulWidget {
+  const _OwnerPinSetupDialog();
+
+  @override
+  State<_OwnerPinSetupDialog> createState() => _OwnerPinSetupDialogState();
+}
+
+class _OwnerPinSetupDialogState extends State<_OwnerPinSetupDialog> {
+  final _name = TextEditingController(text: 'Owner');
+  final _pin = TextEditingController();
+  final _confirm = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _pin.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Thiết lập PIN Owner'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Tên actor audit'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const Key('security-owner-pin'),
+              controller: _pin,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'PIN 4-12 số'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _confirm,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Nhập lại PIN'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final pin = _pin.text.trim();
+            if (!RegExp(r'^\d{4,12}$').hasMatch(pin) ||
+                pin != _confirm.text.trim()) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('PIN không hợp lệ hoặc không khớp.')),
+              );
+              return;
+            }
+            Navigator.of(context).pop((
+              actorName: _name.text.trim().isEmpty ? 'Owner' : _name.text.trim(),
+              pin: pin,
+            ));
+          },
+          child: const Text('Bật bảo vệ'),
+        ),
+      ],
+    );
+  }
+}
+
+class _OwnerPinChangeDialog extends StatefulWidget {
+  const _OwnerPinChangeDialog();
+
+  @override
+  State<_OwnerPinChangeDialog> createState() => _OwnerPinChangeDialogState();
+}
+
+class _OwnerPinChangeDialogState extends State<_OwnerPinChangeDialog> {
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+  final _confirm = TextEditingController();
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Đổi PIN Owner'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _current,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'PIN hiện tại'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _next,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'PIN mới'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _confirm,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Nhập lại PIN mới'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final next = _next.text.trim();
+            if (!RegExp(r'^\d{4,12}$').hasMatch(next) ||
+                next != _confirm.text.trim()) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('PIN mới không hợp lệ hoặc không khớp.')),
+              );
+              return;
+            }
+            Navigator.of(context).pop((
+              currentPin: _current.text.trim(),
+              newPin: next,
+            ));
+          },
+          child: const Text('Đổi PIN'),
+        ),
+      ],
+    );
+  }
 }

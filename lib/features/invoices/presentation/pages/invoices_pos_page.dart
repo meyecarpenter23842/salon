@@ -14,6 +14,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/models/customer_profile.dart';
 import '../../../../core/models/employee_upsert_input.dart';
 import '../../../../core/models/invoice_adjustment.dart';
+import '../../../../core/models/audit_event.dart';
 import '../../../../core/models/invoice_draft.dart';
 import '../../../../core/models/invoice_draft_line.dart';
 import '../../../../core/models/invoice_payment_allocation.dart';
@@ -28,6 +29,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_motion.dart';
 import '../../../../shared/widgets/app_primitives.dart';
 import '../../../../shared/widgets/premium_workspace.dart';
+import '../../../../shared/widgets/sensitive_action_authorization.dart';
 
 part 'pos_bill_panel.dart';
 part 'pos_catalog_panel.dart';
@@ -200,6 +202,14 @@ Future<void> _openDiscountEditor(
   WidgetRef ref,
   InvoiceDraft draft,
 ) async {
+  if (!await ensureSensitiveActionAuthorized(
+    context,
+    ref,
+    SensitiveAction.billDiscount,
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
   final discount = await showAppDialog<int>(
     context: context,
     builder: (_) => _InvoiceDiscountDialog(
@@ -218,6 +228,14 @@ Future<void> _openLineDiscountEditor(
   WidgetRef ref,
   InvoiceDraftLine line,
 ) async {
+  if (!await ensureSensitiveActionAuthorized(
+    context,
+    ref,
+    SensitiveAction.billDiscount,
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
   final discount = await showAppDialog<int>(
     context: context,
     builder: (_) => _InvoiceDiscountDialog(
