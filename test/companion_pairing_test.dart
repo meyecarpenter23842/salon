@@ -58,6 +58,24 @@ class _Client implements LanPairingClient {
   }
 }
 
+class _PanelRegistry extends LanPairingRegistry {
+  _PanelRegistry() : super(file: File('unused-test-device-store'));
+  final entries = [
+    PairedPhone('a' * 64, 'Phone A', PhoneAccess.pending, DateTime.utc(2026)),
+    PairedPhone('b' * 64, 'Phone B', PhoneAccess.pending, DateTime.utc(2026)),
+  ];
+  @override
+  bool get active => true;
+  @override
+  List<PairedPhone> get phones => List.unmodifiable(entries);
+  @override
+  Future<void> decide(String id, PhoneAccess state) async {
+    final index = entries.indexWhere((p) => p.id == id);
+    entries[index] = entries[index].withState(state);
+    notifyListeners();
+  }
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({
     'companion_api_url': 'https://192.168.1.20:8743/api/staff/v1',
@@ -149,11 +167,9 @@ void main() {
   });
 
   testWidgets('desktop displays requests and revokes each phone independently', (tester) async {
-    final root = (await tester.runAsync(() => Directory.systemTemp.createTemp('salon-pair-panel-')))!;
-    final registry = LanPairingRegistry(file: File('${root.path}/devices.json'));
-    registry.setActive(true);
-    final a = (await tester.runAsync(() async => registry.request(await registry.createCode(), 'Phone A', newDeviceSecret())))!;
-    final b = (await tester.runAsync(() async => registry.request(await registry.createCode(), 'Phone B', newDeviceSecret())))!;
+    final registry = _PanelRegistry();
+    final a = registry.phones.first;
+    final b = registry.phones.last;
     final old = desktopPhoneRegistry.value;
     desktopPhoneRegistry.value = registry;
     try {
@@ -161,17 +177,11 @@ void main() {
         overrides: [appDataBackendProvider.overrideWithValue(AppDataBackend.fake)],
         child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: DesktopPairingPanel())))));
       await tester.pumpAndSettle();
-      await tester.runAsync(() async {
-        await tester.tap(find.byKey(Key('phone-approve-${a.id}')));
-        await registry.settled;
-      });
+      await tester.tap(find.byKey(Key('phone-approve-${a.id}')));
       await tester.pumpAndSettle();
       expect(registry.phones.first.state, PhoneAccess.approved);
       expect(registry.phones.last.state, PhoneAccess.pending);
-      await tester.runAsync(() async {
-        await tester.tap(find.byKey(Key('phone-revoke-${a.id}')));
-        await registry.settled;
-      });
+      await tester.tap(find.byKey(Key('phone-revoke-${a.id}')));
       await tester.pumpAndSettle();
       expect(registry.phones.first.state, PhoneAccess.revoked);
       expect(registry.phones.last.id, b.id);
@@ -179,7 +189,6 @@ void main() {
     } finally {
       desktopPhoneRegistry.value = old;
       registry.dispose();
-      await tester.runAsync(() => root.delete(recursive: true));
     }
   });
 }

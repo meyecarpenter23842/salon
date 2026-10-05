@@ -274,6 +274,8 @@ class LanHealthHost {
         await server.close(force: true);
       }
     } finally {
+      // Drain accepted device writes before releasing ownership to another process.
+      await pairing?.settled;
       final handle = _lock;
       _lock = null;
       try {

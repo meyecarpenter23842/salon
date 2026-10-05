@@ -11,7 +11,8 @@ Chưa có API khách hàng/hóa đơn, phân vai nghiệp vụ, ghi dữ liệu 
 6. Desktop: đối chiếu tên và mã thiết bị 8 ký tự trên hai màn hình, rồi Duyệt hoặc Từ chối.
 7. Android tự kiểm tra mỗi 5 giây khi mở app, vào Trang chính sau khi bootstrap được backend cho phép.
 8. Desktop: Thu hồi quyền từng điện thoại. API từ chối ngay sau khi thu hồi được lưu;
-   Android cập nhật sau lần kiểm tra tiếp theo (5 giây + thời gian mạng, timeout 8 giây).
+   Android cập nhật sau lần kiểm tra tiếp theo (5 giây + thời gian mạng;
+   mỗi request timeout 8 giây, lần vào Trang chính có thêm bootstrap).
 
 Quyền đã duyệt và thu hồi tồn tại qua desktop restart. Yêu cầu đang chờ hết hạn sau 5 phút
 hoặc khi host khởi động lại. Mã ghép mới thay mã cũ, dừng host hủy mã đang mở.
