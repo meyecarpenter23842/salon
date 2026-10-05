@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import '../database/salon_database.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +22,7 @@ class DesktopPairingPanel extends ConsumerStatefulWidget {
 class _DesktopPairingPanelState extends ConsumerState<DesktopPairingPanel> {
   bool _busy = false;
   String? _message;
+  final Map<String, List<String>> _commandHistory = {};
   Timer? _timer;
 
   @override
@@ -53,6 +56,19 @@ class _DesktopPairingPanelState extends ConsumerState<DesktopPairingPanel> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _history(String id) => _act(id, () async {
+    final db = await SalonDatabase.instance.database;
+    final rows = await db.query('lan_commands', columns: ['command_id', 'result_json', 'created_at'],
+      where: 'device_id = ?', whereArgs: [id], orderBy: 'created_at DESC', limit: 25);
+    final history = rows.map((row) {
+      final result = LanWriteResult.fromJson(jsonDecode(row['result_json'] as String) as Map<String, dynamic>);
+      final kind = switch (result.type) { 'invoice' => 'Hóa đơn đã thanh toán', 'session' => 'Bill',
+        'appointment' => 'Lịch hẹn', _ => 'Khách hàng' };
+      return 'Yêu cầu: ${row['command_id']}\n$kind: ${result.id}\nThời điểm: ${row['created_at']}';
+    }).toList();
+    if (mounted) setState(() => _commandHistory[id] = history);
+  });
 
   @override
   void dispose() {
@@ -127,6 +143,16 @@ class _DesktopPairingPanelState extends ConsumerState<DesktopPairingPanel> {
                         _act(phone.id, () => registry.setWriteRole(phone.id, role)),
                     ),
                 ]),
+              ],
+              TextButton(key: Key('phone-history-${phone.id}'),
+                onPressed: _busy || !registry.active ? null : () => _history(phone.id),
+                child: const Text('Đối chiếu thao tác điện thoại')),
+              if (_commandHistory[phone.id] case final rows?) ...[
+                const Text('25 thao tác đã lưu gần nhất của thiết bị. So mã yêu cầu '
+                  'trên điện thoại; chỉ xác nhận bỏ yêu cầu sau khi kiểm tra kết quả trên máy salon.'),
+                if (rows.isEmpty) const Text('Chưa có thao tác đã lưu của điện thoại này.'),
+                for (final row in rows) Padding(padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: SelectableText(row)),
               ],
               Wrap(spacing: 8, runSpacing: 8, children: [
                 if (phone.state == PhoneAccess.pending) ...[

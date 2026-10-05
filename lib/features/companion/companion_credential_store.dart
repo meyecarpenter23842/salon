@@ -1,11 +1,15 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import '../../core/lan/lan_write_contract.dart';
 
 class CompanionCredential {
-  const CompanionCredential(this.pin, this.token);
+  const CompanionCredential(this.pin, this.token, {this.pendingCommand});
   final String pin;
   final String token;
+  final LanWriteCommand? pendingCommand;
+  CompanionCredential withPending(LanWriteCommand? command) =>
+    CompanionCredential(pin, token, pendingCommand: command);
 }
 
 abstract interface class CompanionCredentialStore {
@@ -29,13 +33,15 @@ class AndroidCompanionCredentialStore implements CompanionCredentialStore {
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(token)) {
       throw const FormatException('Invalid credential');
     }
-    return CompanionCredential(pin, token);
+    return CompanionCredential(pin, token, pendingCommand: json['pendingCommand'] == null ? null :
+      LanWriteCommand.fromJson(Map<String, dynamic>.from(json['pendingCommand'] as Map)));
   }
 
   @override
   Future<void> write(CompanionCredential credential) =>
       _channel.invokeMethod<void>('write', jsonEncode({
         'pin': credential.pin, 'token': credential.token,
+        if (credential.pendingCommand != null) 'pendingCommand': credential.pendingCommand!.toJson(),
       })).timeout(const Duration(seconds: 3));
   @override
   Future<void> clear() => _channel.invokeMethod<void>('clear').timeout(const Duration(seconds: 3));

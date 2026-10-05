@@ -77,6 +77,9 @@ class SqliteCustomersRepository implements CustomersRepository {
     CustomerUpsertInput input, {
     String? existingId,
   }) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteCustomersRepository(scope).saveCustomer(input, existingId: existingId));
+    }
     final database = await _database.database;
     final existingCustomer = existingId == null
         ? null

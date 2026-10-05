@@ -35,6 +35,26 @@ class SqliteInvoicesRepository
   final SalonDatabase _database;
   final String _draftInvoiceId;
 
+  // Result metadata for a caller joining checkout to its outer transaction.
+  String? _lastArchivedInvoiceId;
+  String? get lastArchivedInvoiceId => _lastArchivedInvoiceId;
+
+  Future<InvoiceDraft> _mutate(Future<InvoiceDraft> Function(SqliteInvoicesRepository repo) action) =>
+    _database.inTransaction((scope) async {
+      final repo = SqliteInvoicesRepository(scope, null, _draftInvoiceId);
+      final result = await action(repo);
+      _lastArchivedInvoiceId = repo.lastArchivedInvoiceId;
+      return result;
+    });
+
+  Future<void> _ensureAppointmentNotPaid(DatabaseExecutor db, String? id) async {
+    if (id == null || id.isEmpty) return;
+    final paid = await db.rawQuery("SELECT i.id FROM invoices i WHERE i.appointment_id = ? "
+      "AND i.paid_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM invoice_adjustments a "
+      "WHERE a.invoice_id = i.id AND a.adjustment_type = 'void') LIMIT 1", [id]);
+    if (paid.isNotEmpty) throw StateError('Lịch hẹn đã có hóa đơn thanh toán.');
+  }
+
   String get _draftStateSettingsKey =>
       _draftInvoiceId == legacyDraftInvoiceId
       ? legacyDraftStateSettingsKey
@@ -47,6 +67,7 @@ class SqliteInvoicesRepository
   }
 
   Future<InvoiceDraft> createEmptyDraft() async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.createEmptyDraft());
     final database = await _database.database;
     final current = await _loadDraft(database);
     if (current.lines.isNotEmpty ||
@@ -140,7 +161,9 @@ class SqliteInvoicesRepository
   Future<InvoiceDraft> prefillDraftFromAppointment(
     AppointmentEntry appointment,
   ) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.prefillDraftFromAppointment(appointment));
     final database = await _database.database;
+    await _ensureAppointmentNotPaid(database, appointment.id);
     final currentDraft = await _loadDraft(database);
     if (currentDraft.lines.isNotEmpty) {
       throw StateError(
@@ -211,6 +234,7 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> selectInvoiceCustomer(String customerId) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.selectInvoiceCustomer(customerId));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final currentCustomerId = draft.customerId.trim();
@@ -234,6 +258,7 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> updateInvoicePaymentMethod(String paymentMethod) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoicePaymentMethod(paymentMethod));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     return _saveDraft(
@@ -250,6 +275,7 @@ class SqliteInvoicesRepository
   Future<InvoiceDraft> updateInvoicePaymentAllocations(
     List<InvoicePaymentAllocation> allocations,
   ) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoicePaymentAllocations(allocations));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final normalized = _normalizePaymentAllocations(
@@ -268,6 +294,7 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> updateInvoiceDiscount(int discountAmount) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoiceDiscount(discountAmount));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final normalizedDiscount = _normalizeDiscount(
@@ -288,6 +315,7 @@ class SqliteInvoicesRepository
     String serviceId, {
     String? employeeId,
   }) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.addInvoiceService(serviceId, employeeId: employeeId));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final service = await _findService(database, serviceId);
@@ -354,6 +382,7 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> addInvoiceProduct(String productId) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.addInvoiceProduct(productId));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final rows = await database.rawQuery(
@@ -428,6 +457,7 @@ class SqliteInvoicesRepository
     String lineId,
     int quantity,
   ) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoiceLineQuantity(lineId, quantity));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final index = draft.lines.indexWhere((line) => line.id == lineId);
@@ -480,6 +510,7 @@ class SqliteInvoicesRepository
     String lineId,
     int discountAmount,
   ) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoiceLineDiscount(lineId, discountAmount));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final index = draft.lines.indexWhere((line) => line.id == lineId);
@@ -515,6 +546,7 @@ class SqliteInvoicesRepository
     String lineId,
     String? employeeId,
   ) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoiceLineEmployee(lineId, employeeId));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     if (draft.isPaid) {
@@ -555,6 +587,7 @@ class SqliteInvoicesRepository
     String lineId,
     int unitPrice,
   ) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoiceLineUnitPrice(lineId, unitPrice));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     if (draft.isPaid) {
@@ -598,6 +631,7 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> splitInvoiceLine(String lineId) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.splitInvoiceLine(lineId));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     if (draft.isPaid) {
@@ -654,6 +688,7 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> removeInvoiceLine(String lineId) async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.removeInvoiceLine(lineId));
     final database = await _database.database;
     final draft = await _loadDraft(database);
     final updatedLines = draft.lines
@@ -676,8 +711,10 @@ class SqliteInvoicesRepository
 
   @override
   Future<InvoiceDraft> checkoutInvoice() async {
+    if (!_database.isTransactionScoped) return _mutate((repo) => repo.checkoutInvoice());
     final database = await _database.database;
     final draft = await _loadDraft(database);
+    await _ensureAppointmentNotPaid(database, draft.appointmentId);
     if (draft.customerId.trim().isEmpty) {
       throw StateError('Chọn khách hàng trước khi thanh toán.');
     }
@@ -1030,6 +1067,7 @@ class SqliteInvoicesRepository
     InvoiceDraft draft,
   ) async {
     final now = DateTime.now();
+    _lastArchivedInvoiceId = null;
     final archivedInvoiceId = 'invoice-${now.microsecondsSinceEpoch}';
     final archivedDraft = draft.copyWith(
       id: archivedInvoiceId,
@@ -1101,6 +1139,7 @@ class SqliteInvoicesRepository
       );
     });
 
+    _lastArchivedInvoiceId = archivedInvoiceId;
     return _loadDraft(database);
   }
 

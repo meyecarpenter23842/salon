@@ -72,6 +72,10 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     AppointmentUpsertInput input, {
     String? existingId,
   }) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteAppointmentsRepository(scope, const FakeSalonDataSource())
+        .saveAppointment(input, existingId: existingId));
+    }
     final database = await _database.database;
     await _seed.seedAppointmentsIfNeeded(database);
     await _seed.seedEmployeesIfNeeded(database);
@@ -80,6 +84,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
       final existing = existingId == null
           ? null
           : await _findById(transaction, existingId);
+      if (existingId != null) await _ensureNotPaid(transaction, existingId);
       final customer = await _findCustomerById(transaction, input.customerId);
       if (customer == null) {
         throw StateError('Customer ${input.customerId} not found');
@@ -195,6 +200,10 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
     String appointmentId,
     String status,
   ) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction((scope) => SqliteAppointmentsRepository(scope, const FakeSalonDataSource())
+        .updateAppointmentStatus(appointmentId, status));
+    }
     final database = await _database.database;
     await _seed.seedAppointmentsIfNeeded(database);
 
@@ -204,6 +213,7 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
         throw StateError('Appointment $appointmentId not found');
       }
 
+      await _ensureNotPaid(transaction, appointmentId);
       var resolvedEmployeeId = existing.employeeId;
       if (status != _cancelledStatus) {
         resolvedEmployeeId ??= await _findEmployeeIdByName(
@@ -239,6 +249,13 @@ class SqliteAppointmentsRepository implements AppointmentsRepository {
 
       return updated;
     });
+  }
+
+  Future<void> _ensureNotPaid(DatabaseExecutor db, String id) async {
+    final paid = await db.rawQuery("SELECT i.id FROM invoices i WHERE i.appointment_id = ? "
+      "AND i.paid_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM invoice_adjustments a "
+      "WHERE a.invoice_id = i.id AND a.adjustment_type = 'void') LIMIT 1", [id]);
+    if (paid.isNotEmpty) throw StateError('Lịch hẹn đã có hóa đơn thanh toán.');
   }
 
   Future<Map<String, Object?>?> _findCustomerById(

@@ -51,7 +51,7 @@ class MainActivity : FlutterActivity() {
                         }
                         "write" -> {
                             val value = call.arguments as String
-                            require(value.length <= 512)
+                            require(value.length <= 32768)
                             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                             cipher.init(Cipher.ENCRYPT_MODE, key())
                             val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))

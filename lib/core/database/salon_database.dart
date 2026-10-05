@@ -21,6 +21,12 @@ class SalonDatabase {
     return scoped;
   }
 
+  bool get isTransactionScoped => _database is TransactionDatabase;
+  Future<T> inTransaction<T>(Future<T> Function(SalonDatabase scope) action) async {
+    final db = await database;
+    return db.transaction((tx) => action(SalonDatabase.forTransaction(tx, runtimeEpoch)));
+  }
+
   static final SalonDatabase instance = SalonDatabase._();
 
   Database? _database;

@@ -87,6 +87,7 @@ class LanWriteEngine {
       });
     } catch (error) {
       final code = error is PairingFailure ? error.code
+          : error is FormatException ? LanErrorCode.invalidRequest
           : error is StateError || error is ArgumentError ? LanErrorCode.businessRule
           : LanErrorCode.internal;
       try {

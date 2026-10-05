@@ -7,6 +7,8 @@ import 'package:crypto/crypto.dart';
 import 'lan_contract.dart';
 import 'lan_pairing.dart';
 import 'lan_read_models.dart';
+import 'lan_workflow_service.dart';
+import 'lan_write_contract.dart';
 
 class LanHostConfig {
   LanHostConfig({
@@ -79,10 +81,12 @@ class LanHostConfig {
 
 /// HTTPS host; health stays anonymous, device routes require separate authority.
 class LanHealthHost {
-  LanHealthHost({required this.lockFile, this.pairing, this.reader});
+  LanHealthHost({required this.lockFile, this.pairing, this.reader, this.workflow});
 
   final LanPairingRegistry? pairing;
   final SalonReadRepository? reader;
+  final LanWorkflowBackend? workflow;
+  int _commandRequests = 0;
   int _activeRequests = 0;
   DateTime _windowStart = DateTime.now();
   int _pairRequests = 0;
@@ -155,6 +159,8 @@ class LanHealthHost {
           request.headers.value(HttpHeaders.transferEncodingHeader) == null) {
         response.statusCode = HttpStatus.ok;
         response.write(jsonEncode(const LanHealth().toJson()));
+      } else if (pairing != null && await _workflowRoute(request)) {
+        // Device writes retain authority until their transaction finishes.
       } else if (pairing != null && await _readRoute(request)) {
         // Approved read authority is checked before and after the database read.
       } else if (pairing != null && await _deviceRoute(request)) {
@@ -177,10 +183,10 @@ class LanHealthHost {
   }
 
 
-  Future<Map<String, dynamic>> _body(HttpRequest request) async {
+  Future<Map<String, dynamic>> _body(HttpRequest request, {int maximum = 4096}) async {
     final bytes = <int>[];
     await for (final chunk in request) {
-      if (bytes.length + chunk.length > 4096) {
+      if (bytes.length + chunk.length > maximum) {
         throw const PairingFailure(LanErrorCode.invalidRequest);
       }
       bytes.addAll(chunk);
@@ -205,6 +211,7 @@ class LanHealthHost {
         _windowStart = now;
         _pairRequests = 0;
         _statusRequests = 0;
+        _commandRequests = 0;
       }
       if (exchange ? ++_pairRequests > 20 : ++_statusRequests > 240) {
         throw const PairingFailure(LanErrorCode.rateLimited);
@@ -264,9 +271,9 @@ class LanHealthHost {
       if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
       final now = DateTime.now();
       if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
-        _windowStart = now; _pairRequests = 0; _statusRequests = 0;
+        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0;
       }
-      if (++_statusRequests > 240) throw const PairingFailure(LanErrorCode.rateLimited);
+      if (++_statusRequests > 240) { throw const PairingFailure(LanErrorCode.rateLimited); }
       if (request.method != 'GET' || request.contentLength > 0 ||
           request.headers.value(HttpHeaders.transferEncodingHeader) != null ||
           request.uri.query.length > 1024) {
@@ -294,6 +301,73 @@ class LanHealthHost {
       request.response.statusCode = code.httpStatus;
       request.response.write(jsonEncode(
         LanFailure(code, requestId: 'read-${++_requestSequence}').toJson()));
+    }
+    return true;
+  }
+
+
+  Future<bool> _workflowRoute(HttpRequest request) async {
+    final suffix = request.uri.path;
+    final commands = suffix == '${LanContract.basePath}/commands';
+    final editor = suffix == '${LanContract.basePath}/editor';
+    final catalog = suffix == '${LanContract.basePath}/catalog';
+    if (workflow == null || (!commands && !editor && !catalog)) return false;
+    try {
+      if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
+      final now = DateTime.now();
+      if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
+        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0;
+      }
+      final writing = commands && request.method == 'POST';
+      if (writing ? ++_commandRequests > 60 : ++_statusRequests > 240) { throw const PairingFailure(LanErrorCode.rateLimited); }
+      if (request.uri.query.length > 1024 || request.contentLength > 16384 ||
+          request.uri.queryParametersAll.values.any((v) => v.length != 1) ||
+          request.method != (writing ? 'POST' : 'GET')) { throw const PairingFailure(LanErrorCode.invalidRequest); }
+      final auth = request.headers.value(HttpHeaders.authorizationHeader);
+      if (auth == null || !auth.startsWith('Bearer ')) throw const PairingFailure(LanErrorCode.unauthenticated);
+      final token = auth.substring(7);
+      final phone = await pairing!.status(token, requireRead: true);
+      Object payload;
+      if (writing) {
+        if (request.uri.query.isNotEmpty || request.headers.contentType?.mimeType != 'application/json') {
+          throw const PairingFailure(LanErrorCode.invalidRequest);
+        }
+        final json = await _body(request, maximum: 16384).timeout(const Duration(seconds: 5));
+        final command = LanWriteCommand.fromJson(json);
+        final result = await pairing!.withWriteAuthority(token, command.operation,
+          (authorized) => workflow!.execute(authorized, command));
+        payload = {'apiVersion': 1, 'result': result.toJson()};
+      } else {
+        if (request.contentLength > 0 || request.headers.value(HttpHeaders.transferEncodingHeader) != null) {
+          throw const PairingFailure(LanErrorCode.invalidRequest);
+        }
+        final q = request.uri.queryParameters;
+        if (commands) {
+          if (q.length != 1 || q['commandId'] == null) throw const FormatException('Command id required');
+          LanContract.validateIdentity(q['commandId']!, 'commandId');
+          final result = await workflow!.result(phone.id, q['commandId']!);
+          payload = {'apiVersion': 1, 'result': result?.toJson()};
+        } else if (editor) {
+          if (q.keys.any((k) => !['kind', 'id'].contains(k)) || q['kind'] == null) throw const FormatException('Editor query');
+          payload = (await workflow!.editor(q['kind']!, q['id'])).toJson();
+        } else {
+          if (q.keys.any((k) => !['kind', 'q', 'offset'].contains(k)) || q['kind'] == null) throw const FormatException('Catalog query');
+          final offset = q['offset'] == null ? 0 : int.tryParse(q['offset']!);
+          if (offset == null) throw const FormatException('Offset');
+          payload = (await workflow!.catalog(q['kind']!, q['q'] ?? '', offset)).toJson();
+        }
+        await pairing!.status(token, requireRead: true);
+      }
+      final encoded = jsonEncode(payload);
+      if (utf8.encode(encoded).length > 262144) throw const PairingFailure(LanErrorCode.unavailable);
+      request.response.statusCode = HttpStatus.ok;
+      request.response.write(encoded);
+    } catch (error) {
+      final code = error is PairingFailure ? error.code :
+        error is FormatException || error is ArgumentError || error is TimeoutException ?
+          LanErrorCode.invalidRequest : LanErrorCode.internal;
+      request.response.statusCode = code.httpStatus;
+      request.response.write(jsonEncode(LanFailure(code, requestId: 'write-${++_requestSequence}').toJson()));
     }
     return true;
   }
