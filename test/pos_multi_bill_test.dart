@@ -38,7 +38,7 @@ void main() {
     final targetA = container.read(invoicesRepositoryProvider);
     container.read(selectedInvoiceSessionIdProvider.notifier).state = drafts[1].id;
     final targetB = container.read(invoicesRepositoryProvider);
-    await targetA.addInvoiceService(fixture.serviceId);
+    await targetA.addInvoiceService(fixture.serviceId, employeeId: fixture.employeeId);
     expect((await targetA.fetchInvoiceDraft()).lines.single.quantity, 2);
     expect((await targetB.fetchInvoiceDraft()).lines.single.quantity, 1);
     expect((await sessions.fetchSession(drafts[2].id)).lines.single.quantity, 1);
@@ -77,6 +77,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.runAsync(() async {
+      try {
       final fixture = await _createFixture(3);
       final sessions = SqliteBillingSessionsRepository(SalonDatabase.instance);
       final drafts = <InvoiceDraft>[];
@@ -136,6 +137,9 @@ void main() {
         expect(tester.takeException(), isNull, reason: size.toString());
       }
       await tester.pumpWidget(const SizedBox.shrink());
+      } catch (error, stack) {
+        fail('Multi-bill UI failed: $error\n$stack');
+      }
     });
     expect(tester.takeException(), isNull);
   });
@@ -143,7 +147,10 @@ void main() {
 
 Future<void> _settle(WidgetTester tester) async {
   // SQLite FFI and provider IO run on the real clock inside runAsync.
-  await Future<void>.delayed(const Duration(milliseconds: 120));
+  for (var frame = 0; frame < 8; frame++) {
+    await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+  }
   await tester.pumpAndSettle();
 }
 
