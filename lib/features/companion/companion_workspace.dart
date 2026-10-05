@@ -89,7 +89,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
     if (!mounted || generation != _generation) return;
     setState(() => _error = 'Chưa tải được dữ liệu. Kiểm tra kết nối rồi thử lại.');
     if (error is PairingFailure &&
-        [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(error.code)) widget.onDenied();
+        [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(error.code)) { widget.onDenied(); }
   }
 
   Future<void> _pick(String kind, String field, {String? lineId}) async {
@@ -153,7 +153,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
     final result = await widget.commands.submit(op, value, payload);
     if (!mounted) return;
     if (result != null) {
-      if (result.type == 'session') await _edit('session', result.id);
+      if (result.type == 'session') { await _edit('session', result.id); }
       else { _clearFields(); setState(() { _editor = null; _picker = null; _sessions = false; _readVersion++; }); }
     }
   }
@@ -211,7 +211,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
   void _numberAction(LanWriteOperation op, String field, {String? lineId}) {
     final number = int.tryParse(_fields[field]!.text);
     if (number == null || number < 0) { setState(() => _error = 'Nhập số tiền nguyên, không âm.'); return; }
-    _submit(op, {'amount': number, if (lineId != null) 'lineId': lineId});
+    _submit(op, {'amount': number, 'lineId': ?lineId});
   }
 
   Widget _text(String key, String label, int max, {bool number = false, int lines = 1}) =>

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
-import 'package:salonmanager/core/lan/lan_contract.dart';
 import 'package:salonmanager/core/lan/lan_health_client.dart';
 import 'package:salonmanager/core/lan/lan_health_host.dart';
 import 'package:salonmanager/core/lan/lan_pairing.dart';

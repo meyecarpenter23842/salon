@@ -43,7 +43,7 @@ class LanWorkflowService implements LanWorkflowBackend {
   @override
   Future<LanEditorSnapshot> editor(String kind, String? id) async {
     if (!['customer', 'appointment', 'session'].contains(kind)) throw const FormatException('Invalid editor');
-    if (id != null) LanContract.validateIdentity(id, 'id');
+    if (id != null) { LanContract.validateIdentity(id, 'id'); }
     if (kind == 'session' && id == null) throw const FormatException('Missing session');
     final db = await database.database;
     return db.transaction((tx) async {
@@ -98,7 +98,7 @@ class LanWorkflowService implements LanWorkflowBackend {
   Future<LanCatalogPage> catalog(String kind, String query, int offset) async {
     if (!['customers', 'services', 'products', 'employees', 'sessions'].contains(kind) ||
         query.length > 80 || offset < 0 || offset > 100000 ||
-        RegExp(r'[\x00-\x1f]').hasMatch(query)) throw const FormatException('Invalid catalog query');
+        RegExp(r'[\x00-\x1f]').hasMatch(query)) { throw const FormatException('Invalid catalog query'); }
     final db = await database.database;
     return db.transaction((tx) async {
       final items = <LanCatalogItem>[];
@@ -127,7 +127,7 @@ class LanWorkflowService implements LanWorkflowBackend {
         final subtitle = kind == 'customers' ? 'phone' : kind == 'employees' ? 'status' : kind == 'products' ? 'sale_price' : 'price';
         final where = <String>[];
         final args = <Object?>[];
-        if (kind == 'services' || kind == 'products') where.add('is_active = 1');
+        if (kind == 'services' || kind == 'products') { where.add('is_active = 1'); }
         if (kind == 'products') where.add('is_hidden_from_staff = 0');
         if (kind == 'employees') { where.add('status IN (?, ?)'); args.addAll(['Đang làm việc', 'Sắp có lịch']); }
         if (query.trim().isNotEmpty) {
@@ -169,7 +169,7 @@ class LanWorkflowService implements LanWorkflowBackend {
       p.keys(['fullName', 'phone', 'email', 'tier', 'favoriteService', 'hairProfile', 'note']);
       final phoneNumber = p.text('phone', 24, required: true);
       if (!RegExp(r'^[+0-9 ()-]+$').hasMatch(phoneNumber) ||
-          phoneNumber.replaceAll(RegExp(r'\D'), '').length < 6) throw const FormatException('Invalid phone');
+          phoneNumber.replaceAll(RegExp(r'\D'), '').length < 6) { throw const FormatException('Invalid phone'); }
       final email = p.text('email', 120);
       if (email.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) throw const FormatException('Invalid email');
       final saved = await SqliteCustomersRepository(scope).saveCustomer(CustomerUpsertInput(
@@ -195,7 +195,7 @@ class LanWorkflowService implements LanWorkflowBackend {
       final services = <Map<String, Object?>>[];
       for (final serviceId in serviceIds) {
         final service = await _row(db, 'services', serviceId);
-        if (service['is_active'] != 1 && status != 'Đã hủy') throw const PairingFailure(LanErrorCode.businessRule);
+        if (service['is_active'] != 1 && status != 'Đã hủy') { throw const PairingFailure(LanErrorCode.businessRule); }
         services.add(service);
       }
       final saved = await appointments.saveAppointment(AppointmentUpsertInput(
@@ -315,7 +315,7 @@ class LanWorkflowService implements LanWorkflowBackend {
 
 // An explicit desktop grant authorizes only these remote owner operations.
 class _DeviceSecurity extends SensitiveActionService {
-  _DeviceSecurity(SalonDatabase database, this.role) : super(database);
+  _DeviceSecurity(super.database, this.role);
   final PhoneWriteRole role;
   @override
   Future<T> runSensitive<T>({required SensitiveAction action, required String targetType,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/lan/lan_health_client.dart';
+import 'package:salonmanager/core/lan/lan_pairing.dart';
+import 'package:salonmanager/core/lan/lan_pairing_client.dart';
+import 'package:salonmanager/features/companion/companion_access_panel.dart';
 import 'package:salonmanager/core/lan/lan_read_client.dart';
 import 'package:salonmanager/core/lan/lan_read_models.dart';
 import 'package:salonmanager/core/lan/lan_workflow_client.dart';
@@ -46,6 +49,15 @@ class _Client implements LanWorkflowClient {
       command.operation.resourceType, revision: revision);
   }
   @override Future<LanWriteResult?> result(LanConnection c, String token, String id) async => null;
+}
+
+class _Pairing implements LanPairingClient {
+  PhoneAccess state = PhoneAccess.approved;
+  PairedPhone get phone => PairedPhone('a' * 64, 'Phone', state, DateTime.utc(2026),
+    canReadSalon: state == PhoneAccess.approved, writeRole: state == PhoneAccess.approved ? PhoneWriteRole.cashier : PhoneWriteRole.none);
+  @override Future<PairedPhone> status(LanConnection c, String token) async => phone;
+  @override Future<PairedPhone> bootstrap(LanConnection c, String token) async => phone;
+  @override Future<PairedPhone> request(LanConnection c, String code, String name, String token) async => phone;
 }
 
 void main() {
@@ -109,4 +121,25 @@ void main() {
     expect(find.byKey(const Key('write-new-bill')), findsNothing);
     await tester.pumpWidget(const SizedBox()); commands.dispose();
   });
+  testWidgets('revoked uncertain checkout cannot forget or resend; explicit desktop review clears it', (tester) async {
+    final store = _Store();
+    store.value = store.value.withPending(LanWriteCommand(commandId: 'uncertain-checkout',
+      operation: LanWriteOperation.sessionCheckout, expectedEpoch: 'desktop-epoch',
+      targetId: 'session-1', expectedRevision: 1, payload: {}));
+    final client = _Client(); final pair = _Pairing();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: CompanionAccessPanel(connection: connection, client: pair, store: store,
+        readClient: _Reader(), workflowClient: client, onAccess: (_) {})))));
+    await tester.pumpAndSettle();
+    expect((tester.widget<TextButton>(find.byKey(const Key('companion-forget')))).onPressed, isNull);
+    pair.state = PhoneAccess.revoked;
+    await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
+    expect(find.byType(CompanionWorkspace), findsNothing);
+    expect((tester.widget<TextButton>(find.byKey(const Key('write-reviewed-discard')))).onPressed, isNull);
+    await tap(tester, 'write-review-confirmed'); await tap(tester, 'write-reviewed-discard');
+    expect(store.value.pendingCommand, isNull); expect(client.sent, isEmpty);
+    expect((tester.widget<TextButton>(find.byKey(const Key('companion-forget')))).onPressed, isNotNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
 }

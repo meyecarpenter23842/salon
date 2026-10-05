@@ -273,7 +273,7 @@ class LanHealthHost {
       if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
         _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0;
       }
-      if (++_statusRequests > 240) throw const PairingFailure(LanErrorCode.rateLimited);
+      if (++_statusRequests > 240) { throw const PairingFailure(LanErrorCode.rateLimited); }
       if (request.method != 'GET' || request.contentLength > 0 ||
           request.headers.value(HttpHeaders.transferEncodingHeader) != null ||
           request.uri.query.length > 1024) {
@@ -319,10 +319,10 @@ class LanHealthHost {
         _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0;
       }
       final writing = commands && request.method == 'POST';
-      if (writing ? ++_commandRequests > 60 : ++_statusRequests > 240) throw const PairingFailure(LanErrorCode.rateLimited);
+      if (writing ? ++_commandRequests > 60 : ++_statusRequests > 240) { throw const PairingFailure(LanErrorCode.rateLimited); }
       if (request.uri.query.length > 1024 || request.contentLength > 16384 ||
           request.uri.queryParametersAll.values.any((v) => v.length != 1) ||
-          request.method != (writing ? 'POST' : 'GET')) throw const PairingFailure(LanErrorCode.invalidRequest);
+          request.method != (writing ? 'POST' : 'GET')) { throw const PairingFailure(LanErrorCode.invalidRequest); }
       final auth = request.headers.value(HttpHeaders.authorizationHeader);
       if (auth == null || !auth.startsWith('Bearer ')) throw const PairingFailure(LanErrorCode.unauthenticated);
       final token = auth.substring(7);

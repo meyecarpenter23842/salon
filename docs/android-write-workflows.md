@@ -29,3 +29,5 @@ Không lưu danh sách khách/lịch/hóa đơn vào DB hoặc preferences trên
 CI kiểm tra SQLite nghiệp vụ và journal, checkout/stock/metrics/split payments/retry/restart/rollback, quyền và xung đột; HTTPS TLS pin/token/result theo thiết bị; controller mất phản hồi và lưu an toàn; widget phone hẹp và xác nhận checkout. Full Linux/Windows regression, Windows release/Staff/installer/updater/NSIS, Android APK đúng head.
 
 **Chưa xác nhận trên điện thoại thật.** Chưa phát hành bộ cài mới, chưa chạy migration production và chưa hoàn thiện truy cập khác Wi-Fi/4G. Không dùng CI/emulator để thay bằng chứng đó. Không chạy build/test app local hoặc tạo clone/worktree.
+
+Khi chủ salon thu hồi quyền giữa lúc mất phản hồi, Android giữ yêu cầu. Desktop có “Đối chiếu thao tác điện thoại” (cần quyền chủ salon), hiển thị 25 mã yêu cầu/kết quả gần nhất. Android chỉ cho kết thúc yêu cầu sau khi đã nhận trạng thái thu hồi quyền từ desktop và người dùng xác nhận đã đối chiếu. Thiết bị bị thu hồi không đọc journal/dữ liệu qua API; không tự ghép lại hoặc gửi lại.

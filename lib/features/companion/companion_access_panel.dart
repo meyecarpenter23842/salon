@@ -10,6 +10,7 @@ import 'companion_credential_store.dart';
 import 'companion_workspace.dart';
 import 'companion_command_controller.dart';
 import '../../core/lan/lan_workflow_client.dart';
+import '../../core/lan/lan_write_contract.dart';
 import '../../core/lan/lan_read_client.dart';
 
 class CompanionAccessPanel extends StatefulWidget {
@@ -41,6 +42,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   bool _loading = true;
   int _generation = 0;
   String? _message;
+  bool _reviewedOnDesktop = false;
 
   @override
   void initState() {
@@ -89,6 +91,8 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   }
 
   void _apply(PairedPhone phone) {
+    if (_phone?.state != phone.state || _phone?.writeRole != phone.writeRole ||
+        _phone?.canReadSalon != phone.canReadSalon) { _reviewedOnDesktop = false; }
     _phone = phone;
     _online = true;
     _message = switch (phone.state) {
@@ -266,6 +270,24 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
         if (_message != null) ...[
           const SizedBox(height: 12),
           Text(_message!, key: const Key('companion-access-status')),
+        ],
+        if (_commands?.pending != null && _phone != null && _online && _foreground &&
+            (_phone!.state == PhoneAccess.revoked || _phone!.state == PhoneAccess.approved &&
+              (!_phone!.canReadSalon || !_commands!.pending!.operation.allows(_phone!.writeRole)))) ...[
+          const Text('Quyền thực hiện thao tác đã bị thu hồi. Chủ salon cần mở '
+            'Cài đặt → Kết nối điện thoại → Đối chiếu thao tác điện thoại. '
+            'Kiểm tra mã yêu cầu và dữ liệu đã lưu trước khi kết thúc yêu cầu này.'),
+          SelectableText('Mã yêu cầu: ${_commands!.pending!.commandId}'),
+          CheckboxListTile(key: const Key('write-review-confirmed'), contentPadding: EdgeInsets.zero,
+            title: const Text('Chủ salon đã đối chiếu kết quả trên máy salon'),
+            value: _reviewedOnDesktop, onChanged: _commands!.busy ? null :
+              (value) => setState(() => _reviewedOnDesktop = value ?? false)),
+          TextButton(key: const Key('write-reviewed-discard'),
+            onPressed: !_reviewedOnDesktop || _commands!.busy ? null : () async {
+              await _commands!.discardAfterDesktopReview();
+              if (mounted) setState(() { _reviewedOnDesktop = false; _message = _commands!.message; });
+            }, child: const Text('Kết thúc yêu cầu đã đối chiếu')),
+          if (_commands!.message != null) Text(_commands!.message!),
         ],
         if (approved && _phone!.canReadSalon && _online && _foreground && _credential != null)
             CompanionWorkspace(

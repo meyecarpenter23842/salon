@@ -5,6 +5,7 @@ import 'package:salonmanager/core/lan/lan_contract.dart';
 import 'package:salonmanager/core/lan/lan_pairing.dart';
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
 import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
+import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
 import 'support/mobile_workflow_fixture.dart';
 
@@ -167,4 +168,25 @@ void main() {
       fails(LanErrorCode.businessRule));
     expect((await f.service.catalog('sessions', '', 0)).items.single.id, bill);
   });
+  test('desktop repository read-modify-write transactions serialize with phone checkout and keep metrics', () async {
+    final f = await mobileFixture();
+    final id = (await f.run(LanWriteOperation.sessionCreate, {})).id;
+    await f.run(LanWriteOperation.sessionSelectCustomer, {'customerId': 'customer-1'}, id: id);
+    final desktopA = SqliteInvoicesRepository(SalonDatabase.instance, null, id);
+    final desktopB = SqliteInvoicesRepository(SalonDatabase.instance, null, id);
+    await Future.wait([desktopA.addInvoiceService('service-1'), desktopB.addInvoiceService('service-1')]);
+    final bill = await f.service.editor('session', id);
+    expect((bill.values['lines'] as List).single['quantity'], 2);
+    final payment = await f.command(LanWriteOperation.sessionPayment,
+      {'payments': [{'method': 'Thẻ', 'amount': 200000}]}, id: id);
+    final outcomes = await Future.wait([desktopA.updateInvoiceDiscount(10000).then<Object>((r) => r),
+      f.service.execute(workflowPhone(), payment).then<Object>((r) => r, onError: (Object e) => e)]);
+    final phone = outcomes[1];
+    expect(phone is LanWriteResult || phone is PairingFailure, isTrue);
+    if (phone is PairingFailure) expect(phone.code, LanErrorCode.revisionConflict);
+    final state = await f.service.editor('session', id);
+    expect(state.values['discountAmount'], 10000);
+    expect((state.values['lines'] as List).single['quantity'], 2);
+  });
+
 }

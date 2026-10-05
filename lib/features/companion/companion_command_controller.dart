@@ -124,6 +124,16 @@ class CompanionCommandController extends ChangeNotifier {
     finally { busy = false; _changed(); }
   }
 
+  Future<void> discardAfterDesktopReview() async {
+    if (busy || pending == null || _closed) return;
+    busy = true; _changed();
+    try {
+      await _save(null); canRetry = false; oldEpoch = false;
+      message = 'Đã kết thúc yêu cầu sau khi đối chiếu trên máy salon. Không tạo lại thao tác đã được lưu.';
+    } catch (_) { message = 'Chưa xóa được yêu cầu đã lưu. Hãy thử lại.'; }
+    finally { busy = false; _changed(); }
+  }
+
   @override
   void dispose() { _closed = true; super.dispose(); }
 }

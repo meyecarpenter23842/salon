@@ -18,7 +18,7 @@ class PinnedLanWorkflowClient implements LanWorkflowClient {
   final Duration timeout;
   @override
   Future<LanEditorSnapshot> editor(LanConnection c, String token, String kind, String? id) async =>
-    LanEditorSnapshot.fromJson(await _request(c, token, 'editor', {'kind': kind, if (id != null) 'id': id}));
+    LanEditorSnapshot.fromJson(await _request(c, token, 'editor', {'kind': kind, 'id': ?id}));
   @override
   Future<LanCatalogPage> catalog(LanConnection c, String token, String kind, String query, int offset) async =>
     LanCatalogPage.fromJson(await _request(c, token, 'catalog', {'kind': kind, 'q': query, 'offset': '$offset'}));
