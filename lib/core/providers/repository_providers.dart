@@ -13,6 +13,7 @@ import '../models/service_catalog_item.dart';
 import '../models/service_formula_item.dart';
 import 'data_backend_provider.dart';
 import '../repositories/billing_sessions_repository.dart';
+import '../repositories/cashier_shift_repository.dart';
 import '../repositories/fake_repositories.dart';
 import '../repositories/guarded_salon_repositories.dart';
 import '../repositories/invoice_adjustment_repository.dart';
@@ -23,6 +24,7 @@ import '../repositories/sqlite_appointments_repository.dart';
 import '../repositories/sqlite_customers_repository.dart';
 import '../repositories/sqlite_employees_repository.dart';
 import '../repositories/sqlite_billing_sessions_repository.dart';
+import '../repositories/sqlite_cashier_shift_repository.dart';
 import '../repositories/sqlite_invoices_repository.dart';
 import '../repositories/sqlite_overview_repository.dart';
 import '../repositories/sqlite_reports_repository.dart';
@@ -177,6 +179,15 @@ final billingSessionsRepositoryProvider =
       }
       return SqliteBillingSessionsRepository(SalonDatabase.instance);
     });
+
+final cashierShiftRepositoryProvider = Provider<CashierShiftRepository>((ref) {
+  if (ref.watch(appDataBackendProvider) != AppDataBackend.sqlite) {
+    throw UnsupportedError('Cashier shifts require SQLite.');
+  }
+  return SqliteCashierShiftRepository(SalonDatabase.instance);
+});
+final activeCashierShiftProvider = FutureProvider((ref) => ref.watch(cashierShiftRepositoryProvider).fetchOpenShift());
+final cashierShiftHistoryProvider = FutureProvider((ref) => ref.watch(cashierShiftRepositoryProvider).fetchShiftHistory());
 
 final activeInvoiceSessionsProvider = FutureProvider<List<InvoiceDraft>>(
   (ref) => ref.watch(billingSessionsRepositoryProvider).fetchActiveSessions(),

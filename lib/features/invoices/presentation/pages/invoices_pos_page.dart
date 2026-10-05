@@ -32,6 +32,7 @@ part 'pos_bill_panel.dart';
 part 'pos_catalog_panel.dart';
 part 'pos_checkout_panel.dart';
 part 'pos_dialogs.dart';
+part 'cashier_shift_dialog.dart';
 part 'receipt_pdf_renderer.dart';
 part 'receipt_settings_dialog.dart';
 
@@ -520,6 +521,13 @@ class _PosHeader extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
           ],
+          OutlinedButton.icon(
+            key: const Key('billing-cashier-shift-action'),
+            onPressed: () => _showCashierShiftDialog(context, ref),
+            icon: const Icon(Icons.point_of_sale_rounded, size: 17),
+            label: const Text('Ca thu ngân'),
+          ),
+          const SizedBox(width: 8),
           OutlinedButton.icon(
             key: const Key('billing-history-action'),
             onPressed: () =>

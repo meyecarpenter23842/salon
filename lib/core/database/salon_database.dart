@@ -363,6 +363,13 @@ class SalonDatabase {
           batch.execute(DatabaseSchema.createInvoiceAdjustmentsCreatedAtIndex);
         }
 
+        if (oldVersion < 14) {
+          batch.execute(DatabaseSchema.createCashierShiftsTable);
+          batch.execute(DatabaseSchema.createCashMovementsTable);
+          batch.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_cashier_shifts_single_open ON cashier_shifts((1)) WHERE closed_at IS NULL');
+          batch.execute('CREATE INDEX IF NOT EXISTS idx_cash_movements_shift_id ON cash_movements(shift_id)');
+        }
+
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {

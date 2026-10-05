@@ -39,7 +39,7 @@ void main() {
 
   test('Issue #45 keeps reporting semantics on one net-revenue basis', () async {
     const fakeDataSource = FakeSalonDataSource();
-    await _seedIssue45Dataset();
+    final activeFutureIsToday = await _seedIssue45Dataset();
 
     final reportsRepository = SqliteReportsRepository(
       SalonDatabase.instance,
@@ -91,7 +91,7 @@ void main() {
       ),
     );
     final overview = await overviewRepository.fetchOverviewSummary();
-    expect(_kpiValue(overview, 'Lịch hôm nay'), '3');
+    expect(_kpiValue(overview, 'Lịch hôm nay'), activeFutureIsToday ? '3' : '2');
     expect(_kpiValue(overview, 'Khách hôm nay'), '2');
 
     final nextAppointment = Map<String, Object?>.from(
@@ -133,7 +133,7 @@ void main() {
   });
 }
 
-Future<void> _seedIssue45Dataset() async {
+Future<bool> _seedIssue45Dataset() async {
   final database = await SalonDatabase.instance.database;
   final now = DateTime.now();
   final startToday = DateTime(now.year, now.month, now.day);
@@ -330,6 +330,10 @@ Future<void> _seedIssue45Dataset() async {
     startsAt: now.add(const Duration(minutes: 10)),
     status: 'Đã hủy',
   );
+  final activeFutureStartsAt = now.add(const Duration(minutes: 20));
+  final activeFutureIsToday = activeFutureStartsAt.isBefore(
+    startToday.add(const Duration(days: 1)),
+  );
   await insertAppointment(
     id: 'apt-net-active-future',
     customerId: 'cust-net-b',
@@ -338,9 +342,10 @@ Future<void> _seedIssue45Dataset() async {
     serviceName: 'Dịch vụ Net A',
     employeeId: 'emp-net-a',
     employeeName: 'NV Net A',
-    startsAt: now.add(const Duration(minutes: 20)),
+    startsAt: activeFutureStartsAt,
     status: 'Đã đặt',
   );
+  return activeFutureIsToday;
 }
 
 List<Map<String, Object?>> _mapList(Object? source) {
