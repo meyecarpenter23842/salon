@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import 'lan_contract.dart';
+import 'lan_write_contract.dart';
 
 String newDeviceSecret() {
   final random = Random.secure();
@@ -21,17 +22,18 @@ class PairingFailure implements Exception {
 enum PhoneAccess { pending, approved, denied, revoked, expired }
 
 class PairedPhone {
-  const PairedPhone(this.id, this.name, this.state, this.createdAt, {this.canReadSalon = false});
+  const PairedPhone(this.id, this.name, this.state, this.createdAt, {this.canReadSalon = false, this.writeRole = PhoneWriteRole.none});
   final String id;
   final String name;
   final PhoneAccess state;
   final DateTime createdAt;
   final bool canReadSalon;
+  final PhoneWriteRole writeRole;
 
   Map<String, Object> toJson() => {
     'id': id, 'name': name, 'state': state.name,
     'createdAt': createdAt.toUtc().toIso8601String(),
-    'canReadSalon': canReadSalon,
+    'canReadSalon': canReadSalon, 'writeRole': writeRole.name,
   };
 
   factory PairedPhone.fromJson(Map<String, dynamic> json) {
@@ -39,20 +41,27 @@ class PairedPhone {
     final name = json['name'];
     if (id is! String || !RegExp(r'^[0-9a-f]{64}$').hasMatch(id) ||
         name is! String || name.isEmpty || name.length > 60 ||
-        (json['canReadSalon'] != null && json['canReadSalon'] is! bool)) {
+        (json['canReadSalon'] != null && json['canReadSalon'] is! bool) ||
+        (json['writeRole'] != null && (json['writeRole'] is! String ||
+          !PhoneWriteRole.values.any((r) => r.name == json['writeRole'])))) {
       throw const FormatException('Invalid device');
     }
     return PairedPhone(id, name,
       PhoneAccess.values.byName(json['state'] as String),
       DateTime.parse(json['createdAt'] as String).toUtc(),
-      canReadSalon: json['canReadSalon'] == true);
+      canReadSalon: json['canReadSalon'] == true,
+      writeRole: PhoneWriteRole.values.byName(json['writeRole'] as String? ?? 'none'));
   }
 
   PairedPhone withState(PhoneAccess value) => PairedPhone(id, name, value, createdAt,
-    canReadSalon: value == PhoneAccess.approved && canReadSalon);
+    canReadSalon: value == PhoneAccess.approved && canReadSalon,
+    writeRole: value == PhoneAccess.approved ? writeRole : PhoneWriteRole.none);
 
   PairedPhone withReadAccess(bool value) => PairedPhone(id, name, state, createdAt,
-    canReadSalon: value);
+    canReadSalon: value, writeRole: value ? writeRole : PhoneWriteRole.none);
+
+  PairedPhone withWriteRole(PhoneWriteRole value) => PairedPhone(id, name, state, createdAt,
+    canReadSalon: canReadSalon, writeRole: value);
 }
 
 /// Machine-only device hashes; no token, PIN or business SQLite dependency.
@@ -186,6 +195,30 @@ class LanPairingRegistry extends ChangeNotifier {
       throw const PairingFailure(LanErrorCode.forbidden);
     }
     await _save({..._phones, id: phone.withReadAccess(value)});
+  });
+
+  Future<void> setWriteRole(String id, PhoneWriteRole role) => _serial(() async {
+    if (!_active) throw const PairingFailure(LanErrorCode.unavailable);
+    final phone = _phones[id];
+    if (phone == null) throw const PairingFailure(LanErrorCode.notFound);
+    if (_effective(phone).state != PhoneAccess.approved || !phone.canReadSalon) {
+      throw const PairingFailure(LanErrorCode.forbidden);
+    }
+    await _save({..._phones, id: phone.withWriteRole(role)});
+  });
+
+  /// Holds device authority until the accepted transaction finishes. Revocation
+  /// queues behind already accepted work and takes effect before later commands.
+  Future<T> withWriteAuthority<T>(String token, LanWriteOperation operation,
+      Future<T> Function(PairedPhone phone) action) => _serial(() async {
+    if (!_active) throw const PairingFailure(LanErrorCode.unavailable);
+    final phone = _phones[_identity(token)];
+    if (phone == null) throw const PairingFailure(LanErrorCode.unauthenticated);
+    if (_effective(phone).state != PhoneAccess.approved || !phone.canReadSalon ||
+        !operation.allows(phone.writeRole)) {
+      throw const PairingFailure(LanErrorCode.forbidden);
+    }
+    return action(phone);
   });
 
   // Desktop owner actions only; there is no HTTP administration route.

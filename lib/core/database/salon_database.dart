@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
@@ -7,15 +8,33 @@ import 'package:sqflite/sqflite.dart';
 import 'database_bootstrap.dart';
 import 'database_schema.dart';
 import 'legacy_demo_data_cleanup.dart';
+import 'lan_write_schema.dart';
+import 'transaction_database.dart';
 
 class SalonDatabase {
   SalonDatabase._();
 
+  factory SalonDatabase.forTransaction(Transaction transaction, String epoch) {
+    final scoped = SalonDatabase._();
+    scoped._database = TransactionDatabase(transaction);
+    scoped._runtimeEpoch = epoch;
+    return scoped;
+  }
+
   static final SalonDatabase instance = SalonDatabase._();
 
   Database? _database;
+  Future<Database>? _opening;
+  String? _runtimeEpoch;
+  String get runtimeEpoch => _runtimeEpoch ?? (throw StateError('Database not opened'));
 
-  Future<Database> initialize({bool preserveExistingTestDatabase = false}) async {
+  Future<Database> initialize({bool preserveExistingTestDatabase = false}) {
+    if (_database != null) return Future.value(_database!);
+    return _opening ??= _initialize(preserveExistingTestDatabase: preserveExistingTestDatabase)
+        .whenComplete(() => _opening = null);
+  }
+
+  Future<Database> _initialize({bool preserveExistingTestDatabase = false}) async {
     if (_database != null) {
       return _database!;
     }
@@ -396,6 +415,11 @@ class SalonDatabase {
           batch.execute(DatabaseSchema.createAuditEventsCreatedAtIndex);
         }
 
+        if (oldVersion < 17) {
+          for (final statement in LanWriteSchema.statements) {
+            batch.execute(statement);
+          }
+        }
         await batch.commit(noResult: true);
       },
       onOpen: (database) async {
@@ -408,14 +432,18 @@ class SalonDatabase {
       },
     );
 
+    final random = Random.secure();
+    _runtimeEpoch = List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
     return _database!;
   }
 
   Future<Database> get database async => initialize();
 
   Future<void> close() async {
+    await _opening;
     await _database?.close();
     _database = null;
+    _runtimeEpoch = null;
   }
 
   Future<String> _resolveDatabasePath() async {

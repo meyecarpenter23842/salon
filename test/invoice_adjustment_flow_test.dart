@@ -29,7 +29,7 @@ void main() {
     'full refund is audited, financially reversed, immutable, and keeps visit closed',
     () async {
       final fixture = await _createFixture();
-      expect(await fixture.database.getVersion(), 16);
+      expect(await fixture.database.getVersion(), 17);
       final paidInvoice = await _checkoutFixture(fixture);
       final adjustments = fixture.invoices as InvoiceAdjustmentRepository;
 
