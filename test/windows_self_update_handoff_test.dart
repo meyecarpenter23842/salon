@@ -115,7 +115,7 @@ Set-Content -LiteralPath $LogPath -Value 'survived_parent_exit'
     final directory = await Directory.systemTemp.createTemp('handoff-early-exit-');
     try {
       final helper = File('${directory.path}/probe.ps1');
-      await helper.writeAsString(parameters + '\nexit 37\n');
+      await helper.writeAsString('$parameters\nexit 37\n');
       await expectLater(
         const WindowsSelfUpdateHandoff().launch(
           helper: helper, installer: File('unused-installer'),
