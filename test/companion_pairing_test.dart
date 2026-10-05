@@ -163,10 +163,10 @@ void main() {
     final client = _Client()..delayed = Completer<void>();
     final store = _Store();
     await showApp(tester, client, store);
-    await tester.enterText(find.byKey(const Key('companion-pair-code')), '12345678');
-    await tester.ensureVisible(find.byKey(const Key('companion-request')));
-    await tester.tap(find.byKey(const Key('companion-request')));
-    await tester.pump();
+    await request(tester);
+    expect(client.requests, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     client.state = PhoneAccess.approved;
     client.delayed!.complete();
