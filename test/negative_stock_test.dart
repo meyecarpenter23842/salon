@@ -14,7 +14,7 @@ import 'package:salonmanager/core/settings/local_settings_store.dart';
 import 'package:salonmanager/core/theme/app_colors.dart';
 import 'package:salonmanager/features/inventory/presentation/pages/inventory_page.dart';
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
-import 'package:salonmanager/core/lan/lan_pairing.dart';
+import 'package:sqflite/sqflite.dart';
 import 'support/mobile_workflow_fixture.dart';
 
 RetailProductUpsertInput productInput({int threshold = 5}) => RetailProductUpsertInput(
