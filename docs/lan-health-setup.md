@@ -1,72 +1,46 @@
-# Desktop HTTPS health host
+# Kết nối điện thoại ngay trong desktop
 
-After one-time setup, opening the licensed Windows main app starts the backend;
-closing it or losing license access stops the backend. Staff never starts one.
-The app keeps working if backend setup/port/IP/certificate fails. See Settings →
-Kết nối điện thoại for status and the API URL.
+Mở app desktop đã có license → **Cài đặt → Kết nối điện thoại**.
+Chọn mạng máy salon đang dùng cùng điện thoại và bấm **Bật kết nối điện thoại**.
+Nếu đã bật bảo vệ Owner, app yêu cầu PIN Owner như các thao tác sửa Cài đặt khác.
 
-## One-time setup (owner machine)
+App tự tạo TLS identity, lưu cấu hình riêng của máy và mở HTTPS health ngay.
+Không cần PowerShell 7, OpenSSL, tự nhập IP hoặc khởi động lại app. Sau khi tự
+kiểm tra HTTPS bằng client pin giống Android, app hiển thị **Địa chỉ máy salon**
+và **Mã xác minh máy salon** cùng nút sao chép. Nhập hai giá trị này vào điện thoại.
 
-Use PowerShell 7 (`pwsh`) to run the repository script, replacing the sample IP
-with the desktop's actual private IPv4 on the salon router:
+Nếu không thấy mạng, kết nối Wi-Fi hoặc dây mạng rồi bấm **Tìm lại mạng**.
+Sau khi đổi mạng/IP, chọn mạng mới và bấm **Áp dụng mạng đã chọn**; app giữ
+nguyên certificate/private key để mã xác minh không tự đổi. Cấu hình lần trước,
+bao gồm cấu hình tạo bằng script cũ, được tự mở lại khi main desktop khởi động.
 
-```powershell
-pwsh -File tools/windows/setup-lan-health.ps1 -Address 192.168.1.20
-```
+## Mạng và tường lửa
 
-This generates a one-year self-signed certificate, private key and config at
-%APPDATA%/HairSpaManager/lan. Windows directory permissions restrict access to
-the current account. Never commit, share or put private-key.pem into a QR.
-The script prints only API URL and public SHA-256 certificate fingerprint.
-It refuses to overwrite config.json so a setup rerun cannot silently change
-the identity trusted by a phone. Back up this directory before deliberate
-certificate renewal/IP changes; those require re-pairing later.
-Use a DHCP reservation to keep desktop IP stable. Restart the main app after
-configuration changes. Do not copy configuration into the business SQLite DB.
+Giữ máy salon và app chính mở; thử điện thoại cùng Wi-Fi trước.
+Nếu Windows hỏi quyền, cho phép Salon trên mạng riêng. Khi cần chỉnh thủ công
+Tường lửa Windows, chỉ cho phép ứng dụng/cổng TCP đã cấu hình (mặc định 8743)
+trên Private profile và LocalSubnet. Luồng bật kết nối không tự thay đổi firewall,
+router hoặc mở cổng ra Internet. 4G/mạng khác cần mạng riêng/tunnel được thiết lập
+riêng. Self-check trên desktop không thay thế kiểm tra qua điện thoại thật.
 
-For Windows Firewall, allow the application/TCP configured port on Private
-profile and local subnet only, after owner review. The script changes no firewall
-rules. A local health success does not prove firewall or phone connectivity.
+## Lưu trữ và lifecycle
 
-## Check the URL
+Identity/cấu hình nằm trong %APPDATA%/HairSpaManager/lan; private key ở thư mục
+identity riêng, bỏ quyền kế thừa và cấp quyền cho tài khoản Windows hiện tại
+trước khi ghi key. Tạo RSA 2048 và certificate SHA-256 bằng basic_utils trong
+isolate; thời hạn một năm, thời gian bắt đầu lùi 5 phút. Điện thoại tin đúng
+certificate DER qua pin, không cài certificate vào trust store và không dùng
+trust-all. Cấu hình JSON chỉ trỏ đường dẫn, không chứa private key.
 
-API URL example: https://192.168.1.20:8743/api/staff/v1
-Health URL: https://192.168.1.20:8743/api/staff/v1/health
+Setup lock OS + guard trong process bảo vệ việc tạo/lưu identity; config được
+ghi file tạm rồi rename sau khi PEM/key đã được kiểm tra. Retry/đổi IP không
+xoay identity. Identity lỗi không bị tự ghi đè. Gia hạn identity khi hết hạn là
+thao tác bảo trì riêng cần cập nhật pin điện thoại, không diễn ra âm thầm.
 
-From a client that explicitly trusts this certificate for this test:
+Chỉ main sau license có callback bật và sở hữu host; Staff/Android không có.
+Controller serialize thao tác, dừng khi main dispose/mất license/thoát; lỗi bind,
+setup hoặc TLS health giữ desktop dùng được và không hiển thị giá trị stale.
+Backend.lock được giải phóng bằng đóng OS handle; không xóa lock đang sống.
 
-```text
-curl --cacert certificate.pem https://192.168.1.20:8743/api/staff/v1/health
-{"apiVersion":1,"status":"ok"}
-```
-
-Use the certificate copied from the owner desktop, not an arbitrary downloaded
-certificate. Do not use curl -k or a trust-all mobile callback. The Android connection shell now supports endpoint-specific pinning; see
-android-companion-test.md for running main.dart or the CI debug APK. QR pairing
-and business access are still separate follow-up work.
-
-Only GET health with no body/query is served. All customer/bill/checkout routes
-remain unavailable. HTTPS protects transport but does not grant business access.
-
-## Connectivity outside the salon
-
-The phone always uses an API URL. Desktop must be running and reachable from
-the phone. LAN IP works within the router; it is not automatically reachable
-from 4G. Remote access requires a separately configured private network or HTTPS
-tunnel to desktop. This PR does not provision those services, public DNS,
-port-forwarding or router/firewall changes.
-
-## Troubleshooting and lifecycle
-
-- Missing config: desktop shows not configured; no listener.
-- IP unavailable, port occupied, invalid/expired certificate: health cannot be
-  reached; desktop stays usable. Correct configuration and restart.
-- Another main app already holds the owner lock: second app refuses hosting,
-  even if configured to another port. Close the first app before changing host.
-- Lock file may remain after close/crash: OS handle release frees ownership.
-  Never delete a live lock file to force another host.
-- Closing/hiding a dialog or opening Staff does not stop main's listener.
-- Main process exit/crash releases sockets and lock. Sleep/network loss makes
-  mobile unreachable; clients must resync on reconnect before writes.
-- Current shutdown force-closes health connections; no business commands exist.
-  Draining accepted mutations transactionally is a prerequisite for Batch 3.
+Chỉ GET /api/staff/v1/health được phục vụ, không đọc business SQLite.
+Khách hàng/hóa đơn/cấp quyền thiết bị vẫn thuộc các batch tiếp theo.
