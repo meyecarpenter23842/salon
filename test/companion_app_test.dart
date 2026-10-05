@@ -86,11 +86,15 @@ void main() {
       await tester.pump();
       expect(tester.widget<FilledButton>(
         find.byKey(const Key('companion-check'))).onPressed, isNull);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       checker.completion!.complete();
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('companion-result')), findsNothing);
       expect(checker.calls, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     });
 }

@@ -29,7 +29,7 @@ void main() {
       skip: 'Set SALON_TEST_TLS_DIR to generated PEM fixtures.');
     return;
   }
-  late HttpServer server;
+  HttpServer? server;
   late String fingerprint;
   Future<void> start(void Function(HttpRequest) respond) async {
     final pem = await File('$fixture/certificate.pem').readAsString();
@@ -40,11 +40,14 @@ void main() {
       ..useCertificateChain('$fixture/certificate.pem')
       ..usePrivateKey('$fixture/private-key.pem');
     server = await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, context);
-    server.listen(respond);
+    server!.listen(respond);
   }
   LanConnection connection([String? pin]) => LanConnection(
-    'https://127.0.0.1:${server.port}/api/staff/v1', pin ?? fingerprint);
-  tearDown(() async => server.close(force: true));
+    'https://127.0.0.1:${server!.port}/api/staff/v1', pin ?? fingerprint);
+  tearDown(() async {
+    await server?.close(force: true);
+    server = null;
+  });
 
   test('real self-signed TLS works only with exact entered certificate pin',
     () async {
