@@ -51,6 +51,11 @@ Assert-Contains $safeService 'exit(0)' 'Salon phải thoát sau khi đóng DB đ
 Assert-Contains $safeService 'self_update_helper.log' 'Updater phải truyền một helper log path ổn định để chẩn đoán lỗi sau handoff.'
 Assert-Contains $safeService 'helperPid' 'Updater audit phải ghi PID của helper đã launch.'
 
+Assert-Contains $handoff 'ProcessStartMode.normal' 'PowerShell phải được chạy normal/hidden thay vì detached console host.'
+Assert-NotContains $handoff 'ProcessStartMode.detached' 'Detached Windows PowerShell có thể chết trước khi chạy script.'
+Assert-Contains $handoff "'-WindowStyle'" 'Helper không được mở cửa sổ console.'
+Assert-Contains $handoff "'-ReadyPath'" 'App phải chờ helper ACK trước khi thoát.'
+Assert-Contains $handoff "'-ContinuePath'" 'Helper không được cài nếu app chưa xác nhận ACK.'
 Assert-Contains $handoff 'Start-Sleep -Milliseconds 900' 'Helper phải cho Salon thời gian ngắn để đóng DB và thoát trước khi cài.'
 Assert-Contains $handoff 'CloseMainWindow()' 'Helper phải đóng các cửa sổ Salon còn lại theo cách graceful.'
 Assert-Contains $handoff '[string]$LogPath' 'Helper phải nhận log path tuyệt đối từ app.'
