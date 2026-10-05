@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
+import '../core/lan/desktop_backend_scope.dart';
 import '../core/theme/theme_controller.dart';
 import '../features/overview/presentation/pages/staff_intake_workspace.dart';
 import '../features/overview/presentation/pages/staff_window_workspace.dart';
@@ -51,6 +52,17 @@ class _SalonManagerHome extends ConsumerWidget {
               !Platform.environment.containsKey('FLUTTER_TEST'),
           child: const DesktopShellPage(),
         ),
+        if (selectedSection == DesktopSection.settings)
+          Positioned(
+            left: 24,
+            bottom: 20,
+            child: FilledButton.tonalIcon(
+              key: const Key('desktop-backend-open'),
+              onPressed: () => showDesktopBackendStatus(context),
+              icon: const Icon(Icons.phonelink, size: 18),
+              label: const Text('Kết nối điện thoại'),
+            ),
+          ),
         if (selectedSection == DesktopSection.settings)
           Positioned(
             right: 24,

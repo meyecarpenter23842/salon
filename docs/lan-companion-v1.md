@@ -1,8 +1,9 @@
 # Android companion / desktop LAN contract v1
 
-Tracking: #86, Batch 2 #89. This PR defines wire primitives and host policy only.
-No server starts from main.dart yet. No port, firewall rule, DB migration,
-pairing token or Android bootstrap is enabled by this change.
+Tracking: #86, Batch 2 #89. Contract/policy landed in #90. The licensed Windows
+main app now starts an HTTPS health host when one-time configuration exists.
+No DB migration, pairing token, business API or Android bootstrap is enabled.
+Firewall rules remain an explicit setup action.
 
 ## Ownership and lifecycle decision
 
@@ -17,7 +18,8 @@ processes), retain it through shutdown, and refuse a second owner. A failed lock
 or bind leaves desktop usable with LAN unavailable; no automatic alternate port.
 License loss stops acceptance of new requests. Shutdown first stops new commands,
 drains accepted work through repository transactions, then closes sockets/lock.
-Policy types express eligibility, not lock acquisition or a running server.
+The health host uses an exclusive OS file lock retained for the entire listener
+lifetime plus an in-process guard. It never falls back to another port.
 The server must never depend on the UI's selectedInvoiceSessionIdProvider.
 
 ## Transport and discovery decision
@@ -26,14 +28,16 @@ Use HTTPS and WSS. Desktop generates a per-installation certificate/private key;
 QR shown by the owner carries endpoint, API version, certificate SHA-256 pin and
 a short-lived single-use pairing secret. Android pins that certificate for this
 endpoint; never use a global trust-all callback. Pin change requires explicit
-re-pair. Discovery uses QR; DHCP address change can require a new QR. No mDNS
+re-pair. API URL is the connection target and can be entered directly; QR is a future
+convenience for exchanging URL/pin and pairing. DHCP address change needs updated
+configuration and certificate identity. No mDNS
 dependency. Bind only configured LAN interfaces; no port-forwarding or UPnP.
 A later spike must prove Dart/Android pin validation with a real certificate.
 Do not expose device tokens, pairing secrets or customer data over plain HTTP.
 
 Firewall setup is a deliberate owner action limited to Private network profiles
-and local subnet. Do not silently open Public network rules. Default port will be
-chosen/tested in the health spike; document conflicts before enabling runtime.
+and local subnet. Do not silently open Public network rules. The health host uses port 8743 by default; configure another port explicitly
+when required. No automatic conflict fallback.
 
 ## Wire rules
 
@@ -97,7 +101,9 @@ by commandId first.
 ## Evidence and remaining gate
 
 Pure Dart contract/policy tests run in existing Ubuntu and Windows Flutter CI.
-This establishes no working LAN connection. Remaining Batch 2 work is an opt-in
-health host with OS ownership lock, TLS pinning/discovery spike, Android network
-bootstrap isolated from Windows credential/license/SQLite startup, and an actual
-Android-to-desktop LAN check. Pairing/auth and business routes follow Batch 3.
+CI additionally exercises a real HTTPS listener with a generated certificate,
+trusted/untrusted clients, unsupported routes, startup/stop races, port conflicts
+and another-process OS lock exclusion on Ubuntu and Windows. This proves host
+behavior, not connectivity from a real phone. Remaining work is Android pinning/
+discovery and network bootstrap isolated from Windows credential/license/SQLite
+startup, followed by an actual Android-to-desktop LAN check. Pairing/auth and business routes follow Batch 3.
