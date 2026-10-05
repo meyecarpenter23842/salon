@@ -22,6 +22,7 @@ import '../models/service_catalog_item.dart';
 import '../models/service_upsert_input.dart';
 import '../settings/local_settings_store.dart';
 import 'repository_contracts.dart';
+import 'fake_inventory_repository.dart';
 
 class FakeOverviewRepository implements OverviewRepository {
   const FakeOverviewRepository(this._dataSource);
@@ -1099,6 +1100,12 @@ class FakeInvoicesRepository implements InvoicesRepository {
       updatedAt: now,
       lines: List<InvoiceDraftLine>.from(draft.lines),
     );
+    final quantities = <String, int>{};
+    for (final line in draft.lines.where((line) => line.isProduct)) {
+      final productId = line.productId ?? '';
+      quantities.update(productId, (value) => value + line.quantity, ifAbsent: () => line.quantity);
+    }
+    await FakeInventoryRepository().recordSale(archived.id, quantities);
     _history.insert(0, archived);
     if (draft.appointmentId != null) {
       await FakeAppointmentsRepository.markAppointmentCompleted(
@@ -1354,6 +1361,9 @@ class FakeRetailProductsRepository implements RetailProductsRepository {
     RetailProductUpsertInput input, {
     String? existingId,
   }) async {
+    if (input.lowStockThreshold < 0) {
+      throw ArgumentError.value(input.lowStockThreshold, 'lowStockThreshold', 'Không được âm');
+    }
     final now = DateTime.now();
     final existingIndex = existingId == null
         ? -1
@@ -1366,6 +1376,7 @@ class FakeRetailProductsRepository implements RetailProductsRepository {
       brand: input.brand,
       volumeLabel: input.volumeLabel,
       unitName: input.unitName,
+      lowStockThreshold: input.lowStockThreshold,
       productType: input.productType,
       salePrice: input.salePrice,
       commissionPercent: input.commissionPercent,

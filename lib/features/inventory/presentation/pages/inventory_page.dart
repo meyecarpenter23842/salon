@@ -22,6 +22,7 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
   String _query = '';
   String? _groupFilter;
   String? _brandFilter;
+  String _stockFilter = 'all';
   String? _selectedProductId;
   final Set<String> _checkedProductIds = <String>{};
 
@@ -61,7 +62,14 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
           final groupOk =
               _groupFilter == null || item.productType == _groupFilter;
           final brandOk = _brandFilter == null || item.brand == _brandFilter;
-          return queryOk && groupOk && brandOk;
+          final stockOk = switch (_stockFilter) {
+            'negative' => item.isNegativeStock,
+            'zero' => item.isOutOfStock,
+            'low' => item.isLowStock,
+            'healthy' => item.stockOnHand > 0 && !item.isLowStock,
+            _ => true,
+          };
+          return queryOk && groupOk && brandOk && stockOk;
         }).toList(growable: false);
         final selected = _resolveSelected(filteredProducts);
         final checkedProducts = products
@@ -75,6 +83,7 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
                 .where((item) => item.productId == selected.id)
                 .toList(growable: false);
         final unsetUnits = products.where((item) => item.unitName.isEmpty).length;
+        final negativeStockCount = products.where((item) => item.isNegativeStock).length;
         final lowStockCount = products.where((item) => item.isLowStock).length;
         final outOfStockCount =
             products.where((item) => item.isOutOfStock).length;
@@ -88,7 +97,7 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
                 key: const Key('inventory-premium-header'),
                 title: 'Kho hàng',
                 subtitle:
-                    'Theo dõi tồn thật; POS tự trừ khi checkout và chặn bán quá tồn.',
+                    'Cho phép bán vượt tồn; sản phẩm âm kho được cảnh báo để nhập bù.',
                 actionLabel: 'Nhập hàng',
                 actionIcon: Icons.add_box_outlined,
                 onAction: () => _startBatchMutation(
@@ -102,6 +111,7 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
                 items: [
                   '${products.length} sản phẩm',
                   '$unsetUnits chưa thiết lập đơn vị',
+                  '$negativeStockCount âm kho',
                   '$lowStockCount sắp hết',
                   '$outOfStockCount hết hàng',
                 ],
@@ -174,6 +184,27 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
                       ],
                       onChanged: (value) => setState(() {
                         _brandFilter = value;
+                        _selectedProductId = null;
+                        _checkedProductIds.clear();
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      key: const Key('inventory-stock-filter'),
+                      initialValue: _stockFilter,
+                      isExpanded: true,
+                      decoration: const InputDecoration(isDense: true, labelText: 'Trạng thái tồn'),
+                      items: [
+                        const DropdownMenuItem(value: 'all', child: Text('Tất cả tồn')),
+                        DropdownMenuItem(value: 'negative', child: Text('Âm kho ($negativeStockCount)', style: TextStyle(color: AppColors.danger))),
+                        const DropdownMenuItem(value: 'zero', child: Text('Hết hàng')),
+                        const DropdownMenuItem(value: 'low', child: Text('Sắp hết')),
+                        const DropdownMenuItem(value: 'healthy', child: Text('Còn hàng')),
+                      ],
+                      onChanged: (value) => setState(() {
+                        _stockFilter = value ?? 'all';
                         _selectedProductId = null;
                         _checkedProductIds.clear();
                       }),
@@ -347,12 +378,11 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
       if (!context.mounted) return;
       ref.read(inventoryRefreshNonceProvider.notifier).state++;
       setState(_checkedProductIds.clear);
-      final total = input.lines.fold<int>(0, (sum, line) => sum + line.quantity);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             mode == _InventoryMutationMode.receive
-                ? 'Đã nhập ${input.lines.length} sản phẩm, tổng $total đơn vị.'
+                ? 'Đã nhập ${input.lines.length} sản phẩm.'
                 : 'Đã điều chỉnh tồn ${input.lines.length} sản phẩm.',
           ),
         ),
@@ -546,7 +576,7 @@ class _InventoryProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stockTone = product.isOutOfStock
+    final stockTone = product.isNegativeStock || product.isOutOfStock
         ? AppColors.danger
         : product.isLowStock
             ? AppColors.warning
@@ -570,7 +600,7 @@ class _InventoryProductRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
-                    Icons.inventory_2_outlined,
+                    product.isNegativeStock ? Icons.warning_amber_rounded : Icons.inventory_2_outlined,
                     size: 17,
                     color: stockTone,
                   ),
@@ -615,11 +645,7 @@ class _InventoryProductRow extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      product.isOutOfStock
-                          ? 'Hết hàng'
-                          : product.isLowStock
-                              ? 'Sắp hết'
-                              : 'Còn hàng',
+                      product.stockLabel,
                       style: TextStyle(
                         color: stockTone,
                         fontSize: 10.5,
@@ -682,8 +708,8 @@ class _InventoryDetailPanel extends StatelessWidget {
               Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
               const SizedBox(height: 4),
-              Text('${item.metaLabel} • Tồn ${item.stockOnHand}',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+              Text('${item.metaLabel} • Tồn ${item.stockOnHand} • ${item.stockLabel} • Ngưỡng ${item.lowStockThreshold}',
+                style: TextStyle(color: item.isNegativeStock ? AppColors.danger : AppColors.textMuted, fontSize: 11.5)),
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(child: FilledButton.icon(onPressed: onReceive,
@@ -1059,7 +1085,6 @@ class _InventoryConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isReceive = mode == _InventoryMutationMode.receive;
-    final total = input.lines.fold<int>(0, (sum, line) => sum + line.quantity);
     final previewNames = products.take(4).map((item) => item.name).join(', ');
     final more = products.length > 4 ? ' và ${products.length - 4} sản phẩm khác' : '';
 
@@ -1074,7 +1099,7 @@ class _InventoryConfirmDialog extends StatelessWidget {
           children: [
             Text(
               isReceive
-                  ? 'Sẽ nhập ${products.length} sản phẩm, tổng $total đơn vị.'
+                  ? 'Sẽ nhập ${products.length} sản phẩm theo số lượng từng dòng.'
                   : 'Sẽ cập nhật tồn mới cho ${products.length} sản phẩm.',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),

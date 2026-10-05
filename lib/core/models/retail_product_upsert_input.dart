@@ -7,6 +7,7 @@ class RetailProductUpsertInput {
     required this.brand,
     required this.volumeLabel,
     this.unitName = '',
+    this.lowStockThreshold = 5,
     required this.productType,
     required this.salePrice,
     required this.commissionPercent,
@@ -21,6 +22,7 @@ class RetailProductUpsertInput {
   final String brand;
   final String volumeLabel;
   final String unitName;
+  final int lowStockThreshold;
   final String productType;
   final int salePrice;
   final double commissionPercent;

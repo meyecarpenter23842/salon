@@ -10,6 +10,7 @@ class RetailProductItem {
     required this.brand,
     required this.volumeLabel,
     this.unitName = '',
+    this.lowStockThreshold = 5,
     required this.productType,
     required this.salePrice,
     required this.commissionPercent,
@@ -27,6 +28,7 @@ class RetailProductItem {
   final String brand;
   final String volumeLabel;
   final String unitName;
+  final int lowStockThreshold;
   final String productType;
   final int salePrice;
   final double commissionPercent;
@@ -47,6 +49,7 @@ class RetailProductItem {
     String? brand,
     String? volumeLabel,
     String? unitName,
+    int? lowStockThreshold,
     String? productType,
     int? salePrice,
     double? commissionPercent,
@@ -64,6 +67,7 @@ class RetailProductItem {
       brand: brand ?? this.brand,
       volumeLabel: volumeLabel ?? this.volumeLabel,
       unitName: unitName ?? this.unitName,
+      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
       productType: productType ?? this.productType,
       salePrice: salePrice ?? this.salePrice,
       commissionPercent: commissionPercent ?? this.commissionPercent,

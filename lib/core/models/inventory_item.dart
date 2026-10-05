@@ -5,6 +5,7 @@ class InventoryProductItem {
     required this.brand,
     required this.volumeLabel,
     this.unitName = '',
+    this.lowStockThreshold = 5,
     required this.productType,
     required this.stockOnHand,
     required this.isActive,
@@ -15,12 +16,16 @@ class InventoryProductItem {
   final String brand;
   final String volumeLabel;
   final String unitName;
+  final int lowStockThreshold;
   final String productType;
   final int stockOnHand;
   final bool isActive;
 
+  bool get isNegativeStock => stockOnHand < 0;
+  String get stockLabel => isNegativeStock ? 'Âm kho' : isOutOfStock ? 'Hết hàng' : isLowStock ? 'Sắp hết' : 'Còn hàng';
+
   bool get isOutOfStock => stockOnHand == 0;
-  bool get isLowStock => stockOnHand > 0 && stockOnHand <= 5;
+  bool get isLowStock => stockOnHand > 0 && stockOnHand <= lowStockThreshold;
 
   String get metaLabel => [
     productType,

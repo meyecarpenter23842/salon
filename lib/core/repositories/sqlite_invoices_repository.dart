@@ -396,13 +396,6 @@ class SqliteInvoicesRepository
       throw StateError('Product $productId not found or inactive');
     }
     final product = rows.first;
-    final requestedQuantity =
-        _productQuantityInDraft(draft, productId) + 1;
-    _ensureProductStockAvailable(
-      productName: product['name']?.toString() ?? 'Sản phẩm',
-      available: _toInt(product['stock_on_hand']),
-      requested: requestedQuantity,
-    );
 
     final existingIndex = draft.lines.indexWhere(
       (line) => line.isProduct && line.productId == productId,
@@ -473,15 +466,7 @@ class SqliteInvoicesRepository
       if (productId.isEmpty) {
         throw StateError('Dòng sản phẩm không có mã sản phẩm.');
       }
-      final requestedQuantity =
-          _productQuantityInDraft(draft, productId) -
-          line.quantity +
-          normalizedQuantity;
-      await _ensureProductStockAvailableFromDatabase(
-        database,
-        productId: productId,
-        requested: requestedQuantity,
-      );
+      await _ensureProductExists(database, productId: productId);
     }
     updatedLines[index] = line.copyWith(
       quantity: normalizedQuantity,
@@ -1314,13 +1299,7 @@ class SqliteInvoicesRepository
         throw StateError('Sản phẩm ${entry.key} không còn trong danh mục.');
       }
 
-      final productName = rows.first['name']?.toString() ?? 'Sản phẩm';
       final before = _toInt(rows.first['stock_on_hand']);
-      _ensureProductStockAvailable(
-        productName: productName,
-        available: before,
-        requested: entry.value,
-      );
       final after = before - entry.value;
       final updated = await database.update(
         'inventory_stock',
@@ -1331,10 +1310,14 @@ class SqliteInvoicesRepository
         where: 'product_id = ?',
         whereArgs: [entry.key],
       );
-      if (updated != 1) {
-        throw StateError(
-          'Sản phẩm $productName chưa có tồn kho để bán. Nhập kho trước khi thanh toán.',
-        );
+      if (updated == 0) {
+        await database.insert('inventory_stock', {
+          'product_id': entry.key,
+          'stock_on_hand': after,
+          'updated_at': now.toIso8601String(),
+        }, conflictAlgorithm: ConflictAlgorithm.abort);
+      } else if (updated != 1) {
+        throw StateError('Không thể cập nhật tồn cho sản phẩm ${entry.key}.');
       }
 
       await database.insert(
@@ -1433,52 +1416,15 @@ class SqliteInvoicesRepository
     }
   }
 
-  Future<void> _ensureProductStockAvailableFromDatabase(
+  Future<void> _ensureProductExists(
     DatabaseExecutor database, {
     required String productId,
-    required int requested,
   }) async {
-    final rows = await database.rawQuery(
-      'SELECT p.name, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
-      'FROM retail_products p '
-      'LEFT JOIN inventory_stock s ON s.product_id = p.id '
-      'WHERE p.id = ? LIMIT 1',
-      [productId],
-    );
+    final rows = await database.query('retail_products',
+        columns: const ['id'], where: 'id = ?', whereArgs: [productId], limit: 1);
     if (rows.isEmpty) {
       throw StateError('Sản phẩm $productId không còn trong danh mục.');
     }
-    _ensureProductStockAvailable(
-      productName: rows.first['name']?.toString() ?? 'Sản phẩm',
-      available: _toInt(rows.first['stock_on_hand']),
-      requested: requested,
-    );
-  }
-
-  void _ensureProductStockAvailable({
-    required String productName,
-    required int available,
-    required int requested,
-  }) {
-    if (requested <= available) return;
-    if (available <= 0) {
-      throw StateError(
-        '$productName đã hết hàng. Nhập kho trước khi bán.',
-      );
-    }
-    throw StateError(
-      'Không đủ tồn kho cho $productName: cần $requested, còn $available.',
-    );
-  }
-
-  int _productQuantityInDraft(InvoiceDraft draft, String productId) {
-    var total = 0;
-    for (final line in draft.lines) {
-      if (line.isProduct && line.productId == productId) {
-        total += line.quantity;
-      }
-    }
-    return total;
   }
 
   String _saleMovementId(String invoiceId, String productId) =>

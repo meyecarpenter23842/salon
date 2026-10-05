@@ -148,6 +148,9 @@ class SqliteRetailProductsRepository
     RetailProductUpsertInput input, {
     String? existingId,
   }) async {
+    if (input.lowStockThreshold < 0) {
+      throw ArgumentError.value(input.lowStockThreshold, 'lowStockThreshold', 'Không được âm');
+    }
     if (!_database.isTransactionScoped) {
       return _database.inTransaction((scope) => SqliteRetailProductsRepository(scope).saveProduct(input, existingId: existingId));
     }
