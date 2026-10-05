@@ -37,6 +37,7 @@ class _ConnectionPage extends StatefulWidget {
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final CompanionCredentialStore credentialStore;
+  final SalonReadClient readClient;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();

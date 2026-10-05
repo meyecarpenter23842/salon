@@ -30,6 +30,15 @@ void main() {
       await expectLater(registry.status(token, requireApproved: true),
         throwsA(isA<PairingFailure>()));
       await approve();
+      Future<void> grantRead() => service.runSensitive(
+        action: SensitiveAction.settingsEdit, targetType: 'phone_access', targetId: phone.id,
+        operation: () => registry.setReadAccess(phone.id, true));
+      service.lockOwnerSession();
+      await expectLater(grantRead(), throwsStateError);
+      expect(registry.phones.single.canReadSalon, isFalse);
+      expect(await service.unlockOwner('1234'), isTrue);
+      await grantRead();
+      expect((await registry.status(token, requireRead: true)).canReadSalon, isTrue);
       service.lockOwnerSession();
       await expectLater(service.runSensitive(
         action: SensitiveAction.settingsEdit, targetType: 'phone_access', targetId: phone.id,
@@ -41,8 +50,8 @@ void main() {
         operation: () => registry.decide(phone.id, PhoneAccess.revoked));
       expect(registry.phones.single.state, PhoneAccess.revoked);
       final audit = (await service.fetchAuditEvents()).where((e) => e.targetType == 'phone_access').toList();
-      expect(audit.where((e) => e.result == 'denied').length, 2);
-      expect(audit.where((e) => e.result == 'success').length, 2);
+      expect(audit.where((e) => e.result == 'denied').length, 3);
+      expect(audit.where((e) => e.result == 'success').length, 3);
       for (final event in audit) {
         expect(event.targetId, phone.id);
         expect(event.detail, isNot(contains(token)));

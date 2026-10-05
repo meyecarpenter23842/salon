@@ -53,11 +53,11 @@ class SalonReadQuery {
   final String? day;
   final String? id;
   Map<String, String> get parameters => {
-    if (id != null) 'id': id!,
+    'id': ?id,
     if (id == null) 'offset': '$offset',
     if (id == null) 'limit': '$limit',
     if (query.isNotEmpty) 'q': query,
-    if (day != null) 'day': day!,
+    'day': ?day,
   };
   factory SalonReadQuery.fromUri(SalonReadKind kind, Uri uri) {
     final p = uri.queryParametersAll;

@@ -97,7 +97,9 @@ class SqliteLanReadRepository implements SalonReadRepository {
       final names = services.map(AppointmentServiceMapper.fromDatabase)
           .map((s) => s.title).join(' + ');
       final paid = await db.query('invoices', columns: ['id'],
-        where: 'appointment_id = ? AND paid_at IS NOT NULL', whereArgs: [a.id], limit: 1);
+        where: 'appointment_id = ? AND paid_at IS NOT NULL AND NOT EXISTS ('
+            "SELECT 1 FROM invoice_adjustments ia WHERE ia.invoice_id = invoices.id AND ia.adjustment_type = 'void')",
+        whereArgs: [a.id], limit: 1);
       return SalonReadRecord(id: a.id, title: '${a.timeLabel} · ${text(a.customerName)}',
         subtitle: '${text(names.isEmpty ? a.serviceName : names)} · ${text(a.status)}',
         fields: detail ? {
@@ -136,6 +138,8 @@ class SqliteLanReadRepository implements SalonReadRepository {
         'Trạng thái': state, 'Tạm tính': money(invoice.subtotal),
         'Giảm giá hóa đơn': money(invoice.discountAmount),
         'Tổng hóa đơn': money(invoice.totalAmount), 'Phương thức': invoice.paymentSummary,
+        for (final allocation in invoice.effectivePaymentAllocations)
+          'Thanh toán ${allocation.paymentMethod}': money(allocation.amount),
         if (adjustments.isNotEmpty) 'Số tiền điều chỉnh': money((adjustments.first['amount'] as num).toInt()),
         for (final (index, line) in invoice.lines.indexed)
           '${index + 1}. ${text(line.title)}':
