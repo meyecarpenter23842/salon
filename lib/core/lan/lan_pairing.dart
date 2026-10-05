@@ -21,30 +21,38 @@ class PairingFailure implements Exception {
 enum PhoneAccess { pending, approved, denied, revoked, expired }
 
 class PairedPhone {
-  const PairedPhone(this.id, this.name, this.state, this.createdAt);
+  const PairedPhone(this.id, this.name, this.state, this.createdAt, {this.canReadSalon = false});
   final String id;
   final String name;
   final PhoneAccess state;
   final DateTime createdAt;
+  final bool canReadSalon;
 
   Map<String, Object> toJson() => {
     'id': id, 'name': name, 'state': state.name,
     'createdAt': createdAt.toUtc().toIso8601String(),
+    'canReadSalon': canReadSalon,
   };
 
   factory PairedPhone.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
     final name = json['name'];
     if (id is! String || !RegExp(r'^[0-9a-f]{64}$').hasMatch(id) ||
-        name is! String || name.isEmpty || name.length > 60) {
+        name is! String || name.isEmpty || name.length > 60 ||
+        (json['canReadSalon'] != null && json['canReadSalon'] is! bool)) {
       throw const FormatException('Invalid device');
     }
     return PairedPhone(id, name,
       PhoneAccess.values.byName(json['state'] as String),
-      DateTime.parse(json['createdAt'] as String).toUtc());
+      DateTime.parse(json['createdAt'] as String).toUtc(),
+      canReadSalon: json['canReadSalon'] == true);
   }
 
-  PairedPhone withState(PhoneAccess value) => PairedPhone(id, name, value, createdAt);
+  PairedPhone withState(PhoneAccess value) => PairedPhone(id, name, value, createdAt,
+    canReadSalon: value == PhoneAccess.approved && canReadSalon);
+
+  PairedPhone withReadAccess(bool value) => PairedPhone(id, name, state, createdAt,
+    canReadSalon: value);
 }
 
 /// Machine-only device hashes; no token, PIN or business SQLite dependency.
@@ -158,15 +166,26 @@ class LanPairingRegistry extends ChangeNotifier {
     return phone;
   }
 
-  Future<PairedPhone> status(String token, {bool requireApproved = false}) => _serial(() async {
+  Future<PairedPhone> status(String token, {bool requireApproved = false, bool requireRead = false}) => _serial(() async {
     if (!_active) throw const PairingFailure(LanErrorCode.unavailable);
     final phone = _phones[_identity(token)];
     if (phone == null) throw const PairingFailure(LanErrorCode.unauthenticated);
     final effective = _effective(phone);
-    if (requireApproved && effective.state != PhoneAccess.approved) {
+    if ((requireApproved || requireRead) && effective.state != PhoneAccess.approved ||
+        requireRead && !effective.canReadSalon) {
       throw const PairingFailure(LanErrorCode.forbidden);
     }
     return effective;
+  });
+
+  Future<void> setReadAccess(String id, bool value) => _serial(() async {
+    if (!_active) throw const PairingFailure(LanErrorCode.unavailable);
+    final phone = _phones[id];
+    if (phone == null) throw const PairingFailure(LanErrorCode.notFound);
+    if (_effective(phone).state != PhoneAccess.approved) {
+      throw const PairingFailure(LanErrorCode.forbidden);
+    }
+    await _save({..._phones, id: phone.withReadAccess(value)});
   });
 
   // Desktop owner actions only; there is no HTTP administration route.

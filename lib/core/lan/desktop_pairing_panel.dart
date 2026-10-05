@@ -98,6 +98,16 @@ class _DesktopPairingPanelState extends ConsumerState<DesktopPairingPanel> {
                 PhoneAccess.revoked => 'Đã thu hồi',
                 PhoneAccess.expired => 'Yêu cầu đã hết hạn',
               }),
+              if (phone.state == PhoneAccess.approved)
+                SwitchListTile(
+                  key: Key('phone-read-${phone.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Cho xem dữ liệu salon'),
+                  subtitle: const Text('Khách hàng, hóa đơn và lịch hẹn. Chỉ xem.'),
+                  value: phone.canReadSalon,
+                  onChanged: _busy || !registry.active ? null : (value) =>
+                    _act(phone.id, () => registry.setReadAccess(phone.id, value)),
+                ),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 if (phone.state == PhoneAccess.pending) ...[
                   FilledButton(

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../database/salon_database.dart';
+import '../repositories/sqlite_lan_read_repository.dart';
 import 'desktop_lan_controller.dart';
 import 'desktop_phone_connection_panel.dart';
 import 'lan_setup_service.dart';
@@ -31,6 +33,7 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
       try {
         _controller = DesktopLanController(
         LanSetupService(desktopLanDirectory()), desktopBackendStatus,
+        reader: SqliteLanReadRepository(() => SalonDatabase.instance.database),
       );
       desktopPhoneRegistry.value = _controller!.pairing;
       _enable = _controller!.enable;

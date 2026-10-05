@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 
 import 'lan_contract.dart';
 import 'lan_pairing.dart';
+import 'lan_read_models.dart';
 
 class LanHostConfig {
   LanHostConfig({
@@ -78,9 +79,10 @@ class LanHostConfig {
 
 /// HTTPS host; health stays anonymous, device routes require separate authority.
 class LanHealthHost {
-  LanHealthHost({required this.lockFile, this.pairing});
+  LanHealthHost({required this.lockFile, this.pairing, this.reader});
 
   final LanPairingRegistry? pairing;
+  final SalonReadRepository? reader;
   int _activeRequests = 0;
   DateTime _windowStart = DateTime.now();
   int _pairRequests = 0;
@@ -153,6 +155,8 @@ class LanHealthHost {
           request.headers.value(HttpHeaders.transferEncodingHeader) == null) {
         response.statusCode = HttpStatus.ok;
         response.write(jsonEncode(const LanHealth().toJson()));
+      } else if (pairing != null && await _readRoute(request)) {
+        // Approved read authority is checked before and after the database read.
       } else if (pairing != null && await _deviceRoute(request)) {
         // Response written by the bounded device router.
       } else {
@@ -235,7 +239,8 @@ class LanHealthHost {
       request.response.statusCode = HttpStatus.ok;
       request.response.write(jsonEncode({
         'apiVersion': 1, 'device': phone.toJson(),
-        if (bootstrap) 'permissions': <String>['connection'],
+        if (bootstrap) 'permissions': <String>['connection',
+          if (phone.canReadSalon) ...['customers.read', 'invoices.read', 'appointments.read']],
       }));
     } catch (error) {
       final code = error is PairingFailure ? error.code
@@ -245,6 +250,50 @@ class LanHealthHost {
       request.response.write(jsonEncode(
         LanFailure(code, requestId: 'device-${++_requestSequence}').toJson(),
       ));
+    }
+    return true;
+  }
+
+  Future<bool> _readRoute(HttpRequest request) async {
+    final kinds = SalonReadKind.values.where((kind) =>
+      request.uri.path == '${LanContract.basePath}/${kind.name}');
+    if (kinds.isEmpty) return false;
+    // Health-only hosts retain their original routing surface.
+    if (reader == null) return false;
+    try {
+      if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
+      final now = DateTime.now();
+      if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
+        _windowStart = now; _pairRequests = 0; _statusRequests = 0;
+      }
+      if (++_statusRequests > 240) throw const PairingFailure(LanErrorCode.rateLimited);
+      if (request.method != 'GET' || request.contentLength > 0 ||
+          request.headers.value(HttpHeaders.transferEncodingHeader) != null ||
+          request.uri.query.length > 1024) {
+        throw const PairingFailure(LanErrorCode.invalidRequest);
+      }
+      final auth = request.headers.value(HttpHeaders.authorizationHeader);
+      if (auth == null || !auth.startsWith('Bearer ')) {
+        throw const PairingFailure(LanErrorCode.unauthenticated);
+      }
+      final token = auth.substring(7);
+      await pairing!.status(token, requireRead: true);
+      final query = SalonReadQuery.fromUri(kinds.single, request.uri);
+      final page = await reader!.read(query).timeout(const Duration(seconds: 5));
+      final payload = jsonEncode(page.toJson());
+      if (utf8.encode(payload).length > 262144) {
+        throw const PairingFailure(LanErrorCode.unavailable);
+      }
+      await pairing!.status(token, requireRead: true);
+      request.response.statusCode = HttpStatus.ok;
+      request.response.write(payload);
+    } catch (error) {
+      final code = error is PairingFailure ? error.code
+          : error is FormatException ? LanErrorCode.invalidRequest
+          : error is TimeoutException ? LanErrorCode.unavailable : LanErrorCode.internal;
+      request.response.statusCode = code.httpStatus;
+      request.response.write(jsonEncode(
+        LanFailure(code, requestId: 'read-${++_requestSequence}').toJson()));
     }
     return true;
   }
