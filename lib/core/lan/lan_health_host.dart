@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'lan_contract.dart';
+import 'lan_pairing.dart';
 
 class LanHostConfig {
   LanHostConfig({
@@ -75,9 +76,15 @@ class LanHostConfig {
   }
 }
 
-/// HTTPS liveness host. No repository, database, auth or mutation dependency.
+/// HTTPS host; health stays anonymous, device routes require separate authority.
 class LanHealthHost {
-  LanHealthHost({required this.lockFile});
+  LanHealthHost({required this.lockFile, this.pairing});
+
+  final LanPairingRegistry? pairing;
+  int _activeRequests = 0;
+  DateTime _windowStart = DateTime.now();
+  int _pairRequests = 0;
+  int _statusRequests = 0;
 
   final File lockFile;
   static final Set<String> _ownedPaths = {};
@@ -112,6 +119,7 @@ class LanHealthHost {
       await lockFile.parent.create(recursive: true);
       _lock = await lockFile.open(mode: FileMode.append);
       await _lock!.lock(FileLock.exclusive, 0, 1);
+      await pairing?.load();
       final context = await config.securityContext();
       _server = await HttpServer.bindSecure(
         config.address,
@@ -119,6 +127,7 @@ class LanHealthHost {
         context,
         shared: false,
       );
+      pairing?.setActive(true);
       _server!.idleTimeout = const Duration(seconds: 5);
       _server!.listen(
         (request) => unawaited(_respond(request)),
@@ -131,6 +140,7 @@ class LanHealthHost {
   }
 
   Future<void> _respond(HttpRequest request) async {
+    _activeRequests++;
     try {
       final response = request.response;
       response.headers.contentType = ContentType.json;
@@ -143,6 +153,8 @@ class LanHealthHost {
           request.headers.value(HttpHeaders.transferEncodingHeader) == null) {
         response.statusCode = HttpStatus.ok;
         response.write(jsonEncode(const LanHealth().toJson()));
+      } else if (pairing != null && await _deviceRoute(request)) {
+        // Response written by the bounded device router.
       } else {
         final code = request.uri.path == LanContract.healthPath
             ? LanErrorCode.invalidRequest
@@ -152,11 +164,89 @@ class LanHealthHost {
           LanFailure(code, requestId: 'health-${++_requestSequence}').toJson(),
         ));
       }
-      // Do not read or parse bodies: no command endpoint exists in this host.
       await response.close();
     } catch (_) {
       // Disconnects must not escape into the desktop event loop.
+    } finally {
+      _activeRequests--;
     }
+  }
+
+
+  Future<Map<String, dynamic>> _body(HttpRequest request) async {
+    final bytes = <int>[];
+    await for (final chunk in request) {
+      if (bytes.length + chunk.length > 4096) {
+        throw const PairingFailure(LanErrorCode.invalidRequest);
+      }
+      bytes.addAll(chunk);
+    }
+    final json = jsonDecode(utf8.decode(bytes));
+    if (json is! Map<String, dynamic>) {
+      throw const PairingFailure(LanErrorCode.invalidRequest);
+    }
+    return json;
+  }
+
+  Future<bool> _deviceRoute(HttpRequest request) async {
+    final path = request.uri.path;
+    final exchange = path == '${LanContract.basePath}/pair/exchange';
+    final status = path == '${LanContract.basePath}/pair/status';
+    final bootstrap = path == '${LanContract.basePath}/bootstrap';
+    if (!exchange && !status && !bootstrap) return false;
+    try {
+      if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
+      final now = DateTime.now();
+      if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
+        _windowStart = now;
+        _pairRequests = 0;
+        _statusRequests = 0;
+      }
+      if (exchange ? ++_pairRequests > 20 : ++_statusRequests > 240) {
+        throw const PairingFailure(LanErrorCode.rateLimited);
+      }
+      if (request.uri.query.isNotEmpty || request.contentLength > 4096 ||
+          request.method != (exchange ? 'POST' : 'GET')) {
+        throw const PairingFailure(LanErrorCode.invalidRequest);
+      }
+      PairedPhone phone;
+      if (exchange) {
+        if (request.headers.contentType?.mimeType != 'application/json') {
+          throw const PairingFailure(LanErrorCode.invalidRequest);
+        }
+        final json = await _body(request).timeout(const Duration(seconds: 5));
+        if (json.length != 3 || json['code'] is! String ||
+            json['name'] is! String || json['token'] is! String) {
+          throw const PairingFailure(LanErrorCode.invalidRequest);
+        }
+        phone = await pairing!.request(json['code'] as String,
+          json['name'] as String, json['token'] as String);
+      } else {
+        if (request.contentLength > 0 ||
+            request.headers.value(HttpHeaders.transferEncodingHeader) != null) {
+          throw const PairingFailure(LanErrorCode.invalidRequest);
+        }
+        final auth = request.headers.value(HttpHeaders.authorizationHeader);
+        if (auth == null || !auth.startsWith('Bearer ')) {
+          throw const PairingFailure(LanErrorCode.unauthenticated);
+        }
+        phone = await pairing!.status(auth.substring(7), requireApproved: bootstrap);
+      }
+      request.response.statusCode = HttpStatus.ok;
+      request.response.write(jsonEncode({
+        'apiVersion': 1, 'device': phone.toJson(),
+        if (bootstrap) 'permissions': <String>['connection'],
+      }));
+    } catch (error) {
+      final code = error is PairingFailure ? error.code
+          : error is FormatException || error is TimeoutException
+              ? LanErrorCode.invalidRequest : LanErrorCode.internal;
+      request.response.statusCode = code.httpStatus;
+      request.response.write(jsonEncode(
+        LanFailure(code, requestId: 'device-${++_requestSequence}').toJson(),
+      ));
+    }
+    return true;
   }
 
   Future<void> stop() => _stopping ??= _stop();
@@ -176,6 +266,7 @@ class LanHealthHost {
   }
 
   Future<void> _close() async {
+    pairing?.setActive(false);
     final server = _server;
     _server = null;
     try {
