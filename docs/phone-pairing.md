@@ -1,7 +1,8 @@
 # Ghép quyền điện thoại với máy salon
 
 Theo dõi: #86, #89. Bước này triển khai quyền thiết bị và màn hình chính Android.
-Chưa có API khách hàng/hóa đơn, phân vai nghiệp vụ, ghi dữ liệu hoặc xử lý sửa đồng thời.
+Có quyền xem riêng cho khách hàng/hóa đơn/lịch hẹn; xem [phone-data-read.md](phone-data-read.md).
+Phân vai nghiệp vụ, ghi dữ liệu và xử lý sửa đồng thời còn ở bước sau.
 
 1. Giữ app chính trên máy salon mở, kết nối hai máy cùng mạng.
 2. Desktop: Cài đặt → Kết nối điện thoại → bật kết nối, sao chép địa chỉ và mã xác minh.
@@ -35,10 +36,11 @@ Không thay schema/database nghiệp vụ. Backend OS lock giữ owner duy nhấ
 
 POST /api/staff/v1/pair/exchange nhận đúng code/name/token, giới hạn 4096 byte,
 timeout body 5 giây và 20 lần/phút trên cả host. GET /pair/status chỉ trả trạng thái
-của Bearer token đó. GET /bootstrap cần token đã duyệt và chỉ có permission connection.
-Status/bootstrap giới hạn chung 240 lần/phút; tối đa 32 device requests đồng thời.
+của Bearer token đó. GET /bootstrap cần token đã duyệt, có permission connection và
+thêm customers.read/invoices.read/appointments.read nếu chủ salon đã bật quyền xem.
+Status/bootstrap/read giới hạn chung 240 lần/phút; tối đa 32 device requests đồng thời.
 Không có admin routes qua HTTP, không có role do client gửi, không có quyền Owner từ desktop session.
-Thao tác tạo mã/duyệt/từ chối/thu hồi dùng guard Owner và audit settings hiện có,
+Thao tác tạo mã/duyệt/từ chối/thu hồi/bật hoặc tắt quyền xem dùng guard Owner và audit settings hiện có,
 chỉ chứa ID hash, không token/PIN/mã ghép. Health anonymous vẫn đúng payload cũ và không đọc SQLite.
 
 Khi mất Wi-Fi, app hiển thị mất kết nối; resume/restart xác minh lại server. Không queue ghi offline.
