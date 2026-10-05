@@ -18,6 +18,15 @@ Hair Spa Manager là ứng dụng Flutter desktop-first để quản lý vận h
 - Backup/Restore dữ liệu SQLite đã được tích hợp trong màn hình Cài đặt.
 - Windows release dùng NSIS installer và updater online qua public Cloudflare R2 feed.
 
+## Nhiều bill trên desktop
+
+POS SQLite có danh sách bill đang mở và nút **Bill mới** để tạo bill khách vãng lai.
+Mở tính tiền từ lịch hẹn/Bàn nhân viên chọn billing session của đúng lịch; bill khác được giữ nguyên.
+Mỗi lịch có tối đa một session active; bill dở và bill legacy được lưu trong SQLite và có thể chọn lại sau khi mở app.
+Danh sách có nút tải lại để cập nhật bill từ cửa sổ khác. Sau checkout, bill đã chốt rời danh sách active; phiếu và lịch sử vẫn mở được.
+Lựa chọn bill thuộc từng cửa sổ, không thay đổi lựa chọn của cửa sổ khác. Khi mở lại app, dùng danh sách để chọn bill cần tiếp tục.
+Backend fake/demo vẫn giữ luồng một bill cũ.
+
 ## Dữ liệu local và Backup/Restore
 
 ### Vị trí dữ liệu

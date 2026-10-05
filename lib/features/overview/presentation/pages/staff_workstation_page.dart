@@ -1,3 +1,4 @@
+import '../../../../core/providers/data_backend_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -349,6 +350,11 @@ class _StaffWorkstationPageState extends ConsumerState<StaffWorkstationPage> {
   Future<InvoiceDraft?> _prepareDraftForAppointment(
     AppointmentEntry appointment,
   ) async {
+    if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+      final prepared = await openAppointmentInvoice(ref, appointment);
+      return prepared;
+    }
+
     final repository = ref.read(invoicesRepositoryProvider);
     final draft = await repository.fetchInvoiceDraft();
 

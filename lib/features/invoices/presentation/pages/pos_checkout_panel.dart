@@ -285,17 +285,14 @@ Future<void> _checkoutAndShowReceipt(
   if (confirmed != true || !context.mounted) return;
 
   ref.read(_invoiceCheckoutBusyProvider.notifier).state = true;
+  final repository = ref.read(invoicesRepositoryProvider);
   InvoiceDraft? paidInvoice;
   try {
-    await ref.read(invoicesRepositoryProvider).checkoutInvoice();
+    await repository.checkoutInvoice();
 
     final recent = draft.appointmentId == null
-        ? await ref
-              .read(invoicesRepositoryProvider)
-              .fetchRecentInvoices(limit: 5, customerId: draft.customerId)
-        : await ref
-              .read(invoicesRepositoryProvider)
-              .fetchRecentInvoices(
+        ? await repository.fetchRecentInvoices(limit: 5, customerId: draft.customerId)
+        : await repository.fetchRecentInvoices(
                 limit: 5,
                 appointmentId: draft.appointmentId,
               );
@@ -310,6 +307,11 @@ Future<void> _checkoutAndShowReceipt(
     }
 
     if (!context.mounted) return;
+    if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+      ref.read(selectedInvoiceSessionIdProvider.notifier).state =
+          SqliteInvoicesRepository.legacyDraftInvoiceId;
+      ref.invalidate(activeInvoiceSessionsProvider);
+    }
     ref.invalidate(invoiceDraftProvider);
     ref.invalidate(invoiceHistoryProvider);
     ref.invalidate(customerInvoiceHistoryProvider(draft.customerId));

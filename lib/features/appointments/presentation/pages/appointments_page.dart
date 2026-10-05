@@ -324,9 +324,7 @@ Future<void> _sendAppointmentToInvoice(
 ) async {
   if (_blockPaidAppointment(context, appointment)) return;
   try {
-    await ref
-        .read(invoicesRepositoryProvider)
-        .prefillDraftFromAppointment(appointment);
+    await openAppointmentInvoice(ref, appointment);
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

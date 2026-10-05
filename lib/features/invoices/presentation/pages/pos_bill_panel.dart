@@ -6,6 +6,7 @@ Future<void> _editInvoiceLineEmployeeAction(
   InvoiceDraftLine line,
 ) async {
   if (!line.isService) return;
+  final repository = ref.read(invoicesRepositoryProvider);
 
   final employeeId = await _chooseInvoiceEmployee(
     context,
@@ -16,9 +17,7 @@ Future<void> _editInvoiceLineEmployeeAction(
 
   try {
     await _queueCatalogMutation(
-      () => ref
-          .read(invoicesRepositoryProvider)
-          .updateInvoiceLineEmployee(
+      () => repository.updateInvoiceLineEmployee(
             line.id,
             employeeId.isEmpty ? null : employeeId,
           ),
