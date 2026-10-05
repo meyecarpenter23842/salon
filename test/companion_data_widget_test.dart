@@ -89,6 +89,11 @@ void main() {
     await tap(tester, const Key('salon-tab-appointments'));
     expect(client.queries.last.kind, SalonReadKind.appointments);
     expect(find.text('Ngày trên máy salon: 2026-10-05'), findsOneWidget);
+    await tap(tester, const Key('salon-pick-day'));
+    await tester.tap(find.text('6').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(client.queries.last.day, '2026-10-06');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

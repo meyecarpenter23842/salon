@@ -43,10 +43,17 @@ class SqliteLanReadRepository implements SalonReadRepository {
         clauses.add('paid_at IS NOT NULL');
       }
       if (query.query.isNotEmpty) {
-        clauses.add('(LOWER(full_name) LIKE ? ESCAPE \'\\\' OR phone LIKE ? ESCAPE \'\\\')');
-        final escaped = query.query.toLowerCase().replaceAll(r'\', r'\\')
-            .replaceAll('%', r'\%').replaceAll('_', r'\_');
-        args.addAll(['%$escaped%', '%$escaped%']);
+        // SQLite LIKE folds ASCII only. Preserve accents and include normal
+        // Vietnamese title/upper-case spellings without changing the schema.
+        final lower = query.query.toLowerCase();
+        final variants = {query.query, lower, query.query.toUpperCase(),
+          lower.split(' ').map((part) => part.isEmpty ? part
+              : '${part[0].toUpperCase()}${part.substring(1)}').join(' ')};
+        String pattern(String value) => '%${value.replaceAll(r'\', r'\\')
+            .replaceAll('%', r'\%').replaceAll('_', r'\_')}%';
+        final nameClauses = variants.map((_) => "full_name LIKE ? ESCAPE '\\'").join(' OR ');
+        clauses.add("($nameClauses OR phone LIKE ? ESCAPE '\\')");
+        args.addAll([...variants.map(pattern), pattern(query.query)]);
       }
       if (query.kind == SalonReadKind.appointments && query.id == null) {
         final day = DateTime.parse(query.day ?? today);

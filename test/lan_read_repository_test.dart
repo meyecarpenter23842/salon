@@ -27,7 +27,7 @@ void main() {
     final stamp = now.toIso8601String();
     for (var i = 0; i < 27; i++) {
       await db.insert('customers', {
-        'id': 'customer-$i', 'full_name': i == 0 ? 'An 100%' : 'Khách ${i.toString().padLeft(2, '0')}',
+        'id': 'customer-$i', 'full_name': i == 0 ? 'An 100%' : i == 26 ? 'Đỗ Lan' : 'Khách ${i.toString().padLeft(2, '0')}',
         'phone': '090${i.toString().padLeft(7, '0')}', 'tier': 'VIP', 'notes': 'Ghi chú thật',
         'created_at': stamp, 'updated_at': stamp,
       });
@@ -81,6 +81,8 @@ void main() {
       'customer-0');
     expect((await reader.read(SalonReadQuery(SalonReadKind.customers, query: '0900000000'))).records.single.id,
       'customer-0');
+    expect((await reader.read(SalonReadQuery(SalonReadKind.customers, query: 'đỗ'))).records.single.id,
+      'customer-26');
     final customer = (await reader.read(SalonReadQuery(SalonReadKind.customers, id: 'customer-0'))).records.single;
     expect(customer.fields['Ghi chú'], 'Ghi chú thật');
     final today = await reader.read(SalonReadQuery(SalonReadKind.appointments));
