@@ -6,6 +6,7 @@ import 'lan_health_client.dart';
 import 'lan_health_host.dart';
 import 'lan_pairing.dart';
 import 'lan_read_models.dart';
+import 'lan_workflow_service.dart';
 import 'lan_setup_service.dart';
 
 class DesktopBackendStatus {
@@ -28,10 +29,11 @@ final desktopPhoneRegistry = ValueNotifier<LanPairingRegistry?>(null);
 Future<void> Function(InternetAddress)? enableDesktopPhoneConnection;
 
 class DesktopLanController {
-  DesktopLanController(this.setup, this.status, {this.reader})
+  DesktopLanController(this.setup, this.status, {this.reader, this.workflow})
       : pairing = LanPairingRegistry(file: File('${setup.directory.path}/devices.json'));
   final LanPairingRegistry pairing;
   final SalonReadRepository? reader;
+  final LanWorkflowBackend? workflow;
   final LanSetupService setup;
   final ValueNotifier<DesktopBackendStatus> status;
   LanHealthHost? _host;
@@ -65,7 +67,7 @@ class DesktopLanController {
       }
       final fingerprint = await config.certificateSha256();
       if (_closed) return;
-      final host = LanHealthHost(lockFile: File('${setup.directory.path}/backend.lock'), pairing: pairing, reader: reader);
+      final host = LanHealthHost(lockFile: File('${setup.directory.path}/backend.lock'), pairing: pairing, reader: reader, workflow: workflow);
       _host = host;
       await host.start(config);
       if (_closed) {

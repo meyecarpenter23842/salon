@@ -7,16 +7,20 @@ import '../../core/lan/lan_health_client.dart';
 import '../../core/lan/lan_pairing.dart';
 import '../../core/lan/lan_pairing_client.dart';
 import 'companion_credential_store.dart';
-import 'companion_data_panel.dart';
+import 'companion_workspace.dart';
+import 'companion_command_controller.dart';
+import '../../core/lan/lan_workflow_client.dart';
 import '../../core/lan/lan_read_client.dart';
 
 class CompanionAccessPanel extends StatefulWidget {
   const CompanionAccessPanel({super.key, required this.connection,
     required this.client, required this.store, required this.onAccess,
-    this.readClient = const PinnedSalonReadClient()});
+    this.readClient = const PinnedSalonReadClient(),
+    this.workflowClient = const PinnedLanWorkflowClient()});
   final LanConnection connection;
   final LanPairingClient client;
   final SalonReadClient readClient;
+  final LanWorkflowClient workflowClient;
   final CompanionCredentialStore store;
   final ValueChanged<bool> onAccess;
   @override
@@ -28,6 +32,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   final _code = TextEditingController();
   final _name = TextEditingController(text: 'Điện thoại của tôi');
   CompanionCredential? _credential;
+  CompanionCommandController? _commands;
   PairedPhone? _phone;
   Timer? _poll;
   bool _busy = false;
@@ -48,7 +53,12 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
     try {
       final value = await widget.store.read();
       if (!mounted) return;
-      if (value?.pin == widget.connection.certificateSha256) _credential = value;
+      if (value?.pin == widget.connection.certificateSha256) {
+        _credential = value;
+        _initCommands();
+      } else if (value?.pendingCommand != null) {
+        _message = 'Có thao tác chưa rõ kết quả trên kết nối cũ. Khôi phục địa chỉ và mã xác minh cũ để kiểm tra.';
+      }
     } catch (_) {
       // A fresh request remains possible; never fall back to plaintext storage.
     } finally {
@@ -58,6 +68,16 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       }
     }
   }
+
+  void _initCommands() {
+    _commands?.removeListener(_commandChanged);
+    _commands?.dispose();
+    _commands = CompanionCommandController(connection: widget.connection, client: widget.workflowClient,
+      store: widget.store, credential: _credential!, onCredential: (value) {
+        if (mounted && _credential?.token == value.token) setState(() => _credential = value);
+      })..addListener(_commandChanged);
+  }
+  void _commandChanged() { if (mounted) setState(() {}); }
 
   void _schedule() {
     _poll?.cancel();
@@ -102,7 +122,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
           _phone = null;
           _message = 'Quyền truy cập không còn hiệu lực. Hãy xin mã ghép mới.';
           widget.onAccess(false);
-          _credential = null;
+          // Keep the encrypted identity while an uncertain command is unresolved.
         }
       });
     } finally {
@@ -115,6 +135,9 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
 
   Future<void> _request() async {
     if (_busy || _loading || !_foreground) return;
+    if (_commands?.blocked == true) {
+      setState(() => _message = 'Kiểm tra thao tác chưa rõ kết quả trước khi ghép lại điện thoại.'); return;
+    }
     if (!RegExp(r'^\d{8}$').hasMatch(_code.text.trim()) ||
         _name.text.trim().isEmpty || _name.text.trim().length > 60) {
       setState(() => _message = 'Nhập tên điện thoại và mã ghép 8 chữ số từ máy salon.');
@@ -124,6 +147,10 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
     _poll?.cancel();
     setState(() => _busy = true);
     try {
+      final savedCredential = await widget.store.read();
+      if (savedCredential?.pendingCommand != null) {
+        throw StateError('Resolve saved command first');
+      }
       final previous = _credential;
       // Reuse an uncertain request token, but never resurrect a terminal identity.
       final credential = previous != null && (_phone == null || _phone!.state == PhoneAccess.pending)
@@ -132,6 +159,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       await widget.store.write(credential);
       if (!mounted || generation != _generation) return;
       _credential = credential;
+      _initCommands();
       var phone = await widget.client.request(widget.connection,
         _code.text.trim(), _name.text.trim(), credential.token);
       if (phone.state == PhoneAccess.approved) {
@@ -169,7 +197,9 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   }
 
   Future<void> _forget() async {
-    if (_busy) return;
+    if (_busy || _commands?.blocked == true) {
+      setState(() => _message = 'Không thể quên quyền khi có thao tác chưa rõ kết quả. Hãy kiểm tra với máy salon.'); return;
+    }
     _generation++;
     _poll?.cancel();
     setState(() => _busy = true);
@@ -177,6 +207,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       await widget.store.clear();
       if (!mounted) return;
       setState(() {
+        _commands?.removeListener(_commandChanged); _commands?.dispose(); _commands = null;
         _credential = null; _phone = null; _online = false; _message = null;
       });
       widget.onAccess(false);
@@ -192,6 +223,8 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
     _generation++;
     _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _commands?.removeListener(_commandChanged);
+    _commands?.dispose();
     _code.dispose();
     _name.dispose();
     super.dispose();
@@ -235,9 +268,11 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
           Text(_message!, key: const Key('companion-access-status')),
         ],
         if (approved && _phone!.canReadSalon && _online && _foreground && _credential != null)
-            CompanionDataPanel(
-              key: ValueKey(_credential!.token), connection: widget.connection,
-              token: _credential!.token, client: widget.readClient,
+            CompanionWorkspace(
+              key: ValueKey('${_credential!.token}:${_phone!.writeRole.name}'),
+              connection: widget.connection, readClient: widget.readClient,
+              client: widget.workflowClient, commands: _commands!,
+              role: _phone!.writeRole,
               onDenied: () {
                 if (!mounted) return;
                 setState(() => _online = false);
@@ -252,7 +287,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
             label: Text(_busy ? 'Đang kiểm tra…' : 'Kiểm tra lại trạng thái')),
         if (_credential != null)
           TextButton(key: const Key('companion-forget'),
-            onPressed: _busy ? null : _forget,
+            onPressed: _busy || _commands?.blocked == true ? null : _forget,
             child: const Text('Quên quyền trên điện thoại này')),
         if (_loading) const LinearProgressIndicator(),
       ],

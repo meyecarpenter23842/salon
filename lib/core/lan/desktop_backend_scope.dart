@@ -8,6 +8,7 @@ import '../repositories/sqlite_lan_read_repository.dart';
 import 'desktop_lan_controller.dart';
 import 'desktop_phone_connection_panel.dart';
 import 'lan_setup_service.dart';
+import 'lan_workflow_service.dart';
 
 export 'desktop_lan_controller.dart' show DesktopBackendStatus, desktopBackendStatus;
 
@@ -34,6 +35,7 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
         _controller = DesktopLanController(
         LanSetupService(desktopLanDirectory()), desktopBackendStatus,
         reader: SqliteLanReadRepository(() => SalonDatabase.instance.database),
+        workflow: LanWorkflowService(SalonDatabase.instance),
       );
       desktopPhoneRegistry.value = _controller!.pairing;
       _enable = _controller!.enable;

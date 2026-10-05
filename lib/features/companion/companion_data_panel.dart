@@ -10,11 +10,14 @@ import '../../core/lan/lan_read_models.dart';
 /// permission, app foreground or pairing. No local business database is opened.
 class CompanionDataPanel extends StatefulWidget {
   const CompanionDataPanel({super.key, required this.connection,
-    required this.token, required this.client, required this.onDenied});
+    required this.token, required this.client, required this.onDenied,
+    this.onEdit, this.onOpenAppointment});
   final LanConnection connection;
   final String token;
   final SalonReadClient client;
   final VoidCallback onDenied;
+  final void Function(String kind, String id)? onEdit;
+  final ValueChanged<String>? onOpenAppointment;
   @override
   State<CompanionDataPanel> createState() => _CompanionDataPanelState();
 }
@@ -92,7 +95,7 @@ class _CompanionDataPanelState extends State<CompanionDataPanel> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const Divider(),
-      const Text('Dữ liệu từ máy salon · Chỉ xem'),
+      Text(widget.onEdit == null ? 'Dữ liệu từ máy salon · Chỉ xem' : 'Dữ liệu từ máy salon'),
       Wrap(spacing: 8, children: [
         for (final kind in SalonReadKind.values)
           ChoiceChip(key: Key('salon-tab-${kind.name}'),
@@ -129,6 +132,13 @@ class _CompanionDataPanelState extends State<CompanionDataPanel> {
           label: const Text('Về danh sách')),
         Text(detail.title, style: Theme.of(context).textTheme.titleLarge),
         Text(detail.subtitle),
+        if (widget.onEdit != null && _kind != SalonReadKind.invoices)
+          FilledButton.tonal(key: const Key('salon-edit'), onPressed: () => widget.onEdit!(
+            _kind == SalonReadKind.customers ? 'customer' : 'appointment', detail.id),
+            child: const Text('Sửa thông tin')),
+        if (widget.onOpenAppointment != null && _kind == SalonReadKind.appointments)
+          FilledButton.tonal(key: const Key('salon-open-bill'),
+            onPressed: () => widget.onOpenAppointment!(detail.id), child: const Text('Lập bill từ lịch hẹn')),
         for (final field in detail.fields.entries)
           Padding(padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text('${field.key}: ${field.value.isEmpty ? '—' : field.value}')),

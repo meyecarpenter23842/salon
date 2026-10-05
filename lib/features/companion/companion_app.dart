@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/lan/lan_health_client.dart';
 import '../../core/lan/lan_pairing_client.dart';
 import '../../core/lan/lan_read_client.dart';
+import '../../core/lan/lan_workflow_client.dart';
 import 'companion_access_panel.dart';
 import 'companion_credential_store.dart';
 
@@ -13,11 +14,13 @@ class SalonCompanionApp extends StatelessWidget {
     this.checker = const PinnedLanHealthClient(),
     this.pairingClient = const PinnedLanPairingClient(),
     this.readClient = const PinnedSalonReadClient(),
+    this.workflowClient = const PinnedLanWorkflowClient(),
     this.credentialStore = const AndroidCompanionCredentialStore(),
   });
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final SalonReadClient readClient;
+  final LanWorkflowClient workflowClient;
   final CompanionCredentialStore credentialStore;
 
   @override
@@ -28,16 +31,17 @@ class SalonCompanionApp extends StatelessWidget {
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF805A45)),
     ),
-    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient),
+    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient),
   );
 }
 
 class _ConnectionPage extends StatefulWidget {
-  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient});
+  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient});
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final CompanionCredentialStore credentialStore;
   final SalonReadClient readClient;
+  final LanWorkflowClient workflowClient;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();
@@ -227,7 +231,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 CompanionAccessPanel(
                   key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
                   connection: _connection!, client: widget.pairingClient,
-                  store: widget.credentialStore, readClient: widget.readClient,
+                  store: widget.credentialStore, readClient: widget.readClient, workflowClient: widget.workflowClient,
                   onAccess: (value) { if (mounted) setState(() => _authorized = value); },
                 ),
               const SizedBox(height: 24),
