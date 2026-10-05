@@ -81,6 +81,8 @@ class LanHealthHost {
 
   final File lockFile;
   static final Set<String> _ownedPaths = {};
+
+  static bool ownsLockFile(File file) => _ownedPaths.contains(file.absolute.path);
   RandomAccessFile? _lock;
   HttpServer? _server;
   String? _ownedPath;

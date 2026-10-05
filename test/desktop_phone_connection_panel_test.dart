@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salonmanager/core/providers/data_backend_provider.dart';
+import 'package:salonmanager/core/lan/lan_setup_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/lan/desktop_backend_scope.dart';
@@ -10,11 +16,11 @@ void main() {
   tearDown(() => desktopBackendStatus.value = original);
 
   Future<void> showPanel(WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(
+    await tester.pumpWidget(const ProviderScope(child: MaterialApp(
       home: Scaffold(
         body: SingleChildScrollView(child: DesktopPhoneConnectionPanel()),
       ),
-    ));
+    )));
     await tester.pumpAndSettle();
   }
 
@@ -68,4 +74,53 @@ void main() {
     expect(find.byKey(const Key('desktop-phone-copy-verification')), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('enable uses selected network, blocks double tap and shows ready without restart', (tester) async {
+    desktopBackendStatus.value = const DesktopBackendStatus('Chưa cấu hình');
+    final done = Completer<void>();
+    final calls = <String>[];
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appDataBackendProvider.overrideWithValue(AppDataBackend.fake)],
+      child: MaterialApp(home: Scaffold(body: SingleChildScrollView(
+        child: DesktopPhoneConnectionPanel(
+          networkLoader: () async => [LanNetwork('Wi-Fi', InternetAddress('192.168.1.20'))],
+          onEnable: (address) async {
+            calls.add(address.address);
+            await done.future;
+            desktopBackendStatus.value = DesktopBackendStatus('Đã bật',
+              apiUrl: Uri.parse('https://192.168.1.20:8743/api/staff/v1'),
+              certificateSha256: 'a' * 64);
+          },
+        ),
+      ))),
+    ));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const Key('desktop-phone-enable'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(button).onPressed, isNull);
+    expect(calls, ['192.168.1.20']);
+    done.complete();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('desktop-phone-verification')), findsOneWidget);
+    expect(find.text('Áp dụng mạng đã chọn'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no network gives actionable recovery and disables enable', (tester) async {
+    desktopBackendStatus.value = const DesktopBackendStatus('Chưa cấu hình');
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(home: Scaffold(body: SingleChildScrollView(
+        child: DesktopPhoneConnectionPanel(
+          networkLoader: () async => [], onEnable: (_) async {},
+        ),
+      ))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Chưa tìm thấy mạng phù hợp'), findsOneWidget);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const Key('desktop-phone-enable'))).onPressed, isNull);
+    expect(find.text('Tìm lại mạng'), findsOneWidget);
+  });
+
 }

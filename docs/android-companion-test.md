@@ -53,10 +53,11 @@ các ô cùng tên trên Android. Địa chỉ trong ví dụ không phải đ�
 
 Mã xác minh được app tính SHA-256 trên DER của chứng chỉ server (chứng chỉ đầu tiên
 trong PEM), cùng cách Android kiểm tra. Không băm văn bản PEM hoặc private key,
-không hiển thị private key. Chỉ hiển thị thông tin khi host đã khởi động thành công;
+không hiển thị private key. Chỉ hiển thị thông tin khi host đã khởi động và tự kiểm tra HTTPS thành công;
 host chưa cấu hình/lỗi/dừng sẽ không cung cấp thông tin cũ để người dùng nhập.
 
 Thiết lập host lần đầu vẫn theo [hướng dẫn LAN](lan-health-setup.md).
-Mục Cài đặt hiển thị thông tin kết nối, chưa tự tạo chứng chỉ hoặc mở firewall.
+Trong Cài đặt, chọn mạng và bấm **Bật kết nối điện thoại** để app tự tạo
+identity và mở host ngay. Luồng này không tự thay đổi firewall.
 Giữ máy salon/app mở; thử cùng Wi-Fi trước. 4G/mạng khác cần truy cập từ xa được
 thiết lập riêng. Chức năng khách hàng/hóa đơn trên điện thoại chưa được mở.
