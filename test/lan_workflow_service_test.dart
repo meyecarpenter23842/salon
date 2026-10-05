@@ -62,16 +62,19 @@ void main() {
   test('mobile bill targets explicit session, role gates owner actions and checkout replays once across restart', () async {
     final f = await mobileFixture();
     final a = (await f.run(LanWriteOperation.sessionCreate, {})).id;
-    final b = (await f.run(LanWriteOperation.sessionCreate, {})).id;
+    final secondPhone = workflowPhone(PhoneWriteRole.staff, 'b' * 64);
+    final b = (await f.run(LanWriteOperation.sessionCreate, {}, phone: secondPhone)).id;
+    await f.run(LanWriteOperation.sessionAddService, {'serviceId': 'service-2', 'employeeId': null}, id: b, phone: secondPhone);
     await f.run(LanWriteOperation.sessionSelectCustomer, {'customerId': 'customer-1'}, id: a);
     await f.run(LanWriteOperation.sessionAddService, {'serviceId': 'service-1', 'employeeId': 'employee-1'}, id: a);
     await f.run(LanWriteOperation.sessionAddProduct, {'productId': 'product-1'}, id: a);
     var editor = await f.service.editor('session', a);
     final lines = editor.values['lines'] as List;
     final service = lines.firstWhere((l) => l['isService'] == true) as Map;
+    expect(service['employeeLabel'], 'Nhân viên An');
     final product = lines.firstWhere((l) => l['isService'] == false) as Map;
     await f.run(LanWriteOperation.sessionQuantity, {'lineId': product['id'], 'quantity': 2}, id: a);
-    expect((await f.service.editor('session', b)).values['lines'], isEmpty);
+    expect(((await f.service.editor('session', b)).values['lines'] as List).single['quantity'], 1);
     await expectLater(f.run(LanWriteOperation.sessionRemoveLine, {'lineId': service['id']}, id: b),
       fails(LanErrorCode.businessRule));
     final security = SensitiveActionService(SalonDatabase.instance);

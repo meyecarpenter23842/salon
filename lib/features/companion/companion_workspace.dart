@@ -291,6 +291,8 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
     return Card(child: Padding(padding: const EdgeInsets.all(10), child:
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text('${line['title']} · $quantity × ${line['unitPrice']} đ = ${line['totalPrice']} đ'),
+        if (line['isService'] == true) Text('Nhân viên: ${line['employeeLabel']?.toString().isNotEmpty == true ?
+          line['employeeLabel'] : 'Chưa gán'}'),
         Wrap(children: [
           _button('−', () { if (quantity > 1) _submit(LanWriteOperation.sessionQuantity, {'lineId': id, 'quantity': quantity - 1}); }),
           _button('+', () { if (quantity < 1000) _submit(LanWriteOperation.sessionQuantity, {'lineId': id, 'quantity': quantity + 1}); }),

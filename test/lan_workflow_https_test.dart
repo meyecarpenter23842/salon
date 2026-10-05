@@ -69,25 +69,30 @@ void main() {
       throwsA(isA<HandshakeException>()));
     final trust = SecurityContext(withTrustedRoots: false);
     trust.setTrustedCertificatesBytes(await File(config.certificatePath).readAsBytes());
-    final raw = HttpClient(context: trust);
-    try {
-      for (final body in [
+    for (final body in [
         {...command.toJson(), 'role': 'owner'},
         {...command.toJson(), 'operation': 'sqlExecute'},
         {...command.toJson(), 'payload': {'fullName': 'a' * 17000}},
-      ]) {
+    ]) {
+      final raw = HttpClient(context: trust);
+      final encoded = utf8.encode(jsonEncode(body));
+      try {
         final request = await raw.postUrl(Uri.parse('${config.apiUrl}/commands'));
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        request.persistentConnection = false;
         request.headers.contentType = ContentType.json;
-        request.add(utf8.encode(jsonEncode(body)));
+        request.add(encoded);
         final response = await request.close();
         expect(response.statusCode, 400);
         expect(response.headers.value(HttpHeaders.cacheControlHeader), 'no-store');
         final text = await utf8.decoder.bind(response).join();
         expect(text, isNot(contains('Khách gốc'))); expect(text, isNot(contains(token)));
         expect(text, isNot(contains(root.path))); expect(text, isNot(contains('SELECT')));
-      }
-    } finally { raw.close(force: true); }
+      } on HttpException {
+        // Oversized chunked bodies may be aborted as soon as the bound is exceeded.
+        expect(encoded.length, greaterThan(16384));
+      } finally { raw.close(force: true); }
+    }
     expect(await f.db.query('customers'), hasLength(1)); expect(await f.db.query('lan_commands'), isEmpty);
   });
 }

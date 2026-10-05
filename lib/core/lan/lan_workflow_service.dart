@@ -77,13 +77,18 @@ class LanWorkflowService implements LanWorkflowBackend {
         final customer = bill.customerId.isEmpty ? <Map<String, Object?>>[] :
           await tx.query('customers', columns: ['full_name'], where: 'id = ?', whereArgs: [bill.customerId], limit: 1);
         if (bill.lines.length > 200) throw const PairingFailure(LanErrorCode.unavailable);
+        final employeeIds = bill.lines.map((l) => l.employeeId).whereType<String>().toSet().toList();
+        final employees = employeeIds.isEmpty ? <Map<String, Object?>>[] : await tx.query('employees',
+          columns: ['id', 'full_name'], where: 'id IN (${List.filled(employeeIds.length, '?').join(',')})',
+          whereArgs: employeeIds);
+        final employeeNames = {for (final e in employees) e['id']: e['full_name']};
         values = {'customerId': bill.customerId, 'customerLabel': customer.isEmpty ? 'Chưa chọn khách' : customer.single['full_name'],
           'appointmentId': bill.appointmentId, 'subtotal': bill.subtotal, 'discountAmount': bill.discountAmount,
           'totalAmount': bill.totalAmount, 'paymentMethod': bill.paymentMethod,
           'payments': bill.effectivePaymentAllocations.map((a) => {'method': a.paymentMethod, 'amount': a.amount}).toList(),
           'lines': bill.lines.map((l) => {'id': l.id, 'title': l.title, 'quantity': l.quantity,
             'unitPrice': l.unitPrice, 'discountAmount': l.discountAmount, 'totalPrice': l.totalPrice,
-            'employeeId': l.employeeId, 'isService': l.isService}).toList()};
+            'employeeId': l.employeeId, 'employeeLabel': employeeNames[l.employeeId] ?? '', 'isService': l.isService}).toList()};
       }
       final snapshot = LanEditorSnapshot(kind: kind, epoch: database.runtimeEpoch, id: id,
         revision: id == null ? 0 : await engine.revision(tx, kind, id), values: values);
