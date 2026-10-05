@@ -9,6 +9,8 @@ import 'package:salonmanager/core/models/invoice_draft.dart';
 import 'package:salonmanager/core/providers/repository_providers.dart';
 import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
 import 'package:salonmanager/core/settings/local_settings_store.dart';
+import 'package:salonmanager/core/theme/app_theme.dart';
+import 'package:salonmanager/core/theme/salon_theme_template.dart';
 import 'package:salonmanager/features/invoices/presentation/pages/invoices_page.dart';
 
 void main() {
@@ -85,8 +87,16 @@ void main() {
         drafts.add(await sessions.openAppointmentSession(appointment));
       }
 
+      final previousErrorHandler = FlutterError.onError;
+      FlutterError.onError = (details) {
+        debugPrint(details.toString());
+        previousErrorHandler?.call(details);
+      };
+      addTearDown(() => FlutterError.onError = previousErrorHandler);
       await tester.pumpWidget(ProviderScope(
-        child: MaterialApp(home: Scaffold(body: Column(children: [
+        child: MaterialApp(
+          theme: AppTheme.build(SalonThemeTemplate.salonNoirGold),
+          home: Scaffold(body: Column(children: [
           Consumer(builder: (context, ref, _) => TextButton(
             key: const Key('test-open-appointment'),
             onPressed: () => openAppointmentInvoice(ref, fixture.appointments[2]),
@@ -130,6 +140,19 @@ void main() {
       expect((await sessions.fetchActiveSessions())
           .where((draft) => draft.appointmentId == fixture.appointments[2].id),
           hasLength(1));
+
+      await tester.tap(find.byKey(const Key('billing-checkout-action')));
+      await _settle(tester);
+      expect(find.byKey(const Key('checkout-confirm-dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('checkout-confirm-yes')));
+      await _settle(tester);
+      expect(find.byKey(const Key('checkout-success-dialog')), findsOneWidget);
+      final remaining = (await sessions.fetchActiveSessions())
+          .map((draft) => draft.id).toSet();
+      expect(remaining, containsAll([drafts[0].id, drafts[1].id, walkInId]));
+      expect(remaining, isNot(contains(drafts[2].id)));
+      await tester.tap(find.widgetWithText(FilledButton, 'Hóa đơn mới'));
+      await _settle(tester);
 
       for (final size in [const Size(1024, 768), const Size(1600, 900)]) {
         tester.view.physicalSize = size;

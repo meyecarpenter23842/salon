@@ -334,6 +334,7 @@ Future<void> _sendAppointmentToInvoice(
   }
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ref.read(desktopSectionProvider.notifier).state = DesktopSection.invoices;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(

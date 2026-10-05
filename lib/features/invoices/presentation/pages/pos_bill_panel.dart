@@ -24,6 +24,7 @@ Future<void> _editInvoiceLineEmployeeAction(
     );
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -69,6 +70,7 @@ Future<void> _editInvoiceLineUnitPriceAction(
     );
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -96,6 +98,7 @@ Future<void> _splitInvoiceLineAction(
     await _queueCatalogMutation(() => actions.splitInvoiceLine(line.id));
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -129,6 +132,7 @@ Future<void> _clearInvoiceDraft(
   }
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ScaffoldMessenger.of(
     context,
   ).showSnackBar(const SnackBar(content: Text('Đã xóa toàn bộ mục khỏi bill')));

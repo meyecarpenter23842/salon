@@ -181,6 +181,7 @@ Future<InvoiceDraft> openAppointmentInvoice(
       .openAppointmentSession(appointment);
   ref.read(selectedInvoiceSessionIdProvider.notifier).state = draft.id;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   return draft;
 }
 
@@ -238,11 +239,7 @@ final activeCashierShiftProvider = FutureProvider((ref) => ref.watch(cashierShif
 final cashierShiftHistoryProvider = FutureProvider((ref) => ref.watch(cashierShiftRepositoryProvider).fetchShiftHistory());
 
 final activeInvoiceSessionsProvider = FutureProvider<List<InvoiceDraft>>(
-  (ref) {
-    // Refresh the list after mutations or cross-process draft refresh.
-    ref.watch(invoiceDraftProvider);
-    return ref.watch(billingSessionsRepositoryProvider).fetchActiveSessions();
-  },
+  (ref) => ref.watch(billingSessionsRepositoryProvider).fetchActiveSessions(),
 );
 
 final invoiceSessionProvider = FutureProvider.family<InvoiceDraft, String>(

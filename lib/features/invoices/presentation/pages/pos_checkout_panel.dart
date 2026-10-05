@@ -300,8 +300,11 @@ Future<void> _checkoutAndShowReceipt(
     if (recent.isNotEmpty) {
       paidInvoice = recent.firstWhere(
         (invoice) =>
-            invoice.totalAmount == draft.totalAmount &&
-            invoice.customerId == draft.customerId,
+            invoice.customerId == draft.customerId &&
+            draft.lines.every((sourceLine) => invoice.lines.any(
+              (paidLine) => paidLine.id == sourceLine.id ||
+                  paidLine.id.endsWith('-${sourceLine.id}'),
+            )),
         orElse: () => recent.first,
       );
     }
@@ -313,6 +316,7 @@ Future<void> _checkoutAndShowReceipt(
       ref.invalidate(activeInvoiceSessionsProvider);
     }
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ref.invalidate(invoiceHistoryProvider);
     ref.invalidate(customerInvoiceHistoryProvider(draft.customerId));
     if (draft.appointmentId != null) {

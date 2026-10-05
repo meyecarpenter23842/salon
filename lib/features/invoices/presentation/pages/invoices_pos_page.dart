@@ -59,6 +59,7 @@ Future<void> _selectInvoiceCustomer(
   await ref.read(invoicesRepositoryProvider).selectInvoiceCustomer(customer.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text('Đã chọn khách ${customer.fullName} cho hóa đơn')),
   );
@@ -74,6 +75,7 @@ Future<void> _updateInvoicePaymentMethod(
       .updateInvoicePaymentMethod(paymentMethod);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
 }
 
 Future<void> _updateInvoicePaymentAllocations(
@@ -87,6 +89,7 @@ Future<void> _updateInvoicePaymentAllocations(
         .updateInvoicePaymentAllocations(allocations);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -131,6 +134,7 @@ Future<void> _addInvoiceService(
     await repository.addInvoiceService(service.id, employeeId: effectiveEmployeeId);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Đã thêm ${service.name} vào bill')),
     );
@@ -154,6 +158,7 @@ Future<void> _addInvoiceProduct(
     await repository.addInvoiceProduct(product.id);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Đã thêm ${product.name} vào bill')),
     );
@@ -181,6 +186,7 @@ Future<void> _updateInvoiceLineQuantity(
         .updateInvoiceLineQuantity(line.id, quantity);
     if (!context.mounted) return;
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   } catch (error) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -201,6 +207,7 @@ Future<void> _removeInvoiceLine(
   await ref.read(invoicesRepositoryProvider).removeInvoiceLine(line.id);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
   ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text('Đã xóa ${line.title} khỏi bill')));
 }
@@ -229,6 +236,7 @@ Future<void> _openDiscountEditor(
   await ref.read(invoicesRepositoryProvider).updateInvoiceDiscount(discount);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
 }
 
 Future<void> _openLineDiscountEditor(
@@ -257,6 +265,7 @@ Future<void> _openLineDiscountEditor(
       .updateInvoiceLineDiscount(line.id, discount);
   if (!context.mounted) return;
   ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
 }
 
 Future<RetailProductItem?> _openRetailProductEditor(

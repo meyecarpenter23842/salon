@@ -145,6 +145,7 @@ class _StaffWindowWorkspaceState extends ConsumerState<StaffWindowWorkspace>
     ref.invalidate(servicesViewProvider);
     ref.invalidate(retailProductsViewProvider);
     ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     ref.invalidate(overviewSummaryProvider);
   }
 

@@ -22,6 +22,7 @@ class _BillingSessionsBarState extends ConsumerState<_BillingSessionsBar> {
       if (!mounted) return;
       ref.read(selectedInvoiceSessionIdProvider.notifier).state = sessionId;
       ref.invalidate(invoiceDraftProvider);
+  ref.invalidate(activeInvoiceSessionsProvider);
     } finally {
       if (mounted) setState(() => _changing = false);
     }

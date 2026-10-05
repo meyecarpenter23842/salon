@@ -1319,6 +1319,7 @@ class _BackupRestorePanelState extends ConsumerState<_BackupRestorePanel> {
       ref.invalidate(servicesViewProvider);
       ref.invalidate(employeesViewProvider);
       ref.invalidate(invoiceDraftProvider);
+      ref.invalidate(activeInvoiceSessionsProvider);
       ref.invalidate(invoiceHistoryProvider);
       ref.invalidate(reportsSummaryProvider);
       ref.invalidate(settingsViewProvider);
