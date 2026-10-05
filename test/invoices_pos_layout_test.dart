@@ -60,6 +60,10 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(const Key('billing-split-payment-action')),
+        findsOneWidget,
+      );
+      expect(
         tester.takeException(),
         isNull,
         reason: '${size.width}x${size.height}',

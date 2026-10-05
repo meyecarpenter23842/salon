@@ -1,4 +1,5 @@
 import 'invoice_draft_line.dart';
+import 'invoice_payment_allocation.dart';
 
 class InvoiceDraft {
   InvoiceDraft({
@@ -7,6 +8,7 @@ class InvoiceDraft {
     required this.customerId,
     required this.discountAmount,
     required this.paymentMethod,
+    this.paymentAllocations = const [],
     required this.createdAt,
     required this.updatedAt,
     required this.lines,
@@ -18,6 +20,7 @@ class InvoiceDraft {
   final String customerId;
   final int discountAmount;
   final String paymentMethod;
+  final List<InvoicePaymentAllocation> paymentAllocations;
   final DateTime? paidAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -38,12 +41,69 @@ class InvoiceDraft {
 
   bool get isPaid => paidAt != null;
 
+  List<InvoicePaymentAllocation> get effectivePaymentAllocations {
+    final explicit = paymentAllocations
+        .where((allocation) => allocation.amount > 0)
+        .toList(growable: false);
+    if (explicit.isNotEmpty) {
+      return explicit;
+    }
+    if (totalAmount <= 0) {
+      return const [];
+    }
+    return [
+      InvoicePaymentAllocation(
+        paymentMethod: paymentMethod,
+        amount: totalAmount,
+      ),
+    ];
+  }
+
+  bool get hasSplitPayment => effectivePaymentAllocations.length > 1;
+
+  int get allocatedPaymentAmount {
+    if (paymentAllocations.isEmpty) {
+      return totalAmount;
+    }
+    return paymentAllocations.fold(
+      0,
+      (sum, allocation) => sum + allocation.amount,
+    );
+  }
+
+  int get paymentAllocationDifference => totalAmount - allocatedPaymentAmount;
+
+  bool get paymentAllocationMatchesTotal =>
+      paymentAllocations.isEmpty || allocatedPaymentAmount == totalAmount;
+
+  int paymentAmountFor(String method) {
+    final normalized = method.trim().toLowerCase();
+    return effectivePaymentAllocations
+        .where(
+          (allocation) =>
+              allocation.paymentMethod.trim().toLowerCase() == normalized,
+        )
+        .fold(0, (sum, allocation) => sum + allocation.amount);
+  }
+
+  String get paymentSummary {
+    final allocations = effectivePaymentAllocations;
+    if (allocations.isEmpty) {
+      return paymentMethod;
+    }
+    return allocations
+        .map((allocation) => allocation.paymentMethod)
+        .join(' + ');
+  }
+
   InvoiceDraft copyWith({
     String? id,
     String? appointmentId,
     String? customerId,
     int? discountAmount,
     String? paymentMethod,
+    List<InvoicePaymentAllocation>? paymentAllocations,
+    bool clearPaymentAllocations = false,
     DateTime? paidAt,
     bool clearPaidAt = false,
     DateTime? createdAt,
@@ -56,6 +116,9 @@ class InvoiceDraft {
       customerId: customerId ?? this.customerId,
       discountAmount: discountAmount ?? this.discountAmount,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentAllocations: clearPaymentAllocations
+          ? const []
+          : paymentAllocations ?? this.paymentAllocations,
       paidAt: clearPaidAt ? null : paidAt ?? this.paidAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

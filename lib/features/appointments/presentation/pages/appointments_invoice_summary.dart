@@ -41,7 +41,7 @@ class _AppointmentInvoiceSummary extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${_currency(invoice.totalAmount)} • ${invoice.paymentMethod}',
+                  '${_currency(invoice.totalAmount)} • ${invoice.paymentSummary}',
                   style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,

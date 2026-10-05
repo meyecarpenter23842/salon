@@ -11,6 +11,7 @@ import '../models/customer_upsert_input.dart';
 import '../models/employee_upsert_input.dart';
 import '../models/invoice_draft.dart';
 import '../models/invoice_draft_line.dart';
+import '../models/invoice_payment_allocation.dart';
 import '../models/payment_config.dart';
 import '../models/retail_product_item.dart';
 import '../models/retail_product_upsert_input.dart';
@@ -809,6 +810,25 @@ class FakeInvoicesRepository implements InvoicesRepository {
     return _storeDraft(
       draft.copyWith(
         paymentMethod: InvoiceDraft.normalizePaymentMethod(paymentMethod),
+        clearPaymentAllocations: true,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Future<InvoiceDraft> updateInvoicePaymentAllocations(
+    List<InvoicePaymentAllocation> allocations,
+  ) async {
+    final draft = await _loadDraft();
+    final normalized = _normalizePaymentAllocations(
+      allocations,
+      expectedTotal: draft.totalAmount,
+    );
+    return _storeDraft(
+      draft.copyWith(
+        paymentMethod: normalized.first.paymentMethod,
+        paymentAllocations: normalized,
         updatedAt: DateTime.now(),
       ),
     );
@@ -1062,6 +1082,9 @@ class FakeInvoicesRepository implements InvoicesRepository {
   @override
   Future<InvoiceDraft> checkoutInvoice() async {
     final draft = await _loadDraft();
+    if (!draft.paymentAllocationMatchesTotal) {
+      throw StateError('Tổng tiền chia thanh toán chưa khớp tổng hóa đơn.');
+    }
     final now = DateTime.now();
     AppointmentEntry? linkedAppointment;
     if (draft.appointmentId != null) {
@@ -1139,6 +1162,52 @@ class FakeInvoicesRepository implements InvoicesRepository {
   InvoiceDraft _storeDraft(InvoiceDraft draft) {
     _cache = draft;
     return _cache!;
+  }
+
+  List<InvoicePaymentAllocation> _normalizePaymentAllocations(
+    List<InvoicePaymentAllocation> allocations, {
+    required int expectedTotal,
+  }) {
+    final normalized = <InvoicePaymentAllocation>[];
+    final seen = <String>{};
+
+    for (final allocation in allocations) {
+      String? method;
+      final rawMethod = allocation.paymentMethod.trim().toLowerCase();
+      for (final candidate in InvoiceDraft.paymentMethods) {
+        if (candidate.toLowerCase() == rawMethod) {
+          method = candidate;
+          break;
+        }
+      }
+      if (method == null) {
+        throw StateError('Phương thức thanh toán không hợp lệ.');
+      }
+      if (allocation.amount <= 0) {
+        throw StateError('Số tiền của mỗi phương thức phải lớn hơn 0.');
+      }
+      if (!seen.add(method)) {
+        throw StateError('Mỗi phương thức chỉ được xuất hiện một lần.');
+      }
+      normalized.add(
+        InvoicePaymentAllocation(
+          paymentMethod: method,
+          amount: allocation.amount,
+        ),
+      );
+    }
+
+    if (normalized.length < 2) {
+      throw StateError('Chia thanh toán cần ít nhất hai phương thức.');
+    }
+    final total = normalized.fold(
+      0,
+      (sum, allocation) => sum + allocation.amount,
+    );
+    if (total != expectedTotal) {
+      throw StateError('Tổng số tiền chia phải bằng tổng hóa đơn.');
+    }
+    return normalized;
   }
 
   int _normalizeDiscount(int discountAmount, int subtotal) {

@@ -6,6 +6,7 @@ import '../models/appointment_entry.dart';
 import '../models/appointment_upsert_input.dart';
 import '../models/invoice_adjustment.dart';
 import '../models/invoice_draft.dart';
+import '../models/invoice_payment_allocation.dart';
 import 'invoice_adjustment_repository.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
@@ -376,6 +377,11 @@ class GuardedInvoicesRepository
   @override
   Future<InvoiceDraft> updateInvoicePaymentMethod(String paymentMethod) =>
       _delegate.updateInvoicePaymentMethod(paymentMethod);
+
+  @override
+  Future<InvoiceDraft> updateInvoicePaymentAllocations(
+    List<InvoicePaymentAllocation> allocations,
+  ) => _delegate.updateInvoicePaymentAllocations(allocations);
 
   @override
   Future<InvoiceDraft> updateInvoiceDiscount(int discountAmount) =>

@@ -1,6 +1,7 @@
 import '../database/salon_database.dart';
 import '../models/appointment_entry.dart';
 import '../models/invoice_draft.dart';
+import '../models/invoice_payment_allocation.dart';
 import 'billing_sessions_repository.dart';
 import 'guarded_salon_repositories.dart';
 import 'sqlite_invoices_repository.dart';
@@ -108,6 +109,15 @@ class SqliteBillingSessionsRepository implements BillingSessionsRepository {
   ) {
     return _guarded(_normalizeSessionId(sessionId))
         .updateInvoicePaymentMethod(paymentMethod);
+  }
+
+  @override
+  Future<InvoiceDraft> updatePaymentAllocations(
+    String sessionId,
+    List<InvoicePaymentAllocation> allocations,
+  ) {
+    return _guarded(_normalizeSessionId(sessionId))
+        .updateInvoicePaymentAllocations(allocations);
   }
 
   @override

@@ -4,6 +4,7 @@ import '../models/customer_profile.dart';
 import '../models/customer_upsert_input.dart';
 import '../models/employee_upsert_input.dart';
 import '../models/invoice_draft.dart';
+import '../models/invoice_payment_allocation.dart';
 import '../models/payment_config.dart';
 import '../models/retail_product_item.dart';
 import '../models/retail_product_upsert_input.dart';
@@ -115,6 +116,10 @@ abstract interface class InvoicesRepository {
   Future<InvoiceDraft> selectInvoiceCustomer(String customerId);
 
   Future<InvoiceDraft> updateInvoicePaymentMethod(String paymentMethod);
+
+  Future<InvoiceDraft> updateInvoicePaymentAllocations(
+    List<InvoicePaymentAllocation> allocations,
+  );
 
   Future<InvoiceDraft> updateInvoiceDiscount(int discountAmount);
 

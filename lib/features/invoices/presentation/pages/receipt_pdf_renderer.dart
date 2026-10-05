@@ -206,7 +206,23 @@ List<pw.Widget> _receiptPdfContent({
     widgets.add(_receiptPdfInfoRow('SĐT', customer?.phone ?? '-', normalStyle));
   }
   if (config.showPaymentMethod) {
-    widgets.add(_receiptPdfInfoRow('Thanh toán', invoice.paymentMethod, normalStyle));
+    final payments = invoice.effectivePaymentAllocations;
+    if (payments.length <= 1) {
+      widgets.add(
+        _receiptPdfInfoRow('Thanh toán', invoice.paymentMethod, normalStyle),
+      );
+    } else {
+      for (var index = 0; index < payments.length; index++) {
+        final payment = payments[index];
+        widgets.add(
+          _receiptPdfInfoRow(
+            index == 0 ? 'Thanh toán' : '',
+            '${payment.paymentMethod}: ${_currency(payment.amount)}',
+            normalStyle,
+          ),
+        );
+      }
+    }
   }
 
   widgets.add(pw.SizedBox(height: sectionGap));
