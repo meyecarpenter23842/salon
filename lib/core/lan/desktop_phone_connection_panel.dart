@@ -187,7 +187,7 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Nếu điện thoại chưa vào được, kiểm tra Tường lửa Windows và mạng Wi-Fi.'),
           const SizedBox(height: 8),
           const Text(
-            'Hiện có thể kiểm tra kết nối; chức năng khách hàng và hóa đơn '
+            'Có thể ghép quyền và thu hồi điện thoại; chức năng khách hàng và hóa đơn '
             'trên điện thoại đang được phát triển.',
           ),
         ],

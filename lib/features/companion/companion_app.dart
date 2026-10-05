@@ -228,7 +228,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 ),
               const SizedBox(height: 24),
               const Text(
-                'Hiện có thể kiểm tra kết nối. Chức năng khách hàng và '
+                'Có thể ghép quyền và kiểm tra kết nối. Chức năng khách hàng và '
                 'hóa đơn trên điện thoại đang được phát triển.',
               ),
               const SizedBox(height: 8),

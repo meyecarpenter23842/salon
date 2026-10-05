@@ -14,8 +14,7 @@ it is not a store release. No application ID/dependencies were changed.
 1. Configure desktop HTTPS once following lan-health-setup.md and keep the licensed
    main app open.
 2. Get the API URL from desktop Settings → Kết nối điện thoại.
-3. Enter that URL on Android plus the SHA-256 certificate fingerprint printed by
-   the desktop setup script. Obtain this fingerprint directly from the owner PC,
+3. Enter that URL on Android plus Mã xác minh máy salon copied from desktop Settings. Obtain this fingerprint directly from the owner PC,
    not from an unknown server. Do not copy the private key to the phone.
 4. Tap Kiểm tra kết nối. Success means the desktop health endpoint responded with
    API version 1; it does not grant staff access or pair the device.
@@ -23,8 +22,8 @@ it is not a store release. No application ID/dependencies were changed.
 The Android shell remembers the successfully checked URL and fingerprint using
 device preferences; it does not store salon business data. It forgets the success
 indicator on app background/reopen or edited input, so it never promises continued
-connectivity from a stale health check. Pairing/revocation and business access are
-later Batch 3 work.
+connectivity from a stale health check. Pairing and owner approval/revocation now follow the health check; see
+[phone-pairing.md](phone-pairing.md). Business access remains later work.
 
 The client uses HTTPS, endpoint-specific certificate fingerprint and certificate
 validity checks. It rejects redirects, different certificates, wrong API version,
@@ -42,7 +41,8 @@ requires a separately configured reachable private network/HTTPS endpoint.
 Widget/client integration tests on Ubuntu/Windows and Android APK compilation do
 not prove a real phone's network connection. Batch 2 remains open until an Android
 device runs the shell and reaches the owner desktop over the intended transport.
-No QR pairing, customer/bill routes, offline mutation queue or SQLite on the phone.
+Owner reported health success on an emulator; this does not close the physical-phone gate.
+No QR discovery, customer/bill routes, offline mutation queue or business SQLite on the phone.
 
 ## Người dùng lấy hai thông tin ở đâu?
 
@@ -56,7 +56,7 @@ trong PEM), cùng cách Android kiểm tra. Không băm văn bản PEM hoặc pr
 không hiển thị private key. Chỉ hiển thị thông tin khi host đã khởi động và tự kiểm tra HTTPS thành công;
 host chưa cấu hình/lỗi/dừng sẽ không cung cấp thông tin cũ để người dùng nhập.
 
-Thiết lập host lần đầu vẫn theo [hướng dẫn LAN](lan-health-setup.md).
+Có thể xem thêm [hướng dẫn LAN](lan-health-setup.md).
 Trong Cài đặt, chọn mạng và bấm **Bật kết nối điện thoại** để app tự tạo
 identity và mở host ngay. Luồng này không tự thay đổi firewall.
 Giữ máy salon/app mở; thử cùng Wi-Fi trước. 4G/mạng khác cần truy cập từ xa được

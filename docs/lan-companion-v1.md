@@ -1,8 +1,9 @@
 # Android companion / desktop LAN contract v1
 
 Tracking: #86, Batch 2 #89. Contract/policy landed in #90. The licensed Windows
-main app now starts an HTTPS health host when one-time configuration exists.
-No DB migration, pairing token, business API or Android bootstrap is enabled.
+main app starts HTTPS after in-app setup. Device pairing, owner approval/revocation
+and a connection-only Android home bootstrap are implemented; see phone-pairing.md.
+No DB migration, customer/bill API or business permissions are enabled.
 Firewall rules remain an explicit setup action.
 
 ## Ownership and lifecycle decision
@@ -25,14 +26,14 @@ The server must never depend on the UI's selectedInvoiceSessionIdProvider.
 ## Transport and discovery decision
 
 Use HTTPS and WSS. Desktop generates a per-installation certificate/private key;
-QR shown by the owner carries endpoint, API version, certificate SHA-256 pin and
+The planned QR shown by the owner carries endpoint, API version, certificate SHA-256 pin and
 a short-lived single-use pairing secret. Android pins that certificate for this
 endpoint; never use a global trust-all callback. Pin change requires explicit
 re-pair. API URL is the connection target and can be entered directly; QR is a future
 convenience for exchanging URL/pin and pairing. DHCP address change needs updated
-configuration and certificate identity. No mDNS
+configuration; the existing certificate identity is retained. No mDNS
 dependency. Bind only configured LAN interfaces; no port-forwarding or UPnP.
-A later spike must prove Dart/Android pin validation with a real certificate.
+CI proves Dart pin validation with real certificates; a physical Android LAN check remains open.
 Do not expose device tokens, pairing secrets or customer data over plain HTTP.
 
 Firewall setup is a deliberate owner action limited to Private network profiles
@@ -50,11 +51,16 @@ GET /health beneath the base path returns exactly
 license, pairing or readiness for checkout. It reads no SQLite and leaks no salon
 name, device ID, version of SQLite, path, PIN or customer data.
 
-Protected route families planned for later implementation:
+Implemented device routes: POST /pair/exchange consumes one expiring code and creates
+an idempotent pending request; GET /pair/status returns only that token's state.
+GET /bootstrap requires desktop-approved device authority and returns its identity
+with permissions: [connection]. It has no business snapshot, epoch or event cursor yet.
+Owner decisions are desktop-only; no HTTP administration routes exist.
+
+Business route families and richer bootstrap planned for later implementation:
 
 | Route | Purpose |
 | --- | --- |
-| POST /pair/exchange | Consume bounded, expiring single-use pairing code |
 | GET /bootstrap | Authorized minimal snapshot, backendEpoch and event cursor |
 | GET /events | Authenticated WebSocket; invalidate/reconcile resources |
 | GET/POST /appointments, PATCH /appointments/:id/status | Schedule operations |
@@ -66,7 +72,7 @@ Protected route families planned for later implementation:
 | POST/PATCH/DELETE /billing-sessions/:sessionId/lines | Bill line operations |
 | POST /billing-sessions/:sessionId/checkout | Repository checkout |
 
-All mutations require authenticated device/actor, commandId and expectedRevision
+All future business mutations require authenticated device/actor, commandId and expectedRevision
 on existing resources. Billing envelopes also carry sessionId, matching the route.
 Missing target is invalid_request, never resolved from desktop selection. New
 resource creation uses a separate DTO (not LanCommand) and commandId without a
@@ -106,4 +112,5 @@ trusted/untrusted clients, unsupported routes, startup/stop races, port conflict
 and another-process OS lock exclusion on Ubuntu and Windows. This proves host
 behavior, not connectivity from a real phone. Android now has a separate network bootstrap and URL/fingerprint health shell,
 with real TLS client tests and a CI debug APK. Remaining work is QR discovery
-and an actual Android-to-desktop LAN check; see android-companion-test.md. Pairing/auth and business routes follow Batch 3.
+and an actual Android-to-desktop LAN check; see android-companion-test.md. Device pairing/approval/revoke is implemented in PR #100. Business role guards, routes,
+revision/idempotency and events remain separate Batch 3 work.
