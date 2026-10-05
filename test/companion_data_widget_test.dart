@@ -65,7 +65,7 @@ void main() {
   }
   Future<void> tap(WidgetTester tester, Key key) async {
     final finder = find.byKey(key);
-    await tester.ensureVisible(finder); await tester.pumpAndSettle();
+    await tester.ensureVisible(finder); await tester.pump();
     await tester.tap(finder); await tester.pumpAndSettle();
   }
 
