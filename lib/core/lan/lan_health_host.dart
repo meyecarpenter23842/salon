@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import 'lan_contract.dart';
 
 class LanHostConfig {
@@ -48,6 +50,22 @@ class LanHostConfig {
     port: port,
     path: LanContract.basePath,
   );
+
+  /// Fingerprint of the first (server) certificate, never of PEM text or key.
+  Future<String> certificateSha256() async {
+    final pem = await File(certificatePath).readAsString();
+    final match = RegExp(
+      r'-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----',
+    ).firstMatch(pem);
+    if (match == null) {
+      throw const FormatException('Missing server certificate');
+    }
+    final der = base64.decode(match.group(1)!.replaceAll(RegExp(r'\s'), ''));
+    if (der.isEmpty) {
+      throw const FormatException('Empty server certificate');
+    }
+    return sha256.convert(der).toString();
+  }
 
   Future<SecurityContext> securityContext() async {
     final context = SecurityContext();

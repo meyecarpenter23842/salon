@@ -117,6 +117,17 @@ void main() {
       }
 
       container.read(desktopSectionProvider.notifier).state =
+          DesktopSection.settings;
+      await pumpUi(tester);
+      final phoneSettings = find.byKey(const Key('settings-hub-phone'));
+      await tester.ensureVisible(phoneSettings);
+      await tester.tap(phoneSettings);
+      await pumpUi(tester);
+      expect(find.textContaining('Chưa có thông tin'), findsOneWidget);
+      await tester.tap(find.byTooltip('Đóng').last);
+      await pumpUi(tester);
+
+      container.read(desktopSectionProvider.notifier).state =
           DesktopSection.employees;
       await pumpUi(tester);
       expect(container.read(desktopSectionProvider), DesktopSection.employees);

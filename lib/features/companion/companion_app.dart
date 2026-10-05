@@ -105,8 +105,8 @@ class _ConnectionPageState extends State<_ConnectionPage>
     } catch (_) {
       if (mounted && generation == _generation) {
         setState(() => _message =
-          'Không kết nối được. Kiểm tra URL, mã chứng chỉ, mạng '
-          'và app desktop đang mở.');
+          'Không kết nối được. Kiểm tra địa chỉ, mã xác minh, mạng '
+          'và giữ app trên máy salon mở.');
       }
     } finally {
       if (mounted && generation == _generation) {
@@ -134,7 +134,8 @@ class _ConnectionPageState extends State<_ConnectionPage>
             padding: const EdgeInsets.all(20),
             children: [
               const Text(
-                'Mở app desktop và lấy API URL trong mục Kết nối điện thoại.',
+                'Trên máy salon, mở Cài đặt → Kết nối điện thoại. '
+                'Lấy địa chỉ và mã xác minh rồi nhập vào hai ô bên dưới.',
               ),
               const SizedBox(height: 20),
               Form(
@@ -148,7 +149,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                       keyboardType: TextInputType.url,
                       autocorrect: false,
                       decoration: const InputDecoration(
-                        labelText: 'API URL',
+                        labelText: 'Địa chỉ máy salon',
                         hintText: 'https://192.168.1.20:8743/api/staff/v1',
                         border: OutlineInputBorder(),
                       ),
@@ -158,7 +159,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                           LanConnection(_url.text, '0' * 64);
                           return null;
                         } catch (_) {
-                          return 'Nhập URL HTTPS kết thúc bằng /api/staff/v1.';
+                          return 'Sao chép đầy đủ địa chỉ từ máy salon, bắt đầu bằng https://.';
                         }
                       },
                     ),
@@ -170,8 +171,9 @@ class _ConnectionPageState extends State<_ConnectionPage>
                       autocorrect: false,
                       enableSuggestions: false,
                       decoration: const InputDecoration(
-                        labelText: 'SHA-256 chứng chỉ desktop',
-                        helperText: 'Lấy mã từ desktop khi thiết lập HTTPS.',
+                        labelText: 'Mã xác minh máy salon',
+                        helperText: 'Sao chép nguyên mã trong Cài đặt → Kết nối điện thoại.',
+                        helperMaxLines: 2,
                         border: OutlineInputBorder(),
                       ),
                       onChanged: _edited,
@@ -182,7 +184,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                           );
                           return null;
                         } catch (_) {
-                          return 'Nhập đủ 64 ký tự hex của mã chứng chỉ.';
+                          return 'Sao chép đủ mã 64 ký tự từ máy salon.';
                         }
                       },
                     ),
@@ -202,13 +204,13 @@ class _ConnectionPageState extends State<_ConnectionPage>
               ],
               const SizedBox(height: 24),
               const Text(
-                'Hiện chỉ kiểm tra kết nối; chưa ghép quyền thiết bị '
-                'hoặc mở khách/bill. Điện thoại không lưu database salon.',
+                'Hiện có thể kiểm tra kết nối. Chức năng khách hàng và '
+                'hóa đơn trên điện thoại đang được phát triển.',
               ),
               const SizedBox(height: 8),
               const Text(
-                'Cùng mạng salon dùng URL LAN. Nếu dùng 4G/mạng khác, '
-                'cần URL truy cập từ xa đã được thiết lập.',
+                'Lần đầu, dùng cùng Wi-Fi với máy salon và giữ app salon mở. '
+                'Dùng 4G hoặc mạng khác cần thiết lập truy cập từ xa trước.',
               ),
             ],
           ),

@@ -5,11 +5,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'lan_health_host.dart';
+import 'desktop_phone_connection_panel.dart';
 
 class DesktopBackendStatus {
-  const DesktopBackendStatus(this.message, {this.apiUrl});
+  const DesktopBackendStatus(
+    this.message, {
+    this.apiUrl,
+    this.certificateSha256,
+  });
   final String message;
   final Uri? apiUrl;
+  final String? certificateSha256;
 }
 
 final desktopBackendStatus = ValueNotifier<DesktopBackendStatus>(
@@ -64,7 +70,7 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
         return;
       }
       desktopBackendStatus.value = const DesktopBackendStatus(
-        'Đang mở backend điện thoại',
+        'Đang mở kết nối điện thoại…',
       );
       final host = LanHealthHost(
         lockFile: File(
@@ -72,20 +78,23 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
         ),
       );
       _host = host;
+      final fingerprint = await config.certificateSha256();
+      if (_cancelled) return;
       await host.start(config);
       if (_cancelled) {
         await host.stop();
         return;
       }
       desktopBackendStatus.value = DesktopBackendStatus(
-        'Backend đang chạy — kiểm tra kết nối',
+        'Máy salon sẵn sàng kiểm tra kết nối',
         apiUrl: config.apiUrl,
+        certificateSha256: fingerprint,
       );
     } catch (_) {
       if (!_cancelled) {
         desktopBackendStatus.value = const DesktopBackendStatus(
-          'Backend chưa mở được. Kiểm tra cấu hình, IP, chứng chỉ, cổng '
-          'hoặc app desktop khác đang chạy.',
+          'Chưa mở được kết nối điện thoại. Kiểm tra mạng của máy salon '
+          'và đóng bản app salon khác nếu đang mở.',
         );
       }
     }
@@ -96,7 +105,7 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
     // start() may still be awaiting TLS/bind; its continuation also stops.
     await _host?.stop();
     desktopBackendStatus.value = const DesktopBackendStatus(
-      'Backend đã dừng',
+      'Kết nối điện thoại đã dừng',
     );
   }
 
@@ -114,38 +123,18 @@ class _DesktopBackendScopeState extends State<DesktopBackendScope> {
 Future<void> showDesktopBackendStatus(BuildContext context) {
   return showDialog<void>(
     context: context,
-    builder: (context) => ValueListenableBuilder<DesktopBackendStatus>(
-      valueListenable: desktopBackendStatus,
-      builder: (context, status, _) => AlertDialog(
-        title: const Text('Kết nối điện thoại'),
-        content: SizedBox(
-          width: 460,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(status.message),
-              if (status.apiUrl != null) ...[
-                const SizedBox(height: 12),
-                const Text('API URL'),
-                SelectableText(status.apiUrl.toString()),
-              ],
-              const SizedBox(height: 12),
-              const Text(
-                'Hiện hỗ trợ kiểm tra kết nối. Chưa mở API khách/bill. '
-                'Thiết lập HTTPS một lần theo hướng dẫn backend; '
-                'những lần mở desktop sau sẽ tự chạy.',
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-        ],
+    builder: (context) => AlertDialog(
+      title: const Text('Kết nối điện thoại'),
+      content: const SizedBox(
+        width: 460,
+        child: SingleChildScrollView(child: DesktopPhoneConnectionPanel()),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Đóng'),
+        ),
+      ],
     ),
   );
 }
