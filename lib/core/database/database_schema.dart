@@ -1,7 +1,7 @@
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 13;
+  static const int version = 14;
 
   static const String createInvoiceAdjustmentsTable = '''
     CREATE TABLE IF NOT EXISTS invoice_adjustments (
@@ -40,6 +40,23 @@ class DatabaseSchema {
       'CREATE INDEX IF NOT EXISTS idx_invoice_adjustments_created_at '
       'ON invoice_adjustments(created_at)';
 
+
+  static const String createCashierShiftsTable = '''
+    CREATE TABLE IF NOT EXISTS cashier_shifts (
+      id TEXT PRIMARY KEY, opening_cash INTEGER NOT NULL CHECK(opening_cash >= 0),
+      opened_at TEXT NOT NULL, closed_at TEXT, counted_cash INTEGER,
+      expected_cash INTEGER, variance INTEGER, note TEXT NOT NULL DEFAULT ''
+    )
+    ''';
+  static const String createCashMovementsTable = '''
+    CREATE TABLE IF NOT EXISTS cash_movements (
+      id TEXT PRIMARY KEY, shift_id TEXT NOT NULL,
+      movement_type TEXT NOT NULL CHECK(movement_type IN ('in','out')),
+      amount INTEGER NOT NULL CHECK(amount > 0),
+      reason TEXT NOT NULL CHECK(length(trim(reason)) > 0), created_at TEXT NOT NULL,
+      FOREIGN KEY (shift_id) REFERENCES cashier_shifts(id) ON DELETE RESTRICT
+    )
+    ''';
 
   static const List<String> createStatements = [
     '''
@@ -228,6 +245,8 @@ class DatabaseSchema {
     createInvoiceAdjustmentsTable,
     createInvoiceAdjustmentsUpdateGuard,
     createInvoiceAdjustmentsDeleteGuard,
+    createCashierShiftsTable,
+    createCashMovementsTable,
     '''
     CREATE TABLE app_settings (
       key TEXT PRIMARY KEY,
@@ -248,6 +267,8 @@ class DatabaseSchema {
     'CREATE INDEX idx_invoice_items_item_type ON invoice_items(item_type)',
     'CREATE INDEX idx_invoice_items_employee_id ON invoice_items(employee_id)',
     createInvoiceAdjustmentsCreatedAtIndex,
+    'CREATE UNIQUE INDEX idx_cashier_shifts_single_open ON cashier_shifts((1)) WHERE closed_at IS NULL',
+    'CREATE INDEX idx_cash_movements_shift_id ON cash_movements(shift_id)',
     'CREATE INDEX idx_service_formulas_service_id ON service_formulas(service_id)',
     'CREATE INDEX idx_retail_products_type ON retail_products(product_type)',
     'CREATE INDEX idx_catalog_options_kind ON catalog_options(kind)',
