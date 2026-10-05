@@ -9,6 +9,7 @@ import '../providers/data_backend_provider.dart';
 import '../providers/repository_providers.dart';
 import 'desktop_lan_controller.dart';
 import 'lan_pairing.dart';
+import 'lan_write_contract.dart';
 
 class DesktopPairingPanel extends ConsumerStatefulWidget {
   const DesktopPairingPanel({super.key});
@@ -103,11 +104,30 @@ class _DesktopPairingPanelState extends ConsumerState<DesktopPairingPanel> {
                   key: Key('phone-read-${phone.id}'),
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Cho xem dữ liệu salon'),
-                  subtitle: const Text('Khách hàng, hóa đơn và lịch hẹn. Chỉ xem.'),
+                  subtitle: const Text('Khách hàng, hóa đơn và lịch hẹn.'),
                   value: phone.canReadSalon,
                   onChanged: _busy || !registry.active ? null : (value) =>
                     _act(phone.id, () => registry.setReadAccess(phone.id, value)),
                 ),
+              if (phone.state == PhoneAccess.approved && phone.canReadSalon) ...[
+                const Text('Quyền thao tác: nhân viên sửa khách/lịch và dòng bill; '
+                    'thu ngân thêm thanh toán; chủ salon thêm giảm giá/sửa giá.'),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final role in PhoneWriteRole.values)
+                    ChoiceChip(
+                      key: Key('phone-write-${phone.id}-${role.name}'),
+                      label: Text(switch (role) {
+                        PhoneWriteRole.none => 'Chỉ xem',
+                        PhoneWriteRole.staff => 'Nhân viên',
+                        PhoneWriteRole.cashier => 'Thu ngân',
+                        PhoneWriteRole.owner => 'Chủ salon',
+                      }),
+                      selected: phone.writeRole == role,
+                      onSelected: _busy || !registry.active ? null : (_) =>
+                        _act(phone.id, () => registry.setWriteRole(phone.id, role)),
+                    ),
+                ]),
+              ],
               Wrap(spacing: 8, runSpacing: 8, children: [
                 if (phone.state == PhoneAccess.pending) ...[
                   FilledButton(

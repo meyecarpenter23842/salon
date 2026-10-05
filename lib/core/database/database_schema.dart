@@ -1,7 +1,9 @@
+import 'lan_write_schema.dart';
+
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 16;
+  static const int version = 17;
 
   static const String createInvoiceAdjustmentsTable = '''
     CREATE TABLE IF NOT EXISTS invoice_adjustments (
@@ -108,7 +110,7 @@ class DatabaseSchema {
       'CREATE INDEX IF NOT EXISTS idx_audit_events_created_at '
       'ON audit_events(created_at)';
 
-  static const List<String> createStatements = [
+  static final List<String> createStatements = [
     '''
     CREATE TABLE customers (
       id TEXT PRIMARY KEY,
@@ -308,6 +310,7 @@ class DatabaseSchema {
       updated_at TEXT NOT NULL
     )
     ''',
+    ...LanWriteSchema.statements,
   ];
 
   static const List<String> indexes = [
