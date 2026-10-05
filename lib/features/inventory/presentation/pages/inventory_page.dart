@@ -674,79 +674,41 @@ class _InventoryDetailPanel extends StatelessWidget {
     }
 
     return _InventorySurface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${item.metaLabel} • Tồn ${item.stockOnHand}',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: onReceive,
-                        icon: const Icon(Icons.add_box_outlined, size: 17),
-                        label: const Text('Nhập kho'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onAdjust,
-                        icon: const Icon(Icons.tune_rounded, size: 17),
-                        label: const Text('Điều chỉnh'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              Text('${item.metaLabel} • Tồn ${item.stockOnHand}',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: FilledButton.icon(onPressed: onReceive,
+                  icon: const Icon(Icons.add_box_outlined, size: 17), label: const Text('Nhập kho'))),
+                const SizedBox(width: 8),
+                Expanded(child: OutlinedButton.icon(onPressed: onAdjust,
+                  icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('Điều chỉnh'))),
+              ]),
+              Divider(height: 20, color: AppColors.border),
+              Text('Biến động gần đây', style: TextStyle(
+                color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w800)),
+            ]),
+          )),
+          if (movementsLoading || movementsError || movements.isEmpty)
+            SliverFillRemaining(hasScrollBody: false, child: Center(
+              child: movementsLoading ? const CircularProgressIndicator()
+                : Text(movementsError ? 'Không tải được lịch sử tồn.' : 'Chưa có biến động tồn kho.'),
+            ))
+          else SliverPadding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+            sliver: SliverList.separated(
+              itemCount: movements.length,
+              separatorBuilder: (_, index) => const SizedBox(height: 6),
+              itemBuilder: (context, index) => _MovementRow(item: movements[index]),
             ),
-          ),
-          Divider(height: 1, color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-            child: Text(
-              'Biến động gần đây',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Expanded(
-            child: movementsLoading
-                ? const Center(child: CircularProgressIndicator())
-                : movementsError
-                    ? const Center(child: Text('Không tải được lịch sử tồn.'))
-                    : movements.isEmpty
-                        ? const Center(child: Text('Chưa có biến động tồn kho.'))
-                        : ListView.separated(
-                            primary: false,
-                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                            itemCount: movements.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 6),
-                            itemBuilder: (context, index) =>
-                                _MovementRow(item: movements[index]),
-                          ),
           ),
         ],
       ),

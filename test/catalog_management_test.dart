@@ -68,6 +68,9 @@ void main() {
     final units = await catalogs.fetchOptions(CatalogOptionKind.productUnit);
     final unit = units.singleWhere((o) => o.name == 'Chai');
     expect(unit.usageCount, 1);
+    await expectLater(products.saveProduct(product(unit: 'Hộp'), existingId: saved.id),
+      throwsA(isA<StateError>()));
+    expect((await products.fetchProducts()).single.unitName, 'Chai');
     final history = await (await SalonDatabase.instance.database).query('inventory_movements');
     await catalogs.renameOption(unit.id, 'Chai bán lẻ');
     final renamed = (await products.fetchProducts()).single;
