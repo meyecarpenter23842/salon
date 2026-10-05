@@ -29,7 +29,7 @@ class SqliteInventoryRepository implements InventoryRepository {
 
     final rows = await database.rawQuery(
       'SELECT p.id, p.name, p.brand, p.volume_label, p.product_type, '
-      'p.is_active, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
+      'p.unit_name, p.is_active, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
       'FROM retail_products p '
       'LEFT JOIN inventory_stock s ON s.product_id = p.id '
       '${clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')} '} '
@@ -197,7 +197,7 @@ class SqliteInventoryRepository implements InventoryRepository {
   }) async {
     final productRows = await transaction.rawQuery(
       'SELECT p.id, p.name, p.brand, p.volume_label, p.product_type, '
-      'p.is_active, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
+      'p.unit_name, p.is_active, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
       'FROM retail_products p '
       'LEFT JOIN inventory_stock s ON s.product_id = p.id '
       'WHERE p.id = ? LIMIT 1',
@@ -259,6 +259,7 @@ class SqliteInventoryRepository implements InventoryRepository {
       name: row['name']?.toString() ?? '',
       brand: row['brand']?.toString() ?? '',
       volumeLabel: row['volume_label']?.toString() ?? '',
+      unitName: row['unit_name']?.toString() ?? '',
       productType: row['product_type']?.toString() ?? '',
       stockOnHand: _toInt(row['stock_on_hand']),
       isActive: _toInt(row['is_active']) == 1,

@@ -24,3 +24,9 @@ final catalogOptionNamesProvider =
       ref.watch(catalogOptionsRefreshNonceProvider);
       return ref.watch(catalogOptionsRepositoryProvider).fetchOptionNames(kind);
     });
+
+final catalogOptionsProvider =
+    FutureProvider.family<List<CatalogOption>, CatalogOptionKind>((ref, kind) {
+  ref.watch(catalogOptionsRefreshNonceProvider);
+  return ref.watch(catalogOptionsRepositoryProvider).fetchOptions(kind);
+});

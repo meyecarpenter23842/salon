@@ -72,7 +72,7 @@ void main() {
     final rows = await database.rawQuery(
       'SELECT kind, name FROM catalog_options ORDER BY kind, name',
     );
-    expect(rows, hasLength(3));
+    expect(rows, hasLength(3 + CatalogOptionKind.values.fold<int>(0, (n, k) => n + k.defaultNames.length)));
   });
 
   test('custom service group survives service input normalization', () {

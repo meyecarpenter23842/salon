@@ -1,3 +1,6 @@
+import '../../../../core/providers/catalog_options_providers.dart';
+import '../../../../core/models/catalog_option.dart';
+import '../../../../shared/widgets/catalog_management_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,14 +11,14 @@ import '../../../../core/repositories/inventory_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/compact_management.dart';
 
-class InventoryPage extends ConsumerStatefulWidget {
-  const InventoryPage({super.key});
+class _InventoryContent extends ConsumerStatefulWidget {
+  const _InventoryContent();
 
   @override
-  ConsumerState<InventoryPage> createState() => _InventoryPageState();
+  ConsumerState<_InventoryContent> createState() => __InventoryContentState();
 }
 
-class _InventoryPageState extends ConsumerState<InventoryPage> {
+class __InventoryContentState extends ConsumerState<_InventoryContent> {
   String _query = '';
   String? _groupFilter;
   String? _brandFilter;
@@ -24,6 +27,9 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(catalogOptionsRefreshNonceProvider, (_, next) {
+      setState(() { _groupFilter = null; _brandFilter = null; });
+    });
     final productsState = ref.watch(inventoryProductsViewProvider);
     final movementsState = ref.watch(inventoryMovementsViewProvider);
 
@@ -68,10 +74,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
             : movements
                 .where((item) => item.productId == selected.id)
                 .toList(growable: false);
-        final totalUnits = products.fold<int>(
-          0,
-          (sum, item) => sum + item.stockOnHand,
-        );
+        final unsetUnits = products.where((item) => item.unitName.isEmpty).length;
         final lowStockCount = products.where((item) => item.isLowStock).length;
         final outOfStockCount =
             products.where((item) => item.isOutOfStock).length;
@@ -98,7 +101,7 @@ class _InventoryPageState extends ConsumerState<InventoryPage> {
               CompactManagementSummary(
                 items: [
                   '${products.length} sản phẩm',
-                  '$totalUnits đơn vị tồn',
+                  '$unsetUnits chưa thiết lập đơn vị',
                   '$lowStockCount sắp hết',
                   '$outOfStockCount hết hàng',
                 ],
@@ -671,79 +674,41 @@ class _InventoryDetailPanel extends StatelessWidget {
     }
 
     return _InventorySurface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${item.metaLabel} • Tồn ${item.stockOnHand}',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: onReceive,
-                        icon: const Icon(Icons.add_box_outlined, size: 17),
-                        label: const Text('Nhập kho'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onAdjust,
-                        icon: const Icon(Icons.tune_rounded, size: 17),
-                        label: const Text('Điều chỉnh'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              Text('${item.metaLabel} • Tồn ${item.stockOnHand}',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: FilledButton.icon(onPressed: onReceive,
+                  icon: const Icon(Icons.add_box_outlined, size: 17), label: const Text('Nhập kho'))),
+                const SizedBox(width: 8),
+                Expanded(child: OutlinedButton.icon(onPressed: onAdjust,
+                  icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('Điều chỉnh'))),
+              ]),
+              Divider(height: 20, color: AppColors.border),
+              Text('Biến động gần đây', style: TextStyle(
+                color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w800)),
+            ]),
+          )),
+          if (movementsLoading || movementsError || movements.isEmpty)
+            SliverFillRemaining(hasScrollBody: false, child: Center(
+              child: movementsLoading ? const CircularProgressIndicator()
+                : Text(movementsError ? 'Không tải được lịch sử tồn.' : 'Chưa có biến động tồn kho.'),
+            ))
+          else SliverPadding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+            sliver: SliverList.separated(
+              itemCount: movements.length,
+              separatorBuilder: (_, index) => const SizedBox(height: 6),
+              itemBuilder: (context, index) => _MovementRow(item: movements[index]),
             ),
-          ),
-          Divider(height: 1, color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-            child: Text(
-              'Biến động gần đây',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Expanded(
-            child: movementsLoading
-                ? const Center(child: CircularProgressIndicator())
-                : movementsError
-                    ? const Center(child: Text('Không tải được lịch sử tồn.'))
-                    : movements.isEmpty
-                        ? const Center(child: Text('Chưa có biến động tồn kho.'))
-                        : ListView.separated(
-                            primary: false,
-                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                            itemCount: movements.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 6),
-                            itemBuilder: (context, index) =>
-                                _MovementRow(item: movements[index]),
-                          ),
           ),
         ],
       ),
@@ -1137,4 +1102,12 @@ class _InventoryConfirmDialog extends StatelessWidget {
       ],
     );
   }
+}
+
+class InventoryPage extends StatelessWidget {
+  const InventoryPage({super.key});
+  @override
+  Widget build(BuildContext context) => const CatalogManagementTabs(
+    listLabel: 'Tồn kho', kinds: [CatalogOptionKind.productUnit, CatalogOptionKind.productGroup, CatalogOptionKind.productBrand],
+    child: _InventoryContent());
 }

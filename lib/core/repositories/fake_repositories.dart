@@ -1365,6 +1365,7 @@ class FakeRetailProductsRepository implements RetailProductsRepository {
       name: input.name,
       brand: input.brand,
       volumeLabel: input.volumeLabel,
+      unitName: input.unitName,
       productType: input.productType,
       salePrice: input.salePrice,
       commissionPercent: input.commissionPercent,

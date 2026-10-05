@@ -1,6 +1,7 @@
 class ServiceUpsertInput {
   const ServiceUpsertInput({
     required this.name,
+    this.groupOptionId,
     required this.category,
     required this.durationMinutes,
     required this.price,
@@ -10,6 +11,7 @@ class ServiceUpsertInput {
   });
 
   final String name;
+  final String? groupOptionId;
   final String category;
   final int durationMinutes;
   final int price;
@@ -32,6 +34,7 @@ class ServiceUpsertInput {
 
   factory ServiceUpsertInput.normalized({
     required String name,
+    String? groupOptionId,
     required String category,
     required int durationMinutes,
     required int price,
@@ -41,6 +44,7 @@ class ServiceUpsertInput {
   }) {
     return ServiceUpsertInput(
       name: normalizeName(name),
+      groupOptionId: groupOptionId,
       category: normalizeCategory(category),
       durationMinutes: durationMinutes,
       price: price,

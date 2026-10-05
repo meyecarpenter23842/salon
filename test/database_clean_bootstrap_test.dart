@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:salonmanager/core/data/fake/fake_salon_data_source.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/models/reports_period.dart';
+import 'package:salonmanager/core/models/catalog_option.dart';
 import 'package:salonmanager/core/repositories/sqlite_appointments_repository.dart';
 import 'package:salonmanager/core/repositories/sqlite_customers_repository.dart';
 import 'package:salonmanager/core/repositories/sqlite_employees_repository.dart';
@@ -88,7 +89,6 @@ void main() {
       'services',
       'service_formulas',
       'retail_products',
-      'catalog_options',
       'inventory_stock',
       'inventory_movements',
       'appointments',
@@ -104,6 +104,15 @@ void main() {
       );
     }
 
+    final options = await database.query('catalog_options');
+    expect(options.length, CatalogOptionKind.values.fold<int>(0, (count, kind) => count + kind.defaultNames.length));
+    for (final option in options) {
+      final kind = CatalogOptionKind.values.singleWhere((kind) => kind.databaseValue == option['kind']);
+      expect(kind.defaultNames, contains(option['name']));
+      expect(option['is_active'], 1);
+    }
+    // Configuration defaults are persisted so rename/archive survives restart;
+    // customer, service, product, invoice and stock tables above remain empty.
     expect(await _countRows(database, 'app_settings'), 1);
   });
 }

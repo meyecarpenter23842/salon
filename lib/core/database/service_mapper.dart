@@ -7,6 +7,7 @@ class ServiceMapper {
     return ServiceCatalogItem(
       id: row['id'].toString(),
       name: row['name'].toString(),
+      groupOptionId: row['group_option_id']?.toString(),
       category: row['category'].toString(),
       durationMinutes: _toInt(row['duration_minutes']),
       price: _toInt(row['price']),

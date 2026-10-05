@@ -188,6 +188,7 @@ class FakeInventoryRepository implements InventoryRepository {
       name: product.name,
       brand: product.brand,
       volumeLabel: product.volumeLabel,
+      unitName: product.unitName,
       productType: product.productType,
       stockOnHand: stockOnHand,
       isActive: product.isActive,

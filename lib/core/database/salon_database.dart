@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'database_bootstrap.dart';
 import 'database_schema.dart';
+import 'catalog_schema.dart';
 import 'legacy_demo_data_cleanup.dart';
 import 'lan_write_schema.dart';
 import 'transaction_database.dart';
@@ -81,6 +82,7 @@ class SalonDatabase {
         });
 
         await batch.commit(noResult: true);
+        await CatalogSchema.install(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         final batch = database.batch();
@@ -427,6 +429,7 @@ class SalonDatabase {
           }
         }
         await batch.commit(noResult: true);
+        if (oldVersion < 18) await CatalogSchema.install(database);
       },
       onOpen: (database) async {
         await database.insert('app_settings', {

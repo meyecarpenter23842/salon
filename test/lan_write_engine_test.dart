@@ -159,6 +159,13 @@ void main() {
     for (final row in triggerRows) { await db.execute('DROP TRIGGER ${row['name']}'); }
     await db.execute('DROP TABLE lan_commands');
     await db.execute('DROP TABLE lan_resource_revisions');
+    // Reconstruct the pre-18 catalog boundary as well; a version-only downgrade
+    // otherwise leaves columns that a real schema-16 file never had.
+    for (final column in ['group_option_id', 'brand_option_id', 'unit_option_id', 'unit_name']) {
+      await db.execute('ALTER TABLE retail_products DROP COLUMN $column');
+    }
+    await db.execute('ALTER TABLE services DROP COLUMN group_option_id');
+    await db.execute('ALTER TABLE catalog_options DROP COLUMN is_active');
     await db.setVersion(16);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
