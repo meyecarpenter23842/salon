@@ -625,7 +625,7 @@ class _EmployeeProfileBody extends ConsumerWidget {
                       Expanded(
                         child: _metric(
                           Icons.percent_rounded,
-                          'Hoa hồng',
+                          'Hoa hồng ước tính',
                           profile['estimatedCommission']?.toString() ?? '0đ',
                         ),
                       ),
