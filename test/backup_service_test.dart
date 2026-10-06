@@ -8,6 +8,13 @@ import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/services/backup_service.dart';
 
+import 'package:salonmanager/core/models/stock_document.dart';
+import 'package:salonmanager/core/repositories/stock_document_repository.dart';
+import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
+import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
+import 'package:salonmanager/core/services/sensitive_action_service.dart';
+import 'support/stock_schema_fixture.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -248,6 +255,119 @@ void main() {
     expect(await _readSetting(database, 'db6_marker'), 'live-extension-safe');
     expect(await _listSafetyBackups(backupDir), isEmpty);
   });
+  test('business restore and pre_restore rollback preserve documents, stock, paid and legacy bills', () async {
+    final database = await SalonDatabase.instance.initialize();
+    final activeId = await _seedQaBusiness(database, withDocuments: true);
+    final expected = await _businessSnapshot(database);
+    final epoch = SalonDatabase.instance.runtimeEpoch;
+    final backup = await service.createBackup();
+    expect(backup.success, isTrue, reason: backup.message);
+    await database.update('customers', {'full_name': 'Sau backup'}, where: 'id = ?', whereArgs: ['qa-customer']);
+    await database.update('catalog_options', {'is_active': 0}, where: 'id = ?', whereArgs: ['qa-unit']);
+    final stock = StockDocumentRepository(SalonDatabase.instance, SensitiveActionService(SalonDatabase.instance));
+    final posted = await stock.document('qa-receipt');
+    await stock.cancel(posted.id, expectedRevision: posted.revision, reason: 'Sau backup');
+    await SqliteBillingSessionsRepository(SalonDatabase.instance).addService(activeId, 'qa-service');
+    final beforeRestore = await _businessSnapshot(database);
+    final result = await service.restoreFromBackup(backup.filePath!);
+    expect(result.success, isTrue, reason: result.message);
+    final restored = await SalonDatabase.instance.database;
+    expect(await _businessSnapshot(restored), expected);
+    expect(SalonDatabase.instance.runtimeEpoch, isNot(epoch));
+    expect(await restored.rawQuery('PRAGMA foreign_key_check'), isEmpty);
+    expect((await restored.query('inventory_stock')).single['stock_on_hand'], -2);
+    expect((await SqliteInvoicesRepository(SalonDatabase.instance).fetchInvoiceDraft()).lines.single.quantity, 1);
+    expect((await SqliteBillingSessionsRepository(SalonDatabase.instance).fetchSession(activeId)).lines.single.quantity, 2);
+    final preRestore = (await _listSafetyBackups(backupDir)).single;
+    final safetyDb = await openDatabase(preRestore.path, readOnly: true, singleInstance: false);
+    try { expect(await _businessSnapshot(safetyDb), beforeRestore); }
+    finally { await safetyDb.close(); }
+    final undo = await service.restoreFromBackup(preRestore.path);
+    expect(undo.success, isTrue, reason: undo.message);
+    expect(await _businessSnapshot(await SalonDatabase.instance.database), beforeRestore);
+    await SalonDatabase.instance.close();
+    expect(await _businessSnapshot(await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true)), beforeRestore);
+  });
+
+  test('restore migrates real schema 19 backup preserving legacy drafts, payments, catalogs and negative history', () async {
+    final database = await SalonDatabase.instance.initialize();
+    final activeId = await _seedQaBusiness(database, withDocuments: false);
+    await removeStockDocumentSchema(database);
+    await database.setVersion(19);
+    await _writeSetting(database, 'schema_version', '19');
+    final legacyRows = await _businessSnapshot(database);
+    final backup = await service.createBackup();
+    expect(backup.success, isTrue, reason: backup.message);
+    expect((await service.validateBackupFile(backup.filePath!)).schemaVersion, 19);
+    await SalonDatabase.instance.close();
+    final live = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
+    await live.update('customers', {'full_name': 'Live mới'}, where: 'id = ?', whereArgs: ['qa-customer']);
+    final result = await service.restoreFromBackup(backup.filePath!);
+    expect(result.success, isTrue, reason: result.message);
+    final upgraded = await SalonDatabase.instance.database;
+    expect(await upgraded.getVersion(), DatabaseSchema.version);
+    expect(await _readSetting(upgraded, 'schema_version'), DatabaseSchema.version.toString());
+    for (final entry in legacyRows.entries) {
+      final columns = entry.value.isEmpty ? null : entry.value.first.keys.toList();
+      final rows = await upgraded.query(entry.key, columns: columns, orderBy: 'rowid',
+        where: entry.key == 'app_settings' ? 'key != ?' : null,
+        whereArgs: entry.key == 'app_settings' ? ['schema_version'] : null);
+      expect(rows, entry.value, reason: entry.key);
+    }
+    expect(await upgraded.query('stock_documents'), isEmpty);
+    expect(await upgraded.query('stock_suppliers'), isEmpty);
+    expect((await upgraded.query('inventory_movements')).single['source'], 'legacy');
+    expect((await upgraded.query('inventory_stock')).single['stock_on_hand'], -5);
+    expect(await upgraded.rawQuery('PRAGMA foreign_key_check'), isEmpty);
+    expect((await SqliteInvoicesRepository(SalonDatabase.instance).fetchInvoiceDraft()).lines.single.quantity, 1);
+    expect((await SqliteBillingSessionsRepository(SalonDatabase.instance).fetchSession(activeId)).lines.single.quantity, 2);
+  });
+
+  test('post-swap open failure rolls back all business rows and keeps safety backup', () async {
+    final database = await SalonDatabase.instance.initialize();
+    await _seedQaBusiness(database, withDocuments: true);
+    final backup = await service.createBackup();
+    expect(backup.success, isTrue, reason: backup.message);
+    final source = await openDatabase(backup.filePath!, singleInstance: false);
+    try {
+      // Valid SQLite passes preflight, but fails production onOpen schema write.
+      await source.execute("CREATE TRIGGER qa_fail_open BEFORE INSERT ON app_settings WHEN NEW.key = 'schema_version' BEGIN SELECT RAISE(ABORT, 'QA open failure'); END");
+    } finally { await source.close(); }
+    expect((await service.validateBackupFile(backup.filePath!)).isValid, isTrue);
+    await database.update('customers', {'full_name': 'Dữ liệu cần giữ'}, where: 'id = ?', whereArgs: ['qa-customer']);
+    final expected = await _businessSnapshot(database);
+    final result = await service.restoreFromBackup(backup.filePath!);
+    expect(result.success, isFalse);
+    final rolledBack = await SalonDatabase.instance.database;
+    expect(await _businessSnapshot(rolledBack), expected);
+    expect(await rolledBack.rawQuery('PRAGMA integrity_check'), [{'integrity_check': 'ok'}]);
+    expect(await rolledBack.rawQuery('PRAGMA foreign_key_check'), isEmpty);
+    expect(await _listSafetyBackups(backupDir), hasLength(1));
+    expect(await dbDir.list().where((entry) => entry.path.contains('.restore_')).toList(), isEmpty);
+    await SalonDatabase.instance.close();
+    expect(await _businessSnapshot(await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true)), expected);
+  });
+
+  test('orphaned invoice backup is rejected before touching live business data', () async {
+    final database = await SalonDatabase.instance.initialize();
+    await _seedQaBusiness(database, withDocuments: true);
+    final expected = await _businessSnapshot(database);
+    final backup = await service.createBackup();
+    expect(backup.success, isTrue, reason: backup.message);
+    final source = await openDatabase(backup.filePath!, singleInstance: false);
+    try {
+      await source.execute('PRAGMA foreign_keys = OFF');
+      await source.update('invoice_items', {'invoice_id': 'missing-invoice'});
+      expect(await source.rawQuery('PRAGMA integrity_check'), [{'integrity_check': 'ok'}]);
+      expect(await source.rawQuery('PRAGMA foreign_key_check'), isNotEmpty);
+    } finally { await source.close(); }
+    final result = await service.restoreFromBackup(backup.filePath!);
+    expect(result.success, isFalse);
+    expect(result.message, contains('foreign_key_check'));
+    expect(await _businessSnapshot(database), expected);
+    expect(await _listSafetyBackups(backupDir), isEmpty);
+  });
+
 }
 
 Future<List<File>> _listSafetyBackups(Directory backupDir) async {
@@ -298,4 +418,57 @@ Future<String?> _readSettingFromFile(String filePath, String key) async {
   } finally {
     await database.close();
   }
+}
+
+
+
+/// Synthetic salon only; use repositories for billing and posted documents.
+Future<String> _seedQaBusiness(Database db, {required bool withDocuments}) async {
+  const stamp = '2026-10-06T10:00:00.000';
+  await db.insert('customers', {'id': 'qa-customer', 'full_name': 'Khách QA', 'phone': '0900000001', 'created_at': stamp, 'updated_at': stamp});
+  await db.insert('services', {'id': 'qa-service', 'name': 'Cắt QA', 'category': 'Tóc', 'duration_minutes': 30, 'price': 100000, 'created_at': stamp, 'updated_at': stamp});
+  await db.insert('catalog_options', {'id': 'qa-unit', 'kind': 'product_unit', 'name': 'Chai QA', 'normalized_name': 'chai qa', 'created_at': stamp, 'updated_at': stamp});
+  await db.insert('retail_products', {'id': 'qa-product', 'name': 'Dầu QA', 'brand': 'QA', 'volume_label': '500 ml', 'product_type': 'QA',
+    'unit_option_id': 'qa-unit', 'unit_name': 'Chai QA', 'sale_price': 50000, 'created_at': stamp, 'updated_at': stamp});
+  await db.insert('inventory_stock', {'product_id': 'qa-product', 'stock_on_hand': -4, 'updated_at': stamp});
+  await db.insert('appointments', {'id': 'qa-appointment', 'customer_id': 'qa-customer', 'service_id': 'qa-service',
+    'starts_at': stamp, 'status': 'Đã đặt', 'created_at': stamp, 'updated_at': stamp});
+  final bills = SqliteBillingSessionsRepository(SalonDatabase.instance);
+  final paid = await bills.createWalkInSession();
+  await bills.selectCustomer(paid.id, 'qa-customer');
+  await bills.addProduct(paid.id, 'qa-product');
+  await bills.checkout(paid.id);
+  final active = await bills.createWalkInSession();
+  await bills.selectCustomer(active.id, 'qa-customer');
+  await bills.addService(active.id, 'qa-service');
+  await bills.addService(active.id, 'qa-service');
+  await SqliteInvoicesRepository(SalonDatabase.instance).addInvoiceService('qa-service');
+  if (withDocuments) {
+    final repo = StockDocumentRepository(SalonDatabase.instance, SensitiveActionService(SalonDatabase.instance));
+    await repo.saveSupplier(const StockSupplier(id: 'qa-supplier', name: 'NCC QA', phone: '0900000002'));
+    StockDocumentInput input(String id, int quantity) => StockDocumentInput(
+      id: id, kind: StockDocumentKind.receipt, date: DateTime(2026, 10, 6),
+      preparedBy: 'QA', supplierId: 'qa-supplier',
+      lines: [StockDocumentLineInput(productId: 'qa-product', quantity: quantity, unitCost: 12000)]);
+    final receipt = await repo.saveDraft(input('qa-receipt', 3));
+    await repo.post(receipt.id, expectedRevision: receipt.revision);
+    final cancelled = await repo.saveDraft(input('qa-cancelled', 1));
+    final posted = await repo.post(cancelled.id, expectedRevision: cancelled.revision);
+    await repo.cancel(posted.id, expectedRevision: posted.revision, reason: 'QA hủy');
+    await repo.saveDraft(input('qa-draft', 2));
+  }
+  return active.id;
+}
+
+/// All business/journal/audit tables; exclude only schema marker rewritten onOpen.
+Future<Map<String, List<Map<String, Object?>>>> _businessSnapshot(Database db) async {
+  final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+  final result = <String, List<Map<String, Object?>>>{};
+  for (final table in tables) {
+    final name = table['name']! as String;
+    result[name] = await db.query(name, orderBy: 'rowid',
+      where: name == 'app_settings' ? 'key != ?' : null,
+      whereArgs: name == 'app_settings' ? ['schema_version'] : null);
+  }
+  return result;
 }
