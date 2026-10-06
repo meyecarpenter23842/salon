@@ -8,6 +8,12 @@ import 'package:salonmanager/core/services/backup_service.dart';
 import 'package:salonmanager/core/repositories/sqlite_employees_repository.dart';
 import 'package:salonmanager/core/data/fake/fake_salon_data_source.dart';
 import 'package:salonmanager/core/models/employee_upsert_input.dart';
+import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
+import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
+import 'package:salonmanager/core/lan/lan_pairing.dart';
+import 'package:salonmanager/core/lan/lan_contract.dart';
+import 'package:salonmanager/core/lan/lan_write_contract.dart';
+import 'package:salonmanager/core/lan/lan_write_engine.dart';
 
 void main(){
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,11 +41,45 @@ void main(){
       'paid_at':date.toIso8601String(),'created_at':date.toIso8601String(),'updated_at':date.toIso8601String()});
     await db.insert('invoice_items',{'id':'line-$id','invoice_id':id,'item_type':'service',
       'employee_id':'emp','title':'Cắt tóc','quantity':1,'unit_price':line,'total_price':line});
-    if(retail)await db.insert('invoice_items',{'id':'retail-$id','invoice_id':id,'item_type':'retail',
-      'employee_id':'emp','title':'Sản phẩm','quantity':1,'unit_price':line,'total_price':line});
+    if(retail) { await db.insert('invoice_items',{'id':'retail-$id','invoice_id':id,'item_type':'retail',
+      'employee_id':'emp','title':'Sản phẩm','quantity':1,'unit_price':line,'total_price':line}); }
   }
   Future<void> capture(String id,DateTime date)=>db.transaction((tx)=>CommissionLedger.capture(tx,id,date));
   Future<void> closeSeptember() async{await invoice('a',total:1000000,line:1000000);await capture('a',DateTime(2026,9,15));await repo.closePeriod('2026-09');}
+
+  test('LAN checkout rollback and replay preserve one snapshot with employee attribution',()async{
+    final stamp=now.toIso8601String();
+    await db.insert('services',{'id':'svc','name':'Cắt','category':'Tóc','duration_minutes':30,
+      'price':100000,'created_at':stamp,'updated_at':stamp});
+    final bills=SqliteBillingSessionsRepository(SalonDatabase.instance);
+    final session=await bills.createWalkInSession();
+    await bills.selectCustomer(session.id,'cust');
+    final draft=await bills.addService(session.id,'svc',employeeId:'emp');
+    expect(draft.lines.single.employeeId,'emp');
+    final engine=LanWriteEngine(SalonDatabase.instance);
+    final phone=PairedPhone('a'*64,'Phone',PhoneAccess.approved,DateTime.utc(2026),
+      canReadSalon:true,writeRole:PhoneWriteRole.owner);
+    final command=LanWriteCommand(commandId:'checkout',operation:LanWriteOperation.sessionCheckout,
+      expectedEpoch:SalonDatabase.instance.runtimeEpoch,targetId:session.id,
+      expectedRevision:await engine.revision(db,'session',session.id),payload:{});
+    await expectLater(engine.execute(phone,command,(scope)async{
+      await SqliteInvoicesRepository(scope,null,session.id).checkoutInvoice();
+      throw StateError('fixture after checkout');
+    }),throwsA(isA<PairingFailure>()));
+    expect(await db.query('commission_entries'),isEmpty);
+    final first=await engine.execute(phone,command,(scope)async{
+      final invoices=SqliteInvoicesRepository(scope,null,session.id);
+      await invoices.checkoutInvoice();
+      return LanMutationTarget(invoices.lastArchivedInvoiceId!,'invoice');
+    });
+    expect((await db.query('commission_entries')).single['amount'],10000);
+    await db.update('employees',{'commission_rate':0.7});
+    final replay=await engine.execute(phone,command,(_)async=>throw StateError('must not run'));
+    expect(replay.id,first.id);expect(await db.query('commission_entries'),hasLength(1));
+    final invoices=SqliteInvoicesRepository(SalonDatabase.instance);
+    await invoices.refundInvoice(first.id,reason:'Test');
+    expect((await db.query('commission_entries',where:"kind='reversal'")).single['amount'],-10000);
+  });
 
   test('rate edits require Owner, validate finite precision/range and leave snapshots unchanged',()async{
     await invoice('a');await capture('a',DateTime(2026,9,15));

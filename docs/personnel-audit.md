@@ -21,13 +21,13 @@ Code hiện đã có today-only không fallback, filter/search/isPaid guards, he
 
 ### Quyết định triển khai
 Tách issue nhỏ trước code. Làm theo thứ tự: làm rõ ước tính và input hồ sơ → hoa hồng/chốt/chi trả theo quy tắc owner → chấm công → payroll → danh mục chức danh (tách quyền). Giữ chứng từ đã trả và attribution; không tính lại hồi tố âm thầm, không bịa hoa hồng cũ hoặc tiền đã trả từ báo cáo ước tính.
-Chờ owner chốt cơ sở hoa hồng, chu kỳ chi trả, bán lẻ và hoàn/hủy sau chi trả trước khi tạo nghĩa vụ tiền. Không tự chọn chính sách lương/thuế/OT/nghỉ/bù trừ. Chi phí/công nợ/gói/remote/unit consumption tiếp tục là các nhánh sau, chưa triển khai.
+Owner đã chốt trong cuộc trò chuyện ngày 06/10/2026: tỷ lệ riêng nhân viên × doanh thu dịch vụ sau giảm giá, chốt tháng, chưa tính bán lẻ, hoàn/hủy ghi giảm vào tháng kế tiếp. Quy trình và giới hạn của sổ/chứng từ xem [Hoa hồng và chi trả](commission-operations.md). Không tự chọn chính sách lương/thuế/OT/nghỉ/bù trừ. Chi phí/công nợ/gói/remote/unit consumption tiếp tục là các nhánh sau, chưa triển khai.
 
 
 ## Các lô nhỏ
 
 1. [#124](https://github.com/meyecarpenter23842/salon/issues/124): làm rõ ước tính; nhãn và ghi chú hồ sơ được sửa, không đổi công thức/tỷ lệ/schema/attribution.
-2. [#125](https://github.com/meyecarpenter23842/salon/issues/125): sổ hoa hồng và chi trả; phải chốt quy tắc owner trước tính nghĩa vụ tiền.
+2. [#125](https://github.com/meyecarpenter23842/salon/issues/125): sổ hoa hồng và chi trả; quy tắc owner đã chốt; triển khai snapshot theo lần thanh toán mới, chốt tháng và chứng từ chi trả.
 3. [#126](https://github.com/meyecarpenter23842/salon/issues/126): chấm công; không suy từ cashier shift/lịch hẹn.
 4. [#127](https://github.com/meyecarpenter23842/salon/issues/127): payroll theo kỳ; cần đầu vào chính sách lương/công, chống cộng hoa hồng đã trả hai lần.
 

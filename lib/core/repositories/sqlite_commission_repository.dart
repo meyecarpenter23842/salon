@@ -98,7 +98,9 @@ class SqliteCommissionRepository {
   Future<String> pay({required String requestId,required String employeeId,
     required int amount, required String method, String reference='',String note=''}) async {
     if (requestId.trim().isEmpty || amount <= 0 || amount > 9000000000000 ||
-      !['cash','transfer'].contains(method)) throw ArgumentError('Thông tin chi trả không hợp lệ.');
+      !['cash','transfer'].contains(method)) {
+      throw ArgumentError('Thông tin chi trả không hợp lệ.');
+    }
     if (method=='transfer' && reference.trim().isEmpty) throw ArgumentError('Nhập mã giao dịch chuyển khoản.');
     final signature=jsonEncode([employeeId,amount,method,reference.trim(),note.trim()]);
     final actor=await security.authorizeCommissionAction('commission_pay',requestId);

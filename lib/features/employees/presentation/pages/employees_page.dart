@@ -76,7 +76,9 @@ Future<void> _openEmployeeEditor(
   if (input == null || !context.mounted) return;
   if ((employee == null || input.commissionLabel != employee['commission']) &&
       (!await ensureSensitiveActionAuthorized(context, ref, SensitiveAction.commission) ||
-       !context.mounted)) return;
+       !context.mounted)) {
+    return;
+  }
 
   try {
     final saved = await ref
