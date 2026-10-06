@@ -7,6 +7,7 @@ import '../../core/lan/lan_write_contract.dart';
 import 'companion_bill_workspace.dart';
 import 'companion_command_controller.dart';
 import 'companion_mobile_list.dart';
+import 'companion_mobile_editor.dart';
 
 export 'companion_bill_workspace.dart' show CompanionCatalogSubtitle;
 
@@ -35,16 +36,21 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
   void initState() { super.initState(); widget.commands.addListener(_changed); }
   void _changed() { if (mounted) { redraw.value++; } }
   @override
+  void didUpdateWidget(CompanionWorkspace old) {
+    super.didUpdateWidget(old);
+    if (old.commands != widget.commands) {
+      old.commands.removeListener(_changed); widget.commands.addListener(_changed);
+    }
+    _changed();
+  }
+  @override
   void dispose() { widget.commands.removeListener(_changed); redraw.dispose(); super.dispose(); }
 
   Future<void> _edit(String kind, String? id) async {
     if (locked || widget.role == PhoneWriteRole.none) { return; }
-    await navigator.currentState!.push(MaterialPageRoute<void>(builder: (_) => Scaffold(
-      appBar: AppBar(title: Text(kind == 'customer' ? 'Thông tin khách hàng' : 'Lịch hẹn')),
-      body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16),
-        child: CompanionBillWorkspace(connection: widget.connection, readClient: widget.readClient,
-          client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
-          initialKind: kind, initialId: id))))));
+    await navigator.currentState!.push<bool>(MaterialPageRoute<bool>(builder: (_) =>
+      CompanionMobileEditor(connection: widget.connection, client: widget.client, commands: widget.commands,
+        role: widget.role, onDenied: widget.onDenied, kind: kind, id: id)));
     if (mounted) { refresh++; _changed(); }
   }
   Future<void> _bills({String? appointmentId}) async {
@@ -53,13 +59,13 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
       body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16),
         child: CompanionBillWorkspace(connection: widget.connection, readClient: widget.readClient,
           client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
-          initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId))))));
+          billOnly: true, initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId))))));
     if (mounted) { refresh++; _changed(); }
   }
 
   @override
   Widget build(BuildContext context) => NavigatorPopHandler(
-    onPopWithResult: (result) => navigator.currentState!.pop(result),
+    onPopWithResult: (result) => navigator.currentState!.maybePop(result),
     child: Navigator(key: navigator, onGenerateRoute: (_) => MaterialPageRoute<void>(
       builder: (context) => AnimatedBuilder(animation: redraw, builder: (context, _) => Scaffold(
         appBar: AppBar(title: Text(['Hôm nay', 'Lịch hẹn', 'Khách hàng', 'Hóa đơn', 'Thêm'][tab]),

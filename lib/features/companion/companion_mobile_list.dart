@@ -27,7 +27,8 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
   final scroll = ScrollController();
   List<SalonReadRecord> rows = [];
   String query = '';
-  String? day, salonDate, error;
+  String? day, salonDate;
+  MobileReadProblem? error;
   int? nextOffset;
   int generation = 0;
   int lastOffset = 0;
@@ -67,13 +68,12 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
       });
     } catch (e) {
       if (!mounted || current != generation) { return; }
-      setState(() { busy = false; rows = []; error = e is PairingFailure && e.code == LanErrorCode.notFound
-        ? 'Dữ liệu đã thay đổi. Tải lại danh sách.' : 'Chưa tải được dữ liệu. Kiểm tra Wi-Fi và giữ máy salon mở.'; });
+      setState(() { busy = false; rows = []; error = MobileReadProblem.from(e, missingMessage: 'Dữ liệu đã thay đổi. Tải lại danh sách.'); });
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
   Future<void> _pickDay() async {
-    final selected = await showDatePicker(context: context, initialDate: DateTime.tryParse(day ?? salonDate ?? '') ?? DateTime.now(),
+    final selected = await showDatePicker(context: context, useRootNavigator: false, initialDate: DateTime.tryParse(day ?? salonDate ?? '') ?? DateTime.now(),
       firstDate: DateTime(2000), lastDate: DateTime(2100), helpText: 'Chọn ngày tại salon');
     if (!mounted || selected == null) { return; }
     day = salonDay(selected); lastOffset = 0;
@@ -104,16 +104,16 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
     if (widget.kind == SalonReadKind.appointments) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         OutlinedButton.icon(key: const Key('salon-pick-day'), onPressed: widget.today ? null : _pickDay,
-          icon: const Icon(Icons.calendar_month), label: Text(DateTime.tryParse(day ?? salonDate ?? '') == null ? 'Đang tải ngày…' : DateFormat('dd/MM/yyyy').format(DateTime.parse(day ?? salonDate!)))),
+          icon: const Icon(Icons.calendar_month), label: Text(DateTime.tryParse(day ?? salonDate ?? '') == null ? error != null ? 'Chưa lấy được ngày' : 'Đang tải ngày…' : DateFormat('dd/MM/yyyy').format(DateTime.parse(day ?? salonDate!)))),
         if (!widget.today) TextButton(onPressed: () { day = null; lastOffset = 0; _load(); }, child: const Text('Hôm nay')),
       ])),
     if (widget.onCreate != null || widget.onBills != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Align(alignment: Alignment.centerLeft, child: FilledButton.icon(
         key: Key(widget.kind == SalonReadKind.customers ? 'write-new-customer' : widget.kind == SalonReadKind.appointments ? 'write-new-appointment' : 'write-bills'),
-        onPressed: widget.onCreate ?? widget.onBills, icon: Icon(widget.onBills != null ? Icons.receipt_long : Icons.add),
+        onPressed: busy || error != null ? null : widget.onCreate ?? widget.onBills, icon: Icon(widget.onBills != null ? Icons.receipt_long : Icons.add),
         label: Text(widget.onBills != null ? 'Bill đang làm' : widget.kind == SalonReadKind.customers ? 'Thêm khách hàng' : 'Đặt lịch hẹn')))),
     if (busy) const LinearProgressIndicator(),
-    Expanded(child: error != null ? MobileStatus(icon: Icons.wifi_off, title: 'Chưa kết nối được', message: error!,
+    Expanded(child: error != null ? MobileStatus(icon: error!.icon, title: error!.title, message: error!.message,
         action: 'Thử lại', onAction: () => _load(preserve: true))
       : !busy && rows.isEmpty ? MobileStatus(icon: widget.kind == SalonReadKind.appointments ? Icons.event_available : Icons.search_off,
           title: widget.today ? 'Hôm nay chưa có lịch hẹn' : 'Chưa có $title phù hợp',
@@ -128,6 +128,27 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
                     child: const Text('Xem thêm'));
             }
             final record = rows[index];
+            if (widget.kind == SalonReadKind.appointments) {
+              final parts = record.title.split(' · ');
+              final details = record.subtitle.split(' · ');
+              return Card(margin: const EdgeInsets.only(bottom: 12), child: InkWell(key: Key('salon-record-${record.id}'),
+                borderRadius: BorderRadius.circular(16), onTap: () => _detail(record),
+                child: Padding(padding: const EdgeInsets.all(16), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(width: 58, child: Column(children: [
+                    const Icon(Icons.schedule, size: 20), const SizedBox(height: 8),
+                    FittedBox(fit: BoxFit.scaleDown, child: Text(parts.first, style: const TextStyle(fontWeight: FontWeight.bold))),
+                  ])),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(parts.skip(1).join(' · '), style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6), Text(details.length > 1 ? details.take(details.length - 1).join(' · ') : record.subtitle),
+                    const SizedBox(height: 8),
+                    DecoratedBox(decoration: BoxDecoration(color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(8)), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Text(details.last, style: Theme.of(context).textTheme.labelLarge))),
+                  ])),
+                ]))));
+            }
             return Card(margin: const EdgeInsets.only(bottom: 10), child: ListTile(key: Key('salon-record-${record.id}'),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               leading: CircleAvatar(child: Icon(widget.kind == SalonReadKind.customers ? Icons.person_outline :
@@ -153,7 +174,7 @@ class CompanionMobileDetail extends StatefulWidget {
 }
 class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
   SalonReadRecord? record;
-  String? error;
+  MobileReadProblem? error;
   int generation = 0;
   @override
   void initState() { super.initState(); _load(); }
@@ -167,19 +188,19 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
       setState(() => record = page.records.single);
     } catch(e) {
       if (!mounted || current != generation) { return; }
-      setState(() => error = e is PairingFailure && e.code == LanErrorCode.notFound
-        ? 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.' : 'Chưa tải được thông tin. Kiểm tra kết nối rồi thử lại.');
+      setState(() => error = MobileReadProblem.from(e, missingMessage: 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.'));
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
+  String _sectionFor(String key) => ['Điện thoại', 'Email'].contains(key) ? 'Liên hệ' : ['Ghi chú', 'Hồ sơ tóc'].contains(key) ? 'Ghi chú' : 'Thông tin';
   @override
   void dispose() { generation++; super.dispose(); }
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.kind == SalonReadKind.customers ? 'Hồ sơ khách hàng' :
       widget.kind == SalonReadKind.appointments ? 'Chi tiết lịch hẹn' : 'Chi tiết hóa đơn')),
-    body: SafeArea(child: error != null ? MobileStatus(icon: Icons.cloud_off, title: 'Chưa tải được thông tin',
-      message: error!, action: 'Thử lại', onAction: _load) : record == null ? const Center(child: CircularProgressIndicator())
+    body: SafeArea(child: error != null ? MobileStatus(icon: error!.icon, title: error!.title,
+      message: error!.message, action: 'Thử lại', onAction: _load) : record == null ? const Center(child: CircularProgressIndicator())
       : ListView(padding: const EdgeInsets.all(16), children: [
           Text(record!.title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8), Text(record!.subtitle), const SizedBox(height: 16),
@@ -191,12 +212,12 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
                 icon: const Icon(Icons.receipt_long_outlined), label: const Text('Lập bill')),
           ]),
           const SizedBox(height: 16),
-          for (final section in ['Liên hệ', 'Thông tin', 'Ghi chú']) Card(child: Padding(padding: const EdgeInsets.all(16),
+          for (final section in ['Liên hệ', 'Thông tin', 'Ghi chú'])
+            if (record!.fields.entries.any((e) => _sectionFor(e.key) == section)) Card(child: Padding(padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(section, style: Theme.of(context).textTheme.titleMedium),
               const Divider(),
-              for (final e in record!.fields.entries.where((e) => section == 'Liên hệ' ? ['Điện thoại', 'Email'].contains(e.key) :
-                section == 'Ghi chú' ? ['Ghi chú', 'Hồ sơ tóc'].contains(e.key) : !['Điện thoại', 'Email', 'Ghi chú', 'Hồ sơ tóc'].contains(e.key)))
+              for (final e in record!.fields.entries.where((e) => _sectionFor(e.key) == section))
                 Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                   children: [Text(e.key, style: Theme.of(context).textTheme.labelMedium),
                     const SizedBox(height: 3), SelectableText(e.value.isEmpty ? 'Chưa ghi nhận' : e.value)])),
@@ -218,4 +239,22 @@ class MobileStatus extends StatelessWidget {
       const SizedBox(height: 8), Text(message, textAlign: TextAlign.center),
       const SizedBox(height: 16), FilledButton(onPressed: onAction, child: Text(action)),
     ])));
+}
+
+class MobileReadProblem {
+  const MobileReadProblem(this.icon, this.title, this.message);
+  final IconData icon;
+  final String title, message;
+  factory MobileReadProblem.from(Object error, {String? missingMessage}) {
+    if (error is PairingFailure && error.code == LanErrorCode.unavailable) {
+      return const MobileReadProblem(Icons.wifi_off, 'Mất kết nối với máy salon',
+        'Kiểm tra Wi-Fi và giữ máy salon mở, rồi thử lại.');
+    }
+    if (error is PairingFailure && error.code == LanErrorCode.notFound) {
+      return MobileReadProblem(Icons.search_off, 'Dữ liệu đã thay đổi',
+        missingMessage ?? 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.');
+    }
+    return const MobileReadProblem(Icons.error_outline, 'Chưa tải được dữ liệu',
+      'Thử tải lại. Nếu lỗi còn xuất hiện, kiểm tra dữ liệu trên máy salon.');
+  }
 }

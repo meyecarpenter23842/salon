@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'companion_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/lan/lan_health_client.dart';
@@ -27,17 +29,10 @@ class SalonCompanionApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'Salon — Điện thoại',
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF805A45)),
-      scaffoldBackgroundColor: const Color(0xFFFAF7F2),
-      inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
-      cardTheme: CardThemeData(color: Colors.white, elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(48, 48))),
-      outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48))),
-    ),
+    locale: const Locale('vi'),
+    supportedLocales: const [Locale('vi'), Locale('en')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    theme: companionTheme(),
     home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient),
   );
 }

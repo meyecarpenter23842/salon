@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:salonmanager/features/companion/companion_theme.dart';
+import 'package:salonmanager/core/lan/lan_contract.dart';
+import 'package:salonmanager/core/lan/lan_pairing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/lan/lan_health_client.dart';
 import 'package:salonmanager/core/lan/lan_read_client.dart';
@@ -18,10 +22,13 @@ class MobileTestStore implements CompanionCredentialStore {
 }
 class MobileTestReader implements SalonReadClient {
   final queries = <SalonReadQuery>[];
-  bool fail = false;
+  bool fail = false, genericFailure = false;
+  LanErrorCode? failCode;
   @override Future<SalonReadPage> read(LanConnection c, String t, SalonReadQuery query) async {
     queries.add(query);
-    if (fail) { throw StateError('private backend data'); }
+    if (failCode != null) { throw PairingFailure(failCode!); }
+    if (fail) { throw const PairingFailure(LanErrorCode.unavailable); }
+    if (genericFailure) { throw StateError('private backend data'); }
     return SalonReadPage(salonDate: '2026-10-06', records: [
       SalonReadRecord(id: '${query.kind.name}-1', title: query.kind == SalonReadKind.appointments ? '09:00 · Khách Lan' : 'Khách Lan',
         subtitle: query.kind == SalonReadKind.appointments ? 'Gội dưỡng · Đã đặt' : '0901234567 · Member',
@@ -31,16 +38,32 @@ class MobileTestReader implements SalonReadClient {
 }
 class MobileTestClient implements LanWorkflowClient {
   final sent = <LanWriteCommand>[];
-  @override Future<LanCatalogPage> catalog(LanConnection c, String t, String k, String q, int o) async =>
-    const LanCatalogPage([], 'desktop-epoch', null);
+  final searches = <String>[];
+  bool conflict = false, unavailable = false, resolved = false;
+  Completer<LanWriteResult>? sending;
+  @override Future<LanCatalogPage> catalog(LanConnection c, String t, String k, String q, int o) async {
+    searches.add('$k|$q|$o');
+    return LanCatalogPage([LanCatalogItem('$k-${o == 0 ? 1 : 2}', switch(k) {
+      'customers' => 'Khách Lan', 'services' => 'Gội dưỡng', _ => 'Thợ An',
+    }, 'Thông tin từ desktop')], 'desktop-epoch', k == 'services' && o == 0 ? 25 : null);
+  }
   @override Future<LanEditorSnapshot> editor(LanConnection c, String t, String kind, String? id) async =>
     LanEditorSnapshot(kind: kind, id: id, epoch: 'desktop-epoch', revision: id == null ? 0 : 1,
-      values: {'fullName': 'Khách Lan', 'phone': '0901234567', 'email': '', 'tier': 'Member',
+      values: kind == 'appointment' ? {
+        'customerId': id == null ? '' : 'customers-1', 'customerLabel': 'Khách Lan',
+        'serviceIds': id == null ? <String>[] : ['services-1'], 'serviceLabels': {'services-1': 'Gội dưỡng'},
+        'employeeId': id == null ? '' : 'employees-1', 'employeeLabel': 'Thợ An',
+        'day': '2026-10-06', 'time': '09:00', 'status': 'Đã đặt', 'durationMinutes': 90, 'slotLabel': '', 'note': '',
+      } : {'fullName': id == null ? '' : 'Khách Lan', 'phone': id == null ? '' : '0901234567', 'email': '', 'tier': 'Member',
         'favoriteService': '', 'hairProfile': '', 'note': ''});
   @override Future<LanWriteResult> send(LanConnection c, String t, LanWriteCommand command) async {
-    sent.add(command); return LanWriteResult(id: command.targetId ?? 'new-1', type: command.operation.resourceType, revision: 2);
+    sent.add(command);
+    if (conflict) { throw const PairingFailure(LanErrorCode.revisionConflict); }
+    if (unavailable) { throw const PairingFailure(LanErrorCode.unavailable); }
+    if (sending != null) { return sending!.future; }
+    return LanWriteResult(id: command.targetId ?? 'new-1', type: command.operation.resourceType, revision: 2);
   }
-  @override Future<LanWriteResult?> result(LanConnection c, String t, String id) async => null;
+  @override Future<LanWriteResult?> result(LanConnection c, String t, String id) async => resolved ? LanWriteResult(id: sent.last.targetId ?? 'new-1', type: sent.last.operation.resourceType, revision: 2) : null;
 }
 Future<CompanionCommandController> showMobile(WidgetTester tester, MobileTestReader reader, MobileTestClient client,
     {PhoneWriteRole role = PhoneWriteRole.staff, double textScale = 1}) async {
@@ -48,7 +71,7 @@ Future<CompanionCommandController> showMobile(WidgetTester tester, MobileTestRea
   final store = MobileTestStore();
   final commands = CompanionCommandController(connection: connection, client: client,
     store: store, credential: store.value, onCredential: (_) {});
-  await tester.pumpWidget(MaterialApp(builder: (context, child) => MediaQuery(
+  await tester.pumpWidget(MaterialApp(theme: companionTheme(), builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)), child: child!),
     home: CompanionWorkspace(connection: connection, readClient: reader,
       client: client, commands: commands, role: role, onDenied: () {})));
@@ -90,4 +113,28 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); commands.dispose();
   });
+  testWidgets('failed reads have retry, safe date label and no enabled create action', (tester) async {
+    final commands = await showMobile(tester, MobileTestReader()..fail = true, MobileTestClient());
+    expect(find.text('Chưa lấy được ngày'), findsOneWidget);
+    expect(find.text('Mất kết nối với máy salon'), findsOneWidget);
+    expect(find.text('Thử lại'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('write-new-appointment'))).onPressed, isNull);
+    expect(find.text('private backend data'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
+  testWidgets('missing or failed data has its own error state rather than an offline message', (tester) async {
+    var commands = await showMobile(tester, MobileTestReader()..genericFailure = true, MobileTestClient());
+    expect(find.text('Chưa tải được dữ liệu'), findsOneWidget);
+    expect(find.text('Mất kết nối với máy salon'), findsNothing);
+    expect(find.text('private backend data'), findsNothing);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+    commands = await showMobile(tester, MobileTestReader()..failCode = LanErrorCode.notFound, MobileTestClient());
+    expect(find.text('Dữ liệu đã thay đổi'), findsOneWidget);
+    expect(find.text('Mất kết nối với máy salon'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
 }
