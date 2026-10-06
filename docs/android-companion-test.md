@@ -1,5 +1,11 @@
 # Run Android connection shell
 
+For the current QA batch use the APK from the exact green PR head following
+[salon operations](salon-operations.md) and record results in
+[physical QA acceptance](salon-qa-acceptance.md). Building/running on the owner
+machine is excluded by #104. The developer-only instructions below apply to a
+separately authorized development machine.
+
 Open the Flutter project root (the directory with pubspec.yaml) in Android Studio,
 choose an Android device/emulator and run lib/main.dart. Android enters the
 companion shell before any Windows license, desktop settings or business SQLite
@@ -7,7 +13,7 @@ initialization. Windows keeps the existing desktop/license flow.
 
 CI builds a debug APK under the artifact salon-companion-debug-apk on the PR's
 Flutter CI run. This is a test build using the existing debug signing configuration;
-it is not a store release. No application ID/dependencies were changed.
+it is not a store release. The artifact includes qa-provenance.json with the APK file SHA-256 and source/tested tree identifiers.
 
 ## Try connecting
 
@@ -39,10 +45,10 @@ requires a separately configured reachable private network/HTTPS endpoint.
 ## Remaining evidence
 
 Widget/client integration tests on Ubuntu/Windows and Android APK compilation do
-not prove a real phone's network connection. Batch 2 remains open until an Android
+not prove a real phone's network connection. The physical-phone gate transferred from #89 to #111 remains open until an Android
 device runs the shell and reaches the owner desktop over the intended transport.
 Owner reported health success on an emulator; this does not close the physical-phone gate.
-Read-only customer/invoice/appointment routes are implemented. QR discovery, offline mutation queue and business writes remain future work. No business SQLite is opened on the phone.
+Read-only customer/invoice/appointment routes are implemented. QR scan/paste, approved-role business writes, bill/checkout and reconnect/resync are implemented (#100–#110). Offline writes are blocked; uncertain commands require explicit result checking. Other-network/4G access remains #112. No business SQLite is opened on the phone.
 
 ## Người dùng lấy hai thông tin ở đâu?
 

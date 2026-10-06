@@ -42,8 +42,7 @@ Controller serialize thao tác, dừng khi main dispose/mất license/thoát; l�
 setup hoặc TLS health giữ desktop dùng được và không hiển thị giá trị stale.
 Backend.lock được giải phóng bằng đóng OS handle; không xóa lock đang sống.
 
-Chỉ GET /api/staff/v1/health được phục vụ, không đọc business SQLite.
-Khách hàng/hóa đơn/cấp quyền thiết bị vẫn thuộc các batch tiếp theo.
+Health không đọc dữ liệu nghiệp vụ. Sau health, chủ salon duyệt từng điện thoại và cấp quyền xem/vai trò ghi; khách hàng, lịch, bill và checkout dùng SQLite của desktop qua API HTTPS. Xem [hướng dẫn vận hành](salon-operations.md) và [mẫu nghiệm thu](salon-qa-acceptance.md).
 
 
 

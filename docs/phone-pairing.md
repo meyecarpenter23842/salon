@@ -1,8 +1,8 @@
 # Ghép quyền điện thoại với máy salon
 
-Theo dõi: #86, #89. Bước này triển khai quyền thiết bị và màn hình chính Android.
+Theo dõi hiện tại: #104, #111 (chuyển tiếp #86, #89). Bước này triển khai quyền thiết bị và màn hình chính Android.
 Có quyền xem riêng cho khách hàng/hóa đơn/lịch hẹn; xem [phone-data-read.md](phone-data-read.md).
-Phân vai nghiệp vụ, ghi dữ liệu và xử lý sửa đồng thời còn ở bước sau.
+Vai trò ghi, revision/commandId, bill/checkout và reconnect đã triển khai; xem [phone-write-foundation.md](phone-write-foundation.md), [android-write-workflows.md](android-write-workflows.md) và [lan-resync.md](lan-resync.md).
 
 1. Giữ app chính trên máy salon mở, kết nối hai máy cùng mạng.
 2. Desktop: Cài đặt → Kết nối điện thoại → bật kết nối, sao chép địa chỉ và mã xác minh.
@@ -49,8 +49,8 @@ Tên thiết bị không chứng minh danh tính con người: chủ salon phả
 ## Gate kiểm tra điện thoại thật
 
 CI kiểm thử registry, HTTPS với certificate thật, desktop panel, Android shell và build APK.
-CI/emulator không chứng minh điện thoại thật. Chưa xác nhận gate điện thoại thật của #89.
+CI/emulator không chứng minh điện thoại thật. Gate điện thoại thật chuyển từ #89 sang #111 và vẫn chưa xác nhận.
 Trên điện thoại thật cần kiểm tra: gửi yêu cầu → duyệt → Trang chính; hai điện thoại độc lập;
 từ chối/hết hạn; revoke ngay khi online; mất Wi-Fi/resume; desktop restart giữ quyền;
 đổi IP cùng certificate; pin sai; quyền lưu Android và khả năng khôi phục sau restart.
-Không chạy build/test app trên máy owner trong quy trình này. Remote Wi-Fi/4G và QR còn ở bước sau.
+Không chạy build/test app trên máy owner trong quy trình này. QR đã có luồng camera/dán/xác nhận; remote Wi-Fi/4G vẫn thuộc backlog #112.

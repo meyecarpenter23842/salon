@@ -227,6 +227,14 @@ class BackupService {
         );
       }
 
+      // integrity_check does not detect orphaned relationships.
+      if ((await database.rawQuery('PRAGMA foreign_key_check')).isNotEmpty) {
+        return const BackupValidationResult(
+          isValid: false,
+          message: 'SQLite foreign_key_check không đạt. Có dữ liệu liên kết bị thiếu.',
+        );
+      }
+
       final tableRows = await database.rawQuery(
         "SELECT name FROM sqlite_master WHERE type = 'table'",
       );
@@ -600,3 +608,4 @@ class BackupService {
     }
   }
 }
+

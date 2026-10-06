@@ -164,9 +164,36 @@ jobs:
         run: flutter pub get
       - name: Build debug APK for companion testing
         run: flutter build apk --debug
+      - name: Record APK provenance for physical QA
+        env:
+          QA_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import datetime, hashlib, json, os, pathlib, subprocess
+          apk = pathlib.Path('build/app/outputs/flutter-apk/app-debug.apk')
+          version = next(line.split(':', 1)[1].strip() for line in pathlib.Path('pubspec.yaml').read_text().splitlines() if line.startswith('version:'))
+          record = {
+              'source_head_sha': os.environ['QA_SOURCE_HEAD'],
+              'tested_checkout_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'tested_tree_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'version': version,
+              'apk_file': apk.name,
+              'apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
+              'pubspec_lock_sha256': hashlib.sha256(pathlib.Path('pubspec.lock').read_bytes()).hexdigest(),
+              'built_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'build_type': 'debug - test only; not a store release',
+              'physical_phone_verified': False,
+          }
+          apk.with_name('qa-provenance.json').write_text(json.dumps(record, indent=2) + '\n')
+          print(json.dumps(record, indent=2))
+          PY
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
           name: salon-companion-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/qa-provenance.json
           if-no-files-found: error
