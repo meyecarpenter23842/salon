@@ -20,6 +20,8 @@ class _DelayedChanges implements LanChangeSource {
 }
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // These are real generated-fixture TLS tests, not the widget HTTP mock.
+  HttpOverrides.global = null;
   test('watermarks observe main/mobile writes and external Staff commits without schema changes', () async {
     await SalonDatabase.instance.close();
     final f = await mobileFixture(), source = SqliteLanChanges(SalonDatabase.instance);
