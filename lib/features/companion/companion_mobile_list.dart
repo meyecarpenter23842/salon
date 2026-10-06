@@ -128,6 +128,27 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
                     child: const Text('Xem thêm'));
             }
             final record = rows[index];
+            if (widget.kind == SalonReadKind.appointments) {
+              final parts = record.title.split(' · ');
+              final details = record.subtitle.split(' · ');
+              return Card(margin: const EdgeInsets.only(bottom: 12), child: InkWell(key: Key('salon-record-${record.id}'),
+                borderRadius: BorderRadius.circular(16), onTap: () => _detail(record),
+                child: Padding(padding: const EdgeInsets.all(16), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(width: 58, child: Column(children: [
+                    const Icon(Icons.schedule, size: 20), const SizedBox(height: 8),
+                    FittedBox(fit: BoxFit.scaleDown, child: Text(parts.first, style: const TextStyle(fontWeight: FontWeight.bold))),
+                  ])),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(parts.skip(1).join(' · '), style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6), Text(details.length > 1 ? details.take(details.length - 1).join(' · ') : record.subtitle),
+                    const SizedBox(height: 8),
+                    DecoratedBox(decoration: BoxDecoration(color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(8)), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Text(details.last, style: Theme.of(context).textTheme.labelLarge))),
+                  ])),
+                ]))));
+            }
             return Card(margin: const EdgeInsets.only(bottom: 10), child: ListTile(key: Key('salon-record-${record.id}'),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               leading: CircleAvatar(child: Icon(widget.kind == SalonReadKind.customers ? Icons.person_outline :
@@ -172,6 +193,7 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
+  String _sectionFor(String key) => ['Điện thoại', 'Email'].contains(key) ? 'Liên hệ' : ['Ghi chú', 'Hồ sơ tóc'].contains(key) ? 'Ghi chú' : 'Thông tin';
   @override
   void dispose() { generation++; super.dispose(); }
   @override
@@ -191,12 +213,12 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
                 icon: const Icon(Icons.receipt_long_outlined), label: const Text('Lập bill')),
           ]),
           const SizedBox(height: 16),
-          for (final section in ['Liên hệ', 'Thông tin', 'Ghi chú']) Card(child: Padding(padding: const EdgeInsets.all(16),
+          for (final section in ['Liên hệ', 'Thông tin', 'Ghi chú'])
+            if (record!.fields.entries.any((e) => _sectionFor(e.key) == section)) Card(child: Padding(padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(section, style: Theme.of(context).textTheme.titleMedium),
               const Divider(),
-              for (final e in record!.fields.entries.where((e) => section == 'Liên hệ' ? ['Điện thoại', 'Email'].contains(e.key) :
-                section == 'Ghi chú' ? ['Ghi chú', 'Hồ sơ tóc'].contains(e.key) : !['Điện thoại', 'Email', 'Ghi chú', 'Hồ sơ tóc'].contains(e.key)))
+              for (final e in record!.fields.entries.where((e) => _sectionFor(e.key) == section))
                 Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                   children: [Text(e.key, style: Theme.of(context).textTheme.labelMedium),
                     const SizedBox(height: 3), SelectableText(e.value.isEmpty ? 'Chưa ghi nhận' : e.value)])),

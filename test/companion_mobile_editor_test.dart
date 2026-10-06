@@ -1,0 +1,104 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:salonmanager/core/lan/lan_write_contract.dart';
+import 'companion_mobile_navigation_test.dart' as fixture;
+
+void main() {
+  void phone(WidgetTester tester) {
+    tester.view.physicalSize = const Size(360, 640); tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+  }
+  testWidgets('customer edit preserves search/back and sends desktop revision; phone/email keyboards and field errors', (tester) async {
+    phone(tester);
+    final reader = fixture.MobileTestReader(), client = fixture.MobileTestClient();
+    final commands = await fixture.showMobile(tester, reader, client);
+    await fixture.tapMobile(tester, 'mobile-tab-customers');
+    await tester.enterText(find.byKey(const Key('salon-customer-search')), 'Lan');
+    await fixture.tapMobile(tester, 'salon-search');
+    await fixture.tapMobile(tester, 'salon-record-customers-1'); await fixture.tapMobile(tester, 'salon-edit');
+    expect(tester.widget<TextFormField>(find.byKey(const Key('mobile-field-phone'))).keyboardType, TextInputType.phone);
+    expect(tester.widget<TextFormField>(find.byKey(const Key('mobile-field-email'))).keyboardType, TextInputType.emailAddress);
+    await tester.enterText(find.byKey(const Key('mobile-field-phone')), 'abc');
+    await fixture.tapMobile(tester, 'mobile-save');
+    expect(find.textContaining('ít nhất 6 chữ số'), findsOneWidget);
+    expect(client.sent, isEmpty);
+    await tester.enterText(find.byKey(const Key('mobile-field-phone')), '0901234567');
+    await tester.enterText(find.byKey(const Key('mobile-field-fullName')), 'Khách Lan sửa');
+    await fixture.tapMobile(tester, 'mobile-save');
+    expect(client.sent.single.operation, LanWriteOperation.customerUpdate);
+    expect(client.sent.single.expectedRevision, 1);
+    expect(client.sent.single.expectedEpoch, 'desktop-epoch');
+    expect(client.sent.single.payload['fullName'], 'Khách Lan sửa');
+    expect(find.text('Hồ sơ khách hàng'), findsOneWidget);
+    await tester.pageBack(); await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byKey(const Key('salon-customer-search'))).controller!.text, 'Lan');
+    expect(reader.queries.where((q) => q.query == 'Lan').length, greaterThan(1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+  testWidgets('appointment chooses server IDs with searchable catalogs and real date/time pickers', (tester) async {
+    phone(tester);
+    final client = fixture.MobileTestClient();
+    final commands = await fixture.showMobile(tester, fixture.MobileTestReader(), client);
+    await fixture.tapMobile(tester, 'write-new-appointment');
+    await fixture.tapMobile(tester, 'mobile-select-customers');
+    await tester.enterText(find.byKey(const Key('mobile-picker-search')), '090');
+    await fixture.tapMobile(tester, 'mobile-picker-find');
+    expect(client.searches, contains('customers|090|0'));
+    await fixture.tapMobile(tester, 'mobile-pick-customers-1');
+    await fixture.tapMobile(tester, 'mobile-select-services'); await fixture.tapMobile(tester, 'mobile-pick-services-1');
+    await fixture.tapMobile(tester, 'mobile-picker-next'); expect(client.searches, contains('services||25'));
+    await fixture.tapMobile(tester, 'mobile-picker-done');
+    await fixture.tapMobile(tester, 'mobile-select-employees'); await fixture.tapMobile(tester, 'mobile-pick-employees-1');
+    await fixture.tapMobile(tester, 'mobile-appointment-day'); expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('OK')); await tester.pumpAndSettle();
+    await fixture.tapMobile(tester, 'mobile-appointment-time'); expect(find.byType(TimePickerDialog), findsOneWidget);
+    await tester.tap(find.text('OK')); await tester.pumpAndSettle();
+    await fixture.tapMobile(tester, 'mobile-save');
+    expect(client.sent.single.operation, LanWriteOperation.appointmentCreate);
+    expect(client.sent.single.expectedRevision, isNull);
+    expect(client.sent.single.payload['customerId'], 'customers-1');
+    expect(client.sent.single.payload['serviceIds'], ['services-1']);
+    expect(client.sent.single.payload['employeeId'], 'employees-1');
+    expect(client.sent.single.payload['day'], '2026-10-06');
+    expect(client.sent.single.payload['time'], '09:00');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+  testWidgets('dirty back requires confirmation, keyboard and large text fit a narrow screen', (tester) async {
+    phone(tester);
+    final commands = await fixture.showMobile(tester, fixture.MobileTestReader(), fixture.MobileTestClient(), textScale: 1.5);
+    await fixture.tapMobile(tester, 'mobile-tab-customers'); await fixture.tapMobile(tester, 'write-new-customer');
+    await tester.enterText(find.byKey(const Key('mobile-field-fullName')), 'Chưa lưu');
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260); await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    tester.view.resetViewInsets(); await tester.pumpAndSettle();
+    await tester.pageBack(); await tester.pumpAndSettle();
+    expect(find.text('Bỏ thay đổi chưa lưu?'), findsOneWidget);
+    await fixture.tapMobile(tester, 'mobile-keep-editing'); expect(find.byKey(const Key('mobile-save')), findsOneWidget);
+    await tester.pageBack(); await tester.pumpAndSettle(); await fixture.tapMobile(tester, 'mobile-discard');
+    expect(find.byKey(const Key('write-new-customer')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+  testWidgets('revision conflict keeps form; reload confirms discard; uncertain write stays locked and durable after back', (tester) async {
+    phone(tester);
+    final client = fixture.MobileTestClient()..conflict = true;
+    final commands = await fixture.showMobile(tester, fixture.MobileTestReader(), client);
+    await fixture.tapMobile(tester, 'mobile-tab-customers'); await fixture.tapMobile(tester, 'salon-record-customers-1'); await fixture.tapMobile(tester, 'salon-edit');
+    await tester.enterText(find.byKey(const Key('mobile-field-fullName')), 'Đổi tên');
+    await fixture.tapMobile(tester, 'mobile-save');
+    expect(commands.pending, isNull); expect(find.byKey(const Key('mobile-save')), findsOneWidget);
+    expect(find.textContaining('Dữ liệu đã đổi'), findsOneWidget);
+    await fixture.tapMobile(tester, 'mobile-reload-editor'); await fixture.tapMobile(tester, 'mobile-discard');
+    expect(tester.widget<TextFormField>(find.byKey(const Key('mobile-field-fullName'))).controller!.text, 'Khách Lan');
+    client.conflict = false; client.unavailable = true;
+    await fixture.tapMobile(tester, 'mobile-save');
+    final id = commands.pending!.commandId;
+    expect(tester.widget<FilledButton>(find.byKey(const Key('mobile-save'))).onPressed, isNull);
+    await tester.pageBack(); await tester.pumpAndSettle();
+    expect(commands.pending!.commandId, id); expect(client.sent.length, 2);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+}

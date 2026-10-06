@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:salonmanager/core/lan/lan_contract.dart';
+import 'package:salonmanager/core/lan/lan_pairing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/lan/lan_health_client.dart';
 import 'package:salonmanager/core/lan/lan_read_client.dart';
@@ -31,14 +34,30 @@ class MobileTestReader implements SalonReadClient {
 }
 class MobileTestClient implements LanWorkflowClient {
   final sent = <LanWriteCommand>[];
-  @override Future<LanCatalogPage> catalog(LanConnection c, String t, String k, String q, int o) async =>
-    const LanCatalogPage([], 'desktop-epoch', null);
+  final searches = <String>[];
+  bool conflict = false, unavailable = false;
+  Completer<LanWriteResult>? sending;
+  @override Future<LanCatalogPage> catalog(LanConnection c, String t, String k, String q, int o) async {
+    searches.add('$k|$q|$o');
+    return LanCatalogPage([LanCatalogItem('$k-${o == 0 ? 1 : 2}', switch(k) {
+      'customers' => 'Khách Lan', 'services' => 'Gội dưỡng', _ => 'Thợ An',
+    }, 'Thông tin từ desktop')], 'desktop-epoch', k == 'services' && o == 0 ? 25 : null);
+  }
   @override Future<LanEditorSnapshot> editor(LanConnection c, String t, String kind, String? id) async =>
     LanEditorSnapshot(kind: kind, id: id, epoch: 'desktop-epoch', revision: id == null ? 0 : 1,
-      values: {'fullName': 'Khách Lan', 'phone': '0901234567', 'email': '', 'tier': 'Member',
+      values: kind == 'appointment' ? {
+        'customerId': id == null ? '' : 'customers-1', 'customerLabel': 'Khách Lan',
+        'serviceIds': id == null ? <String>[] : ['services-1'], 'serviceLabels': {'services-1': 'Gội dưỡng'},
+        'employeeId': id == null ? '' : 'employees-1', 'employeeLabel': 'Thợ An',
+        'day': '2026-10-06', 'time': '09:00', 'status': 'Đã đặt', 'durationMinutes': 90, 'slotLabel': '', 'note': '',
+      } : {'fullName': id == null ? '' : 'Khách Lan', 'phone': id == null ? '' : '0901234567', 'email': '', 'tier': 'Member',
         'favoriteService': '', 'hairProfile': '', 'note': ''});
   @override Future<LanWriteResult> send(LanConnection c, String t, LanWriteCommand command) async {
-    sent.add(command); return LanWriteResult(id: command.targetId ?? 'new-1', type: command.operation.resourceType, revision: 2);
+    sent.add(command);
+    if (conflict) { throw const PairingFailure(LanErrorCode.revisionConflict); }
+    if (unavailable) { throw const PairingFailure(LanErrorCode.unavailable); }
+    if (sending != null) { return sending!.future; }
+    return LanWriteResult(id: command.targetId ?? 'new-1', type: command.operation.resourceType, revision: 2);
   }
   @override Future<LanWriteResult?> result(LanConnection c, String t, String id) async => null;
 }
