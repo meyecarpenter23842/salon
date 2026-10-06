@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'lan_connection_qr.dart';
+import 'lan_health_client.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,6 +115,12 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
       final address = status.apiUrl;
       final verification = status.certificateSha256;
       final ready = address != null && verification != null;
+      String? discovery;
+      if (ready) {
+        try { discovery = LanConnectionQr.encode(LanConnection(address.toString(), verification)); }
+        on FormatException { /* Legacy loopback hosts keep manual status without an unusable QR. */ }
+      }
+      final qrPayload = discovery;
       final busy = status.busy || _enabling || _loading;
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -157,9 +166,21 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
           ],
           if (ready) ...[
             const Text(
-              'Trên điện thoại, mở Kết nối máy salon và nhập đúng hai '
-              'thông tin bên dưới vào các ô cùng tên.',
+              'Trên điện thoại, mở Kết nối máy salon để quét QR, '
+              'hoặc nhập hai thông tin bên dưới vào các ô cùng tên.',
             ),
+            const SizedBox(height: 16),
+            if (qrPayload != null) ...[
+            Center(child: Semantics(label: 'QR kết nối máy salon', child: Container(
+              color: Colors.white, padding: const EdgeInsets.all(12), child: QrImageView(
+                key: const Key('desktop-phone-qr'), size: 220,
+                data: qrPayload,
+                backgroundColor: Colors.white)))),
+            const Text('Trên Android bấm Quét QR máy salon. QR chỉ chứa địa chỉ và mã xác minh; chủ salon vẫn duyệt quyền riêng.'),
+            TextButton.icon(key: const Key('desktop-phone-copy-qr'),
+              onPressed: () => _copy(context, qrPayload),
+              icon: const Icon(Icons.copy), label: const Text('Sao chép thông tin QR')),
+            ] else const Text('Địa chỉ này chỉ dùng trên máy salon. Chọn mạng Wi-Fi/dây mạng và áp dụng để tạo QR dùng được trên điện thoại.'),
             const SizedBox(height: 16),
             _field(context, 'Địa chỉ máy salon', address.toString(), 'address'),
             const SizedBox(height: 12),
@@ -175,6 +196,12 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Chọn mạng rồi bấm Bật kết nối điện thoại trên app chính của máy salon.',
             ),
           ],
+          const SizedBox(height: 12),
+          const Text('Không kết nối được? Hai máy cần cùng mạng nội bộ. Chọn đúng Wi-Fi/dây mạng, tắt mạng khách có chặn thiết bị, và giữ máy salon mở.'),
+          const SizedBox(height: 8),
+          const Text('Windows Firewall: cho phép app salon trên mạng Riêng tư, cổng TCP đang hiển thị. Không mở cổng router hoặc mạng Công cộng. App không tự đổi firewall.'),
+          const SizedBox(height: 8),
+          const Text('Nếu IP đổi sau khi nối Wi-Fi lại: Tìm lại mạng → Áp dụng mạng đã chọn → quét QR mới trên Android. Mã xác minh vẫn giữ nguyên; không cần duyệt lại điện thoại cùng máy salon.'),
           const DesktopPairingPanel(),
           const SizedBox(height: 16),
           const Text(
@@ -187,11 +214,12 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Nếu điện thoại chưa vào được, kiểm tra Tường lửa Windows và mạng Wi-Fi.'),
           const SizedBox(height: 8),
           const Text(
-            'Có thể ghép quyền và thu hồi điện thoại; chức năng khách hàng và hóa đơn '
-            'trên điện thoại đang được phát triển.',
+            'Chủ salon duyệt và thu hồi quyền từng điện thoại. Sau khi được bật quyền, '
+            'điện thoại xem khách hàng, lịch hẹn và hóa đơn; thao tác sửa và thanh toán theo vai trò được cấp.',
           ),
         ],
       );
     },
   );
 }
+

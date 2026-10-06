@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:salonmanager/core/lan/lan_connection_qr.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -52,6 +54,13 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(copied, [address, pin]);
+    final qr = tester.widget<QrImageView>(find.byKey(const Key('desktop-phone-qr')));
+    // Copying and scanning use the same strict discovery protocol.
+    final qrCopy = find.byKey(const Key('desktop-phone-copy-qr'));
+    await tester.ensureVisible(qrCopy); await tester.tap(qrCopy); await tester.pumpAndSettle();
+    final decoded = LanConnectionQr.decode(copied.last);
+    expect(decoded.apiUrl.toString(), address); expect(decoded.certificateSha256, pin);
+    expect(qr.size, 220);
     expect(tester.takeException(), isNull);
   });
 
@@ -72,6 +81,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('desktop-phone-address')), findsNothing);
     expect(find.byKey(const Key('desktop-phone-copy-verification')), findsNothing);
+    expect(find.byKey(const Key('desktop-phone-qr')), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets('enable uses selected network, blocks double tap and shows ready without restart', (tester) async {
@@ -123,4 +133,16 @@ void main() {
     expect(find.text('Tìm lại mạng'), findsOneWidget);
   });
 
+  testWidgets('legacy loopback backend preserves status and manual values with LAN guidance', (tester) async {
+    desktopBackendStatus.value = DesktopBackendStatus('Sẵn sàng',
+      apiUrl: Uri.parse('https://127.0.0.1:8743/api/staff/v1'), certificateSha256: 'b' * 64);
+    await showPanel(tester);
+    expect(find.byKey(const Key('desktop-phone-qr')), findsNothing);
+    expect(find.byKey(const Key('desktop-phone-copy-qr')), findsNothing);
+    expect(find.byKey(const Key('desktop-phone-address')), findsOneWidget);
+    expect(find.textContaining('Địa chỉ này chỉ dùng trên máy salon'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
+

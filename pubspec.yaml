@@ -42,6 +42,7 @@ dependencies:
   printing: ^5.14.3
   file_selector: ^1.0.3
   qr_flutter: ^4.1.0
+  mobile_scanner: 7.4.2
   path_provider: ^2.1.5
   package_info_plus: ^10.2.1
   shared_preferences: ^2.5.3
@@ -66,3 +67,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
