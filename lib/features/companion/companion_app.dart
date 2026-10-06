@@ -230,7 +230,9 @@ class _ConnectionPageState extends State<_ConnectionPage>
       )));
     }
     return Scaffold(
-    appBar: AppBar(title: Text(widget.settingsOnly ? 'Kết nối máy salon' : 'Thiết lập lần đầu')),
+    appBar: AppBar(title: Text(widget.settingsOnly ? 'Kết nối máy salon' : 'Thiết lập lần đầu'),
+      leading: widget.settingsOnly ? BackButton(key: const Key('companion-settings-back'),
+        onPressed: () => Navigator.of(context).pop()) : null),
     body: SafeArea(
       child: _loading
         ? const Center(child: CircularProgressIndicator())

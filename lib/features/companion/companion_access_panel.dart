@@ -292,7 +292,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       ])));
     }
     if (_phone?.state == PhoneAccess.approved || _credential != null && !_needsPairing || _storageFailed) {
-      return Scaffold(appBar: AppBar(title: const Text('Salon — Trang chính'), actions: [
+      return Scaffold(appBar: AppBar(title: Text(_phone?.state == PhoneAccess.approved ? 'Salon — Trang chính' : 'Kết nối máy salon'), actions: [
           if (widget.onConnectionSettings != null) IconButton(key: const Key('companion-connection-settings'),
             onPressed: widget.onConnectionSettings, icon: const Icon(Icons.settings_outlined), tooltip: 'Kết nối máy salon')]),
         body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));

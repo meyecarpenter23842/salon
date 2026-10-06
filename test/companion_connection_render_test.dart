@@ -106,7 +106,7 @@ void main() {
     expect(find.byKey(const Key('companion-pair-code')), findsNothing);
     await billTap(tester, 'companion-connection-settings');
     await capture('26-connection-settings');
-    await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('companion-settings-back'))); await tester.pumpAndSettle();
     pair.offline = false; changes.delayed = null;
     await billTap(tester, 'companion-access-refresh');
     await capture('27-connection-restored-home');

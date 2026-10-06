@@ -275,7 +275,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<TextFormField>(find.byKey(const Key('companion-pin'))).controller!.text, 'b' * 64);
     await tester.enterText(find.byKey(const Key('companion-url')), 'https://192.168.1.21:8743/api/staff/v1');
-    await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('companion-settings-back'))); await tester.pumpAndSettle();
     expect((await SharedPreferences.getInstance()).getString('companion_api_url'), contains('192.168.1.20'));
     expect(find.byKey(const Key('companion-url')), findsNothing);
     await tester.tap(find.byKey(const Key('companion-connection-settings')));
