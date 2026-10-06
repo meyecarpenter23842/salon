@@ -65,7 +65,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
 
   @override
   Widget build(BuildContext context) => NavigatorPopHandler(
-    onPopWithResult: (result) => navigator.currentState!.pop(result),
+    onPopWithResult: (result) => navigator.currentState!.maybePop(result),
     child: Navigator(key: navigator, onGenerateRoute: (_) => MaterialPageRoute<void>(
       builder: (context) => AnimatedBuilder(animation: redraw, builder: (context, _) => Scaffold(
         appBar: AppBar(title: Text(['Hôm nay', 'Lịch hẹn', 'Khách hàng', 'Hóa đơn', 'Thêm'][tab]),

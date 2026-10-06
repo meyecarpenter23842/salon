@@ -34,7 +34,7 @@ void main() {
     final font = File('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
     final bytes = await tester.runAsync(font.readAsBytes);
     final loader = FontLoader('SalonPreview')..addFont(Future.value(ByteData.sublistView(bytes!)));
-    await loader.load();
+    await tester.runAsync(loader.load);
     final output = Directory('build/mobile-ui-review');
     await tester.runAsync(() => output.create(recursive: true));
     final boundary = GlobalKey();

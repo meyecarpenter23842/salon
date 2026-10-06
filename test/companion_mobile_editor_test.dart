@@ -73,7 +73,7 @@ void main() {
     tester.view.viewInsets = const FakeViewPadding(bottom: 260); await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     tester.view.resetViewInsets(); await tester.pumpAndSettle();
-    await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute(); await tester.pumpAndSettle();
     expect(find.text('Bỏ thay đổi chưa lưu?'), findsOneWidget);
     await fixture.tapMobile(tester, 'mobile-keep-editing'); expect(find.byKey(const Key('mobile-save')), findsOneWidget);
     await tester.pageBack(); await tester.pumpAndSettle(); await fixture.tapMobile(tester, 'mobile-discard');
