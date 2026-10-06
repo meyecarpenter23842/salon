@@ -13,7 +13,7 @@ typedef CrossProcessFingerprintLoader = Future<String> Function();
 /// Keeps the main Windows process coherent with writes made by the detached
 /// Staff process. Both processes share SQLite but have independent Riverpod
 /// caches, so the main process only re-reads operational state after the shared
-/// SQLite files actually change.
+/// SQLite commit counters actually change.
 class MainCrossProcessRefreshGate extends ConsumerStatefulWidget {
   const MainCrossProcessRefreshGate({
     required this.child,
@@ -114,7 +114,7 @@ class _MainCrossProcessRefreshGateState
         _refreshOperationalState();
       }
     } catch (_) {
-      // Do not invalidate the whole UI just because a filesystem probe failed.
+      // Do not invalidate the whole UI just because a SQLite probe failed.
     } finally {
       _fingerprintCheckInFlight = false;
     }
