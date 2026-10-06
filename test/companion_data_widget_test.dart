@@ -129,11 +129,16 @@ void main() {
         store: _Store(), readClient: reader, onAccess: (_) {}))));
     await tester.pumpAndSettle();
     expect(find.text('Dữ liệu appointments'), findsOneWidget);
+    await tap(tester, const Key('salon-record-record-appointments'));
+    expect(find.text('Chi tiết lịch hẹn'), findsOneWidget);
+    expect(find.text('Chi tiết thật'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pumpAndSettle();
     expect(find.text('Dữ liệu appointments'), findsNothing);
+    expect(find.text('Chi tiết lịch hẹn'), findsNothing);
+    expect(find.text('Chi tiết thật'), findsNothing);
     pair.readAccess = false;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);

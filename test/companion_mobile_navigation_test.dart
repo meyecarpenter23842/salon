@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:salonmanager/features/companion/companion_theme.dart';
 import 'package:salonmanager/core/lan/lan_contract.dart';
 import 'package:salonmanager/core/lan/lan_pairing.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,7 +68,7 @@ Future<CompanionCommandController> showMobile(WidgetTester tester, MobileTestRea
   final store = MobileTestStore();
   final commands = CompanionCommandController(connection: connection, client: client,
     store: store, credential: store.value, onCredential: (_) {});
-  await tester.pumpWidget(MaterialApp(builder: (context, child) => MediaQuery(
+  await tester.pumpWidget(MaterialApp(theme: companionTheme(), builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)), child: child!),
     home: CompanionWorkspace(connection: connection, readClient: reader,
       client: client, commands: commands, role: role, onDenied: () {})));

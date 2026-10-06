@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:salonmanager/features/companion/companion_theme.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,12 +54,9 @@ void main() {
     }
     Future<void> mount({double scale = 1, SalonReadClient? reader}) async {
       await tester.pumpWidget(RepaintBoundary(key: boundary, child: MaterialApp(
-        theme: ThemeData(useMaterial3: true, fontFamily: 'SalonPreview', colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff735343)),
-          scaffoldBackgroundColor: const Color(0xffFAF7F2),
-          inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
-          cardTheme: CardThemeData(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-          filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(48, 48)))),
+        locale: const Locale('vi'), supportedLocales: const [Locale('vi'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: companionTheme(fontFamily: 'SalonPreview'),
         builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!),
         home: CompanionWorkspace(connection: connection, readClient: reader ?? _PreviewReader(), client: client,
           commands: commands, role: PhoneWriteRole.staff, onDenied: () {}))));
