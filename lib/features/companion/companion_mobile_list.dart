@@ -73,7 +73,7 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
     }
   }
   Future<void> _pickDay() async {
-    final selected = await showDatePicker(context: context, initialDate: DateTime.tryParse(day ?? salonDate ?? '') ?? DateTime.now(),
+    final selected = await showDatePicker(context: context, useRootNavigator: false, initialDate: DateTime.tryParse(day ?? salonDate ?? '') ?? DateTime.now(),
       firstDate: DateTime(2000), lastDate: DateTime(2100), helpText: 'Chọn ngày tại salon');
     if (!mounted || selected == null) { return; }
     day = salonDay(selected); lastOffset = 0;

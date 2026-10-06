@@ -71,7 +71,7 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
 
   Future<bool> _confirm() async {
     if (!dirty) { return true; }
-    return await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+    return await showDialog<bool>(context: context, useRootNavigator: false, builder: (context) => AlertDialog(
       title: const Text('Bỏ thay đổi chưa lưu?'),
       content: const Text('Thông tin đã nhập chưa được lưu trên máy salon.'),
       actions: [
@@ -134,12 +134,12 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
     setState(() { if (kind == 'customers') { customer = selected; } else if(kind == 'employees') { employee = selected; } else { services = selected; } });
   }
   Future<void> _pickDay() async {
-    final selected = await showDatePicker(context: context, initialDate: day ?? DateTime.now(),
+    final selected = await showDatePicker(context: context, useRootNavigator: false, initialDate: day ?? DateTime.now(),
       firstDate: DateTime(2000), lastDate: DateTime(2100), helpText: 'Chọn ngày tại salon');
     if (mounted && selected != null) { setState(() => day = selected); }
   }
   Future<void> _pickTime() async {
-    final selected = await showTimePicker(context: context, initialTime: time ?? const TimeOfDay(hour: 9, minute: 0),
+    final selected = await showTimePicker(context: context, useRootNavigator: false, initialTime: time ?? const TimeOfDay(hour: 9, minute: 0),
       helpText: 'Chọn giờ tại salon', builder: (context, child) =>
         MediaQuery(data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true), child: child!));
     if (mounted && selected != null) { setState(() => time = selected); }

@@ -8,6 +8,10 @@ import 'package:salonmanager/core/lan/lan_pairing.dart';
 import 'package:salonmanager/core/lan/lan_pairing_client.dart';
 import 'package:salonmanager/core/lan/lan_read_client.dart';
 import 'package:salonmanager/core/lan/lan_read_models.dart';
+import 'package:salonmanager/core/lan/lan_write_contract.dart';
+import 'package:salonmanager/features/companion/companion_mobile_editor.dart';
+import 'package:salonmanager/features/companion/companion_catalog_picker.dart';
+import 'companion_mobile_navigation_test.dart' as fixture;
 import 'package:salonmanager/features/companion/companion_access_panel.dart';
 import 'package:salonmanager/features/companion/companion_credential_store.dart';
 import 'package:salonmanager/features/companion/companion_data_panel.dart';
@@ -33,8 +37,9 @@ class _PairClient implements LanPairingClient {
   PhoneAccess state = PhoneAccess.approved;
   bool readAccess = true;
   bool offline = false;
+  PhoneWriteRole role = PhoneWriteRole.none;
   PairedPhone get phone => PairedPhone('a' * 64, 'Phone', state, DateTime.utc(2026),
-    canReadSalon: readAccess);
+    canReadSalon: readAccess, writeRole: role);
   @override
   Future<PairedPhone> status(LanConnection connection, String token) async {
     if (offline) throw const PairingFailure(LanErrorCode.unavailable);
@@ -156,4 +161,32 @@ void main() {
     expect(find.byType(CompanionWorkspace), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('background removes nested editor/catalog; revocation removes an open date dialog', (tester) async {
+    final pair = _PairClient()..role = PhoneWriteRole.staff;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: CompanionAccessPanel(
+      connection: connection, client: pair, store: _Store(), readClient: _ReadClient(),
+      workflowClient: fixture.MobileTestClient(), onAccess: (_) {}))));
+    await tester.pumpAndSettle();
+    await fixture.tapMobile(tester, 'write-new-appointment');
+    await fixture.tapMobile(tester, 'mobile-select-services');
+    expect(find.byType(CompanionCatalogPicker), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+    expect(find.byType(CompanionCatalogPicker), findsNothing);
+    expect(find.byType(CompanionMobileEditor), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    await fixture.tapMobile(tester, 'mobile-tab-appointments');
+    await fixture.tapMobile(tester, 'salon-pick-day'); expect(find.byType(DatePickerDialog), findsOneWidget);
+    pair.state = PhoneAccess.revoked;
+    await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsNothing); expect(find.byType(CompanionWorkspace), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
 }
