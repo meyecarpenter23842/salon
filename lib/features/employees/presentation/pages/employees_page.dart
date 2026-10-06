@@ -623,10 +623,14 @@ class _EmployeeProfileBody extends ConsumerWidget {
                         ),
                       ),
                       Expanded(
-                        child: _metric(
-                          Icons.percent_rounded,
-                          'Hoa hồng ước tính',
-                          profile['estimatedCommission']?.toString() ?? '0đ',
+                        child: Tooltip(
+                          message: profile['dataNote']?.toString() ??
+                              'Hoa hồng ước tính, chưa phải số đã chốt hoặc đã chi trả.',
+                          child: _metric(
+                            Icons.percent_rounded,
+                            'Hoa hồng ước tính',
+                            profile['estimatedCommission']?.toString() ?? '0đ',
+                          ),
                         ),
                       ),
                     ],
