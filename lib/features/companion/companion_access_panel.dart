@@ -153,7 +153,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
 
   Future<void> _request() async {
     if (_busy || _loading || !_foreground) return;
-    if (_commands?.blocked == true) {
+    if ((_commands?.pending != null || _commands?.busy == true)) {
       setState(() => _message = 'Kiểm tra thao tác chưa rõ kết quả trước khi ghép lại điện thoại.'); return;
     }
     if (!RegExp(r'^\d{8}$').hasMatch(_code.text.trim()) ||
@@ -221,7 +221,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   }
 
   Future<void> _forget() async {
-    if (_busy || _commands?.blocked == true) {
+    if (_busy || (_commands?.pending != null || _commands?.busy == true)) {
       setState(() => _message = 'Không thể quên quyền khi có thao tác chưa rõ kết quả. Hãy kiểm tra với máy salon.'); return;
     }
     _generation++;
@@ -353,7 +353,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
             label: Text(_busy ? 'Đang kiểm tra…' : 'Kiểm tra lại trạng thái')),
         if (_credential != null)
           TextButton(key: const Key('companion-forget'),
-            onPressed: _busy || _commands?.blocked == true ? null : _forget,
+            onPressed: _busy || (_commands?.pending != null || _commands?.busy == true) ? null : _forget,
             child: const Text('Quên quyền trên điện thoại này')),
         if (_loading) const LinearProgressIndicator(),
       ],

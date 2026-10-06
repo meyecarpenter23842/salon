@@ -14,7 +14,7 @@ class _DelayedChanges implements LanChangeSource {
   final entered = Completer<void>(), finish = Completer<void>();
   int reads = 0;
   @override Future<LanChangeSnapshot> read(String? epoch, int cursor) async {
-    reads++; entered.complete(); await finish.future;
+    reads++; if (!entered.isCompleted) entered.complete(); await finish.future;
     return const LanChangeSnapshot('epoch-a', 1, reset: true, changed: true);
   }
 }
@@ -86,6 +86,11 @@ void main() {
       source.finish.complete(); await rejected;
       await expectLater(client.read(connection, token, null, 0), throwsA(isA<PairingFailure>()));
       expect(source.reads, 1);
+      final secondToken = newDeviceSecret();
+      final second = await registry.request(await registry.createCode(), 'Other phone', secondToken);
+      await registry.decide(second.id, PhoneAccess.approved); await registry.setReadAccess(second.id, true);
+      final success = await client.read(connection, secondToken, null, 0);
+      expect(success.epoch, 'epoch-a'); expect(success.cursor, 1); expect(success.reset, isTrue);
       final raw = HttpClient(context: SecurityContext(withTrustedRoots: false));
       raw.badCertificateCallback = connection.matches;
       try {
