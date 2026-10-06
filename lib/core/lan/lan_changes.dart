@@ -74,7 +74,7 @@ class PinnedLanChangeClient implements LanChangeClient {
     try {
       return await (() async {
         final uri = connection.apiUrl.replace(path: '${LanContract.basePath}/changes',
-          queryParameters: {'cursor': '$cursor', if (epoch != null) 'epoch': epoch});
+          queryParameters: {'cursor': '$cursor', 'epoch': ?epoch});
         final request = await client.getUrl(uri);
         request.followRedirects = false;
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');

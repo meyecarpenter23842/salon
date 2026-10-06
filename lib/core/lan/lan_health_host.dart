@@ -395,7 +395,28 @@ class LanHealthHost {
       final cursor = int.tryParse(q['cursor'] ?? '');
       if (q.keys.any((k) => !['epoch', 'cursor'].contains(k)) || cursor == null ||
           cursor < 0 || cursor > 9007199254740991 ||
-          q['epoch'] != null && !RegExp(r'^[a-zA-Z0-9_-]{1,80} _stopping ??= _stop();
+          q['epoch'] != null && !RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(q['epoch']!)) {
+        throw const PairingFailure(LanErrorCode.invalidRequest);
+      }
+      final auth = request.headers.value(HttpHeaders.authorizationHeader);
+      if (auth == null || !auth.startsWith('Bearer ')) throw const PairingFailure(LanErrorCode.unauthenticated);
+      final token = auth.substring(7);
+      await pairing!.status(token, requireRead: true);
+      final value = await changes!.read(q['epoch'], cursor).timeout(const Duration(seconds: 5));
+      await pairing!.status(token, requireRead: true);
+      request.response.statusCode = HttpStatus.ok;
+      request.response.write(jsonEncode(value.toJson()));
+    } catch (error) {
+      final code = error is PairingFailure ? error.code :
+        error is FormatException ? LanErrorCode.invalidRequest :
+        error is TimeoutException ? LanErrorCode.unavailable : LanErrorCode.internal;
+      request.response.statusCode = code.httpStatus;
+      request.response.write(jsonEncode(LanFailure(code, requestId: 'changes-${++_requestSequence}').toJson()));
+    }
+    return true;
+  }
+
+  Future<void> stop() => _stopping ??= _stop();
 
   Future<void> _stop() async {
     try {
