@@ -406,7 +406,12 @@ class SqliteEmployeesRepository
 
   double _parseCommissionRate(String label) {
     final digits = label.replaceAll('%', '').trim().replaceAll(',', '.');
-    final raw = double.tryParse(digits) ?? 0;
+    if (label.trim().isEmpty || label.trim() == 'KPI cố định') return 0;
+    final raw = double.tryParse(digits);
+    if (raw == null || !raw.isFinite || raw < 0 || raw > 100 ||
+        (raw * 100 - (raw * 100).round()).abs() > 0.000001) {
+      throw ArgumentError('Hoa hồng phải là tỷ lệ 0–100%, tối đa 2 số thập phân, hoặc KPI cố định (chưa tự tính).');
+    }
     return raw / 100;
   }
 

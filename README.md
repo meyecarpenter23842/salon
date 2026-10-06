@@ -233,3 +233,5 @@ Kiểm tra cập nhật
 
 Release được build local. Upload R2 thủ công theo thứ tự installer trước và `latest.json` cuối cùng. Xem `WINDOWS_RELEASE.md` để biết quy trình chi tiết.
 
+
+- [Hoa hồng và chi trả desktop](docs/commission-operations.md): snapshot theo giao dịch mới, chốt tháng và chứng từ trả từng phần.

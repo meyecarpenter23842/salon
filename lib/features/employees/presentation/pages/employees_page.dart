@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'commission_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/employee_upsert_input.dart';
@@ -304,6 +305,11 @@ class _EmployeesToolbar extends ConsumerWidget {
               spacing: 7,
               runSpacing: 7,
               children: [
+                if (ref.watch(commissionRepositoryProvider) != null)
+                  ActionChip(label: const Text('Hoa hồng và chi trả'),
+                    avatar: const Icon(Icons.payments_outlined, size: 18),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const CommissionPage()))),
                 for (final status in statuses)
                   FilterChip(
                     label: Text('${status.$1} ${status.$2}'),
