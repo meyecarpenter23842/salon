@@ -29,7 +29,7 @@ class _CompanionBillLineEditorState extends State<CompanionBillLineEditor> {
   late final price = TextEditingController(text: '${widget.line['unitPrice']}');
   late Map<String, String> employee = widget.line['employeeId'] == null ? {} :
     {widget.line['employeeId'] as String: widget.line['employeeLabel']?.toString() ?? 'Nhân viên đã chọn'};
-  late final original = jsonEncode(_payload());
+  late String original;
   bool allowExit = false, confirming = false, submitted = false, needsReload = false, completing = false;
   bool get locked => widget.commands.blocked || widget.role == PhoneWriteRole.none;
   bool get dirty => jsonEncode(_payload()) != original;
@@ -38,7 +38,7 @@ class _CompanionBillLineEditorState extends State<CompanionBillLineEditor> {
     'employeeId': employee.keys.firstOrNull,
     if (widget.role == PhoneWriteRole.owner) 'unitPrice': int.tryParse(price.text.trim()) ?? 0,
   };
-  @override void initState() { super.initState(); widget.commands.addListener(_changed); }
+  @override void initState() { super.initState(); original = jsonEncode(_payload()); widget.commands.addListener(_changed); }
   void _changed() {
     if (!mounted) { return; }
     if (submitted && !widget.commands.busy && widget.commands.pending == null) {
@@ -124,8 +124,9 @@ class _CompanionBillPaymentEditorState extends State<CompanionBillPaymentEditor>
   late bool split = widget.payments.length > 1;
   late String method = billMethods.contains(widget.payments.firstOrNull?['method']) ? widget.payments.first['method'] as String : billMethods.first;
   late final amounts = {for (final m in billMethods) m: TextEditingController(text: '${widget.payments.where((p) => p['method'] == m).fold<int>(0, (sum, p) => sum + (p['amount'] as int))}')};
-  late final original = jsonEncode(_payments());
+  late String original;
   bool allowExit = false, confirming = false;
+  @override void initState() { super.initState(); original = jsonEncode(_payments()); }
   bool get dirty => jsonEncode(_payments()) != original;
   int get allocated => split ? amounts.values.fold(0, (sum, c) => sum + (int.tryParse(c.text.trim()) ?? 0)) : widget.total;
   List<Map<String, dynamic>> _payments() => !split || widget.total == 0

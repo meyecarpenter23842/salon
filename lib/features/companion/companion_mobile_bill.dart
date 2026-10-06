@@ -173,13 +173,14 @@ class _CompanionMobileBillState extends State<CompanionMobileBill> {
     if (mounted && next != null) { setState(() { paymentDraft = next; notice = null; }); }
   }
   Future<void> _checkout() async {
-    if (locked || !_allows(LanWriteOperation.sessionCheckout) || snapshot?.kind != 'session') { return; }
+    if (confirming || locked || !_allows(LanWriteOperation.sessionCheckout) || snapshot?.kind != 'session') { return; }
     if ((snapshot!.values['customerId']?.toString() ?? '').isEmpty || lines.isEmpty) { return; }
     final allocations = payments.map((p) => Map<String, dynamic>.from(p)).toList();
     if (allocations.fold<int>(0, (sum, p) => sum + (p['amount'] as int)) != total) {
       setState(() => notice = 'Tổng bill đã đổi. Kiểm tra lại khoản thanh toán trước khi xác nhận.'); return;
     }
     final reviewedContent = _content(snapshot!);
+    confirming = true;
     final confirmed = await showDialog<bool>(context: context, useRootNavigator: false, builder: (context) => AlertDialog(
       title: const Text('Xác nhận thanh toán'),
       content: SizedBox(width: double.maxFinite, child: ConstrainedBox(
@@ -201,6 +202,7 @@ class _CompanionMobileBillState extends State<CompanionMobileBill> {
         ])))),
       actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Kiểm tra lại')),
         FilledButton(key: const Key('bill-confirm-checkout'), onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận thanh toán'))]));
+    confirming = false;
     if (!mounted || confirmed != true || locked) { return; }
     setState(() => flowBusy = true);
     try {

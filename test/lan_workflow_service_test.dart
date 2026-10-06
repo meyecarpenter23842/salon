@@ -233,5 +233,39 @@ void main() {
     expect(() => LanCatalogItem.fromJson({'id': 'bad', 'title': '', 'subtitle': '', 'totalAmount': -1}), throwsFormatException);
   });
 
+  test('mobile line edit is atomic, targets one bill and preserves owner price authorization', () async {
+    final f = await mobileFixture();
+    final a = (await f.run(LanWriteOperation.sessionCreate, {})).id;
+    final b = (await f.run(LanWriteOperation.sessionCreate, {})).id;
+    for (final id in [a, b]) {
+      await f.run(LanWriteOperation.sessionAddService, {'serviceId': 'service-1', 'employeeId': null}, id: id);
+    }
+    final editor = await f.service.editor('session', a);
+    final lineId = (editor.values['lines'] as List).single['id'] as String;
+    final before = jsonEncode((await f.service.editor('session', a)).toJson());
+    final ownerPrice = await f.command(LanWriteOperation.sessionUpdateLine,
+      {'lineId': lineId, 'quantity': 3, 'employeeId': 'employee-1', 'unitPrice': 130000}, id: a);
+    await expectLater(f.service.execute(workflowPhone(PhoneWriteRole.cashier), ownerPrice), fails(LanErrorCode.forbidden));
+    expect(jsonEncode((await f.service.editor('session', a)).toJson()), before);
+    await expectLater(f.run(LanWriteOperation.sessionUpdateLine,
+      {'lineId': lineId, 'quantity': 4, 'employeeId': 'missing-employee'}, id: a), fails(LanErrorCode.businessRule));
+    expect(jsonEncode((await f.service.editor('session', a)).toJson()), before);
+    final command = await f.command(LanWriteOperation.sessionUpdateLine,
+      {'lineId': lineId, 'quantity': 2, 'employeeId': 'employee-1', 'unitPrice': 130000}, id: a);
+    final saved = await f.service.execute(workflowPhone(), command);
+    expect((await f.service.execute(workflowPhone(), command)).revision, saved.revision);
+    final updated = await f.service.editor('session', a);
+    expect(updated.values['totalAmount'], 260000);
+    expect((updated.values['lines'] as List).single['employeeLabel'], 'Nhân viên An');
+    expect((await f.service.editor('session', b)).values['totalAmount'], 100000);
+    final staffCommand = await f.command(LanWriteOperation.sessionUpdateLine,
+      {'lineId': lineId, 'quantity': 1, 'employeeId': null}, id: a);
+    await f.service.execute(workflowPhone(PhoneWriteRole.staff), staffCommand);
+    expect((await f.service.editor('session', a)).values['totalAmount'], 130000);
+    await expectLater(f.service.execute(workflowPhone(PhoneWriteRole.none), command), fails(LanErrorCode.forbidden));
+    expect(await f.db.query('inventory_movements'), isEmpty);
+    expect(await f.db.query('invoices', where: 'paid_at IS NOT NULL'), isEmpty);
+  });
+
 }
 
