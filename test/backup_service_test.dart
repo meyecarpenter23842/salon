@@ -14,6 +14,13 @@ import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repositor
 import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
 import 'support/stock_schema_fixture.dart';
+import 'package:salonmanager/core/models/invoice_payment_allocation.dart';
+import 'package:salonmanager/core/lan/lan_pairing.dart';
+import 'package:salonmanager/core/lan/lan_write_contract.dart';
+import 'package:salonmanager/core/lan/lan_write_engine.dart';
+
+final _qaPhone = PairedPhone('a' * 64, 'QA phone', PhoneAccess.approved, DateTime.utc(2026),
+  canReadSalon: true, writeRole: PhoneWriteRole.owner);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -257,7 +264,7 @@ void main() {
   });
   test('business restore and pre_restore rollback preserve documents, stock, paid and legacy bills', () async {
     final database = await SalonDatabase.instance.initialize();
-    final activeId = await _seedQaBusiness(database, withDocuments: true);
+    final fixture = await _seedQaBusiness(database, withDocuments: true);
     final expected = await _businessSnapshot(database);
     final epoch = SalonDatabase.instance.runtimeEpoch;
     final backup = await service.createBackup();
@@ -267,7 +274,7 @@ void main() {
     final stock = StockDocumentRepository(SalonDatabase.instance, SensitiveActionService(SalonDatabase.instance));
     final posted = await stock.document('qa-receipt');
     await stock.cancel(posted.id, expectedRevision: posted.revision, reason: 'Sau backup');
-    await SqliteBillingSessionsRepository(SalonDatabase.instance).addService(activeId, 'qa-service');
+    await SqliteBillingSessionsRepository(SalonDatabase.instance).addService(fixture.activeId, 'qa-service');
     final beforeRestore = await _businessSnapshot(database);
     final result = await service.restoreFromBackup(backup.filePath!);
     expect(result.success, isTrue, reason: result.message);
@@ -277,7 +284,14 @@ void main() {
     expect(await restored.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     expect((await restored.query('inventory_stock')).single['stock_on_hand'], -2);
     expect((await SqliteInvoicesRepository(SalonDatabase.instance).fetchInvoiceDraft()).lines.single.quantity, 1);
-    expect((await SqliteBillingSessionsRepository(SalonDatabase.instance).fetchSession(activeId)).lines.single.quantity, 2);
+    expect((await SqliteBillingSessionsRepository(SalonDatabase.instance).fetchSession(fixture.activeId)).lines.single.quantity, 2);
+    final engine = LanWriteEngine(SalonDatabase.instance);
+    final savedResult = await engine.result(_qaPhone.id, fixture.command.commandId);
+    expect(savedResult, isNotNull);
+    final replay = await engine.execute(_qaPhone, fixture.command, (_) async => throw StateError('Replay must not charge again'));
+    expect(replay.id, savedResult!.id);
+    expect(await _businessSnapshot(restored), expected);
+    expect(await restored.query('invoice_payments'), hasLength(2));
     final preRestore = (await _listSafetyBackups(backupDir)).single;
     final safetyDb = await openDatabase(preRestore.path, readOnly: true, singleInstance: false);
     try { expect(await _businessSnapshot(safetyDb), beforeRestore); }
@@ -291,7 +305,7 @@ void main() {
 
   test('restore migrates real schema 19 backup preserving legacy drafts, payments, catalogs and negative history', () async {
     final database = await SalonDatabase.instance.initialize();
-    final activeId = await _seedQaBusiness(database, withDocuments: false);
+    final fixture = await _seedQaBusiness(database, withDocuments: false);
     await removeStockDocumentSchema(database);
     await database.setVersion(19);
     await _writeSetting(database, 'schema_version', '19');
@@ -320,7 +334,7 @@ void main() {
     expect((await upgraded.query('inventory_stock')).single['stock_on_hand'], -5);
     expect(await upgraded.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     expect((await SqliteInvoicesRepository(SalonDatabase.instance).fetchInvoiceDraft()).lines.single.quantity, 1);
-    expect((await SqliteBillingSessionsRepository(SalonDatabase.instance).fetchSession(activeId)).lines.single.quantity, 2);
+    expect((await SqliteBillingSessionsRepository(SalonDatabase.instance).fetchSession(fixture.activeId)).lines.single.quantity, 2);
   });
 
   test('post-swap open failure rolls back all business rows and keeps safety backup', () async {
@@ -423,7 +437,7 @@ Future<String?> _readSettingFromFile(String filePath, String key) async {
 
 
 /// Synthetic salon only; use repositories for billing and posted documents.
-Future<String> _seedQaBusiness(Database db, {required bool withDocuments}) async {
+Future<({String activeId, LanWriteCommand command})> _seedQaBusiness(Database db, {required bool withDocuments}) async {
   const stamp = '2026-10-06T10:00:00.000';
   await db.insert('customers', {'id': 'qa-customer', 'full_name': 'Khách QA', 'phone': '0900000001', 'created_at': stamp, 'updated_at': stamp});
   await db.insert('services', {'id': 'qa-service', 'name': 'Cắt QA', 'category': 'Tóc', 'duration_minutes': 30, 'price': 100000, 'created_at': stamp, 'updated_at': stamp});
@@ -437,7 +451,19 @@ Future<String> _seedQaBusiness(Database db, {required bool withDocuments}) async
   final paid = await bills.createWalkInSession();
   await bills.selectCustomer(paid.id, 'qa-customer');
   await bills.addProduct(paid.id, 'qa-product');
-  await bills.checkout(paid.id);
+  await bills.updatePaymentAllocations(paid.id, const [
+    InvoicePaymentAllocation(paymentMethod: 'Tiền mặt', amount: 20000),
+    InvoicePaymentAllocation(paymentMethod: 'Chuyển khoản', amount: 30000),
+  ]);
+  final engine = LanWriteEngine(SalonDatabase.instance);
+  final command = LanWriteCommand(commandId: 'qa-checkout', operation: LanWriteOperation.sessionCheckout,
+    expectedEpoch: SalonDatabase.instance.runtimeEpoch, targetId: paid.id,
+    expectedRevision: await engine.revision(db, 'session', paid.id), payload: {});
+  await engine.execute(_qaPhone, command, (scope) async {
+    final invoices = SqliteInvoicesRepository(scope, null, paid.id);
+    await invoices.checkoutInvoice();
+    return LanMutationTarget(invoices.lastArchivedInvoiceId!, 'invoice');
+  });
   final active = await bills.createWalkInSession();
   await bills.selectCustomer(active.id, 'qa-customer');
   await bills.addService(active.id, 'qa-service');
@@ -457,7 +483,7 @@ Future<String> _seedQaBusiness(Database db, {required bool withDocuments}) async
     await repo.cancel(posted.id, expectedRevision: posted.revision, reason: 'QA hủy');
     await repo.saveDraft(input('qa-draft', 2));
   }
-  return active.id;
+  return (activeId: active.id, command: command);
 }
 
 /// All business/journal/audit tables; exclude only schema marker rewritten onOpen.

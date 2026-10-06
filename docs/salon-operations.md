@@ -43,7 +43,7 @@ Phiếu nhập/xuất/kiểm kê lưu nháp chưa đổi tồn; xác nhận mớ
 
 ## Sao lưu và phục hồi
 
-Desktop: **Cài đặt → Sao lưu & phục hồi**; xem đường dẫn thực tế hiển thị trong app. Trên Windows thông thường:
+Desktop: **Cài đặt → Backup & Restore**; xem đường dẫn thực tế hiển thị trong app. Trên Windows thông thường:
 - Dữ liệu: `%APPDATA%\HairSpaManager\data\.salon_manager\salon_manager.db`.
 - Backup: `%APPDATA%\HairSpaManager\data\backups`.
 
