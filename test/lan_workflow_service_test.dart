@@ -4,6 +4,7 @@ import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/lan/lan_contract.dart';
 import 'package:salonmanager/core/lan/lan_pairing.dart';
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
+import 'package:salonmanager/core/lan/lan_workflow_models.dart';
 import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
 import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
@@ -197,4 +198,40 @@ void main() {
     expect((state.values['lines'] as List).single['quantity'], 2);
   });
 
+  test('bill search precedes paging, includes empty drafts and exposes typed totals without writes', () async {
+    final f = await mobileFixture();
+    await f.db.update('customers', {'full_name': 'Đỗ Lan 100%'}, where: 'id = ?', whereArgs: ['customer-1']);
+    final wanted = (await f.run(LanWriteOperation.sessionCreate, {})).id;
+    await f.run(LanWriteOperation.sessionSelectCustomer, {'customerId': 'customer-1'}, id: wanted);
+    for (var i = 0; i < 27; i++) { await f.run(LanWriteOperation.sessionCreate, {}); }
+    final before = (await f.db.rawQuery('SELECT total_changes() AS n')).single['n'];
+    for (final query in ['đỗ', '%', '0911111111', wanted]) {
+      final page = await f.service.catalog('sessions', query, 0);
+      expect(page.items.single.id, wanted);
+      expect(page.items.single.totalAmount, 0);
+      expect(page.items.single.lineCount, 0);
+      expect(DateTime.tryParse(page.items.single.updatedAt!), isNotNull);
+    }
+    final page = await f.service.catalog('sessions', '', 0);
+    expect(page.items, hasLength(25)); expect(page.nextOffset, 25);
+    expect((await f.service.catalog('sessions', '', 25)).items, hasLength(3));
+    expect((await f.db.rawQuery('SELECT total_changes() AS n')).single['n'], before);
+  });
+
+  test('bill editor uses latest product stock and catalog amounts retain wire compatibility', () async {
+    final f = await mobileFixture();
+    final bill = (await f.run(LanWriteOperation.sessionCreate, {})).id;
+    await f.run(LanWriteOperation.sessionAddProduct, {'productId': 'product-1'}, id: bill);
+    await f.db.update('inventory_stock', {'stock_on_hand': -3});
+    final editor = await f.service.editor('session', bill);
+    expect((editor.values['lines'] as List).single['stockOnHand'], -3);
+    expect(editor.values['totalAmount'], 50000);
+    final item = (await f.service.catalog('products', '', 0)).items.single;
+    expect(item.unitPrice, 50000); expect(item.isNegativeStock, isTrue);
+    expect(LanCatalogItem.fromJson(Map<String, dynamic>.from(item.toJson())).unitPrice, 50000);
+    expect(LanCatalogItem.fromJson({'id': 'old', 'title': 'Old', 'subtitle': ''}).totalAmount, isNull);
+    expect(() => LanCatalogItem.fromJson({'id': 'bad', 'title': '', 'subtitle': '', 'totalAmount': -1}), throwsFormatException);
+  });
+
 }
+

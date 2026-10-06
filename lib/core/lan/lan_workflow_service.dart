@@ -82,13 +82,21 @@ class LanWorkflowService implements LanWorkflowBackend {
           columns: ['id', 'full_name'], where: 'id IN (${List.filled(employeeIds.length, '?').join(',')})',
           whereArgs: employeeIds);
         final employeeNames = {for (final e in employees) e['id']: e['full_name']};
+        final productIds = bill.lines.map((l) => l.productId).whereType<String>().toSet().toList();
+        final stocks = productIds.isEmpty ? <Map<String, Object?>>[] : await tx.rawQuery(
+          'SELECT p.id, p.low_stock_threshold, COALESCE(s.stock_on_hand, 0) AS stock_on_hand '
+          'FROM retail_products p LEFT JOIN inventory_stock s ON s.product_id = p.id '
+          'WHERE p.id IN (${List.filled(productIds.length, '?').join(',')})', productIds);
+        final productStocks = {for (final stock in stocks) stock['id']: stock};
         values = {'customerId': bill.customerId, 'customerLabel': customer.isEmpty ? 'Chưa chọn khách' : customer.single['full_name'],
-          'appointmentId': bill.appointmentId, 'subtotal': bill.subtotal, 'discountAmount': bill.discountAmount,
+          'appointmentId': bill.appointmentId, 'updatedAt': bill.updatedAt.toIso8601String(), 'subtotal': bill.subtotal, 'discountAmount': bill.discountAmount,
           'totalAmount': bill.totalAmount, 'paymentMethod': bill.paymentMethod,
           'payments': bill.effectivePaymentAllocations.map((a) => {'method': a.paymentMethod, 'amount': a.amount}).toList(),
           'lines': bill.lines.map((l) => {'id': l.id, 'title': l.title, 'quantity': l.quantity,
             'unitPrice': l.unitPrice, 'discountAmount': l.discountAmount, 'totalPrice': l.totalPrice,
-            'employeeId': l.employeeId, 'employeeLabel': employeeNames[l.employeeId] ?? '', 'isService': l.isService}).toList()};
+            'employeeId': l.employeeId, 'employeeLabel': employeeNames[l.employeeId] ?? '', 'isService': l.isService,
+            if (l.isProduct) 'stockOnHand': productStocks[l.productId]?['stock_on_hand'],
+            if (l.isProduct) 'lowStockThreshold': productStocks[l.productId]?['low_stock_threshold']}).toList()};
       }
       final snapshot = LanEditorSnapshot(kind: kind, epoch: database.runtimeEpoch, id: id,
         revision: id == null ? 0 : await engine.revision(tx, kind, id), values: values);
@@ -109,14 +117,31 @@ class LanWorkflowService implements LanWorkflowBackend {
       final items = <LanCatalogItem>[];
       List<Map<String, Object?>> rows;
       if (kind == 'sessions') {
-        // Bound discovery before loading domain lines; empty sessions live in settings.
+        // Search before pagination, including empty drafts held in settings.
+        final sessionSearch = <String>[];
+        final sessionArgs = <Object?>[];
+        if (query.trim().isNotEmpty) {
+          final q = query.trim();
+          final variants = {q, q.toLowerCase(), q.toUpperCase(), q.toLowerCase().split(' ').map((part) =>
+            part.isEmpty ? part : part[0].toUpperCase() + part.substring(1)).join(' ')};
+          for (final column in ['d.id', 'c.full_name', 'c.phone']) {
+            for (final variant in variants) {
+              sessionSearch.add("$column LIKE ? ESCAPE '\\'");
+              sessionArgs.add('%${variant.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_')}%');
+            }
+          }
+        }
         rows = await tx.rawQuery(
-          "SELECT id, MAX(updated_at) AS touched FROM ("
-          "SELECT id, updated_at FROM invoices WHERE paid_at IS NULL UNION ALL "
+          "SELECT d.id, MAX(d.updated_at) AS touched FROM ("
+          "SELECT id, updated_at, customer_id FROM invoices WHERE paid_at IS NULL UNION ALL "
           "SELECT CASE WHEN key = 'invoice_draft_state_v1' THEN 'invoice-draft-001' "
-          "ELSE substr(key, 24) END AS id, updated_at FROM app_settings "
-          "WHERE key = 'invoice_draft_state_v1' OR key LIKE 'invoice_draft_state_v2:%') "
-          "GROUP BY id ORDER BY touched DESC, id ASC LIMIT 26 OFFSET ?", [offset]);
+          "ELSE substr(key, 24) END AS id, updated_at, "
+          "CASE WHEN json_valid(value) THEN json_extract(value, '\$.customerId') END AS customer_id "
+          "FROM app_settings WHERE key = 'invoice_draft_state_v1' OR key LIKE 'invoice_draft_state_v2:%') d "
+          "LEFT JOIN customers c ON c.id = d.customer_id "
+          "${sessionSearch.isEmpty ? '' : 'WHERE (${sessionSearch.join(' OR ')}) '}"
+          "GROUP BY d.id ORDER BY touched DESC, d.id ASC LIMIT 26 OFFSET ?",
+          [...sessionArgs, offset]);
         final scope = SalonDatabase.forTransaction(tx, database.runtimeEpoch);
         for (final row in rows.take(25)) {
           final id = row['id'] as String;
@@ -124,7 +149,8 @@ class LanWorkflowService implements LanWorkflowBackend {
           final customers = await tx.query('customers', columns: ['full_name'], where: 'id = ?',
             whereArgs: [bill.customerId], limit: 1);
           items.add(LanCatalogItem(id, customers.isEmpty ? 'Bill chưa chọn khách' :
-            customers.single['full_name'] as String, '${bill.totalAmount} đ · ${bill.lines.length} dòng'));
+            customers.single['full_name'] as String, '${bill.totalAmount} đ · ${bill.lines.length} dòng',
+            totalAmount: bill.totalAmount, lineCount: bill.lines.length, updatedAt: bill.updatedAt.toIso8601String()));
         }
       } else {
         final table = kind == 'products' ? 'retail_products' : kind;
@@ -159,7 +185,8 @@ class LanWorkflowService implements LanWorkflowBackend {
             '${row[subtitle] ?? ''}${['price', 'sale_price'].contains(subtitle) ? ' đ' : ''}'
             '${kind == 'products' && (row['unit_name'] as String? ?? '').isNotEmpty ? ' / ${row['unit_name']}' : ''}',
             stockOnHand: stock == null ? null : stock.isEmpty ? 0 : stock.single['stock_on_hand'] as int,
-            lowStockThreshold: row['low_stock_threshold'] as int? ?? 5));
+            lowStockThreshold: row['low_stock_threshold'] as int? ?? 5,
+            unitPrice: ['price', 'sale_price'].contains(subtitle) ? (row[subtitle] as num).toInt() : null));
         }
       }
       return LanCatalogPage(items, database.runtimeEpoch, rows.length > 25 ? offset + 25 : null);

@@ -51,13 +51,24 @@ class SqliteLanReadRepository implements SalonReadRepository {
               : '${part[0].toUpperCase()}${part.substring(1)}').join(' ')};
         String pattern(String value) => '%${value.replaceAll(r'\', r'\\')
             .replaceAll('%', r'\%').replaceAll('_', r'\_')}%';
-        final nameClauses = variants.map((_) => "full_name LIKE ? ESCAPE '\\'").join(' OR ');
-        clauses.add("($nameClauses OR phone LIKE ? ESCAPE '\\')");
-        args.addAll([...variants.map(pattern), pattern(query.query)]);
+        final columns = query.kind == SalonReadKind.invoices
+            ? ['invoices.id', '(SELECT full_name FROM customers WHERE customers.id = invoices.customer_id)',
+              '(SELECT phone FROM customers WHERE customers.id = invoices.customer_id)']
+            : ['full_name', 'phone'];
+        final search = <String>[];
+        for (final column in columns) {
+          for (final variant in variants) {
+            search.add("$column LIKE ? ESCAPE '\\'");
+            args.add(pattern(variant));
+          }
+        }
+        clauses.add('(${search.join(' OR ')})');
       }
-      if (query.kind == SalonReadKind.appointments && query.id == null) {
+      if (query.id == null && (query.kind == SalonReadKind.appointments ||
+          query.kind == SalonReadKind.invoices && query.day != null)) {
         final day = DateTime.parse(query.day ?? today);
-        clauses.add('starts_at >= ? AND starts_at < ?');
+        final timeColumn = query.kind == SalonReadKind.invoices ? 'paid_at' : 'starts_at';
+        clauses.add('$timeColumn >= ? AND $timeColumn < ?');
         args.addAll([day.toIso8601String(),
           DateTime(day.year, day.month, day.day + 1).toIso8601String()]);
       }
