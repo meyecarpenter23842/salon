@@ -71,7 +71,7 @@ class _StockDocumentsPageState extends ConsumerState<StockDocumentsPage> {
         Expanded(child: TextField(decoration: const InputDecoration(isDense: true, labelText: 'Tìm mã phiếu, NCC, người lập, chứng từ ngoài'),
           onChanged: (v) => setState(() { query = v; offset = 0; }))),
         const SizedBox(width: 8),
-        SizedBox(width: 150, child: DropdownButtonFormField<String>(initialValue: status,
+        SizedBox(width: 200, child: DropdownButtonFormField<String>(initialValue: status, isExpanded: true,
           decoration: const InputDecoration(isDense: true, labelText: 'Trạng thái'),
           items: const [DropdownMenuItem(value: 'all', child: Text('Tất cả')), DropdownMenuItem(value: 'draft', child: Text('Nháp')),
             DropdownMenuItem(value: 'posted', child: Text('Đã ghi kho')), DropdownMenuItem(value: 'cancelled', child: Text('Đã hủy'))],
@@ -410,7 +410,7 @@ class _StockMovementHistoryPageState extends ConsumerState<StockMovementHistoryP
           suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: () { query = search.text; offset = 0; reload(); }))),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
-        SizedBox(width: 220, child: DropdownButtonFormField<String>(initialValue: source,
+        SizedBox(width: 220, child: DropdownButtonFormField<String>(initialValue: source, isExpanded: true,
           decoration: const InputDecoration(isDense: true, labelText: 'Nguồn giao dịch'),
           items: const [DropdownMenuItem(value: 'all', child: Text('Tất cả')), DropdownMenuItem(value: 'document', child: Text('Chứng từ kho')),
             DropdownMenuItem(value: 'sale', child: Text('Bán / hủy hóa đơn')), DropdownMenuItem(value: 'legacy', child: Text('Lịch sử cũ (legacy)'))],
