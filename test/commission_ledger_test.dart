@@ -11,7 +11,6 @@ import 'package:salonmanager/core/models/employee_upsert_input.dart';
 import 'package:salonmanager/core/repositories/sqlite_billing_sessions_repository.dart';
 import 'package:salonmanager/core/repositories/sqlite_invoices_repository.dart';
 import 'package:salonmanager/core/lan/lan_pairing.dart';
-import 'package:salonmanager/core/lan/lan_contract.dart';
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
 import 'package:salonmanager/core/lan/lan_write_engine.dart';
 
