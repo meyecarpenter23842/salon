@@ -136,7 +136,7 @@ class LanWorkflowService implements LanWorkflowBackend {
           "SELECT id, updated_at, customer_id FROM invoices WHERE paid_at IS NULL UNION ALL "
           "SELECT CASE WHEN key = 'invoice_draft_state_v1' THEN 'invoice-draft-001' "
           "ELSE substr(key, 24) END AS id, updated_at, "
-          "CASE WHEN json_valid(value) THEN json_extract(value, '$.customerId') END AS customer_id "
+          "CASE WHEN json_valid(value) THEN json_extract(value, '\$.customerId') END AS customer_id "
           "FROM app_settings WHERE key = 'invoice_draft_state_v1' OR key LIKE 'invoice_draft_state_v2:%') d "
           "LEFT JOIN customers c ON c.id = d.customer_id "
           "${sessionSearch.isEmpty ? '' : 'WHERE (${sessionSearch.join(' OR ')}) '}"
