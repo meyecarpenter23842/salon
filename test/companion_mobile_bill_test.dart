@@ -17,7 +17,11 @@ import 'support/mobile_bill_fixture.dart';
 final billConnection = LanConnection('https://192.168.1.20:8743/api/staff/v1', 'b' * 64);
 Future<void> billTap(WidgetTester tester, String key) async {
   FocusManager.instance.primaryFocus?.unfocus(); await tester.pumpAndSettle();
-  final finder = find.byKey(Key(key)); await tester.ensureVisible(finder); await tester.pumpAndSettle();
+  final finder = find.byKey(Key(key));
+  if (finder.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(finder, 180, scrollable: find.byType(Scrollable).last, maxScrolls: 30);
+  }
+  await tester.ensureVisible(finder); await tester.pumpAndSettle();
   await tester.tap(finder); await tester.pumpAndSettle();
 }
 Future<CompanionCommandController> mountBill(WidgetTester tester, BillTestClient client,
