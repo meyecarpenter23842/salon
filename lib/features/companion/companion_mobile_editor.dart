@@ -71,12 +71,13 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
 
   Future<bool> _confirm() async {
     if (!dirty) { return true; }
+    final pending = widget.commands.pending != null;
     return await showDialog<bool>(context: context, useRootNavigator: false, builder: (context) => AlertDialog(
-      title: const Text('Bỏ thay đổi chưa lưu?'),
-      content: const Text('Thông tin đã nhập chưa được lưu trên máy salon.'),
+      title: Text(pending ? 'Quay lại khi yêu cầu đang chờ?' : 'Bỏ thay đổi chưa lưu?'),
+      content: Text(pending ? 'Kết quả lưu vẫn chưa rõ. Yêu cầu được giữ trên điện thoại để đối chiếu với máy salon, kể cả khi bạn quay lại.' : 'Thông tin đã nhập chưa được lưu trên máy salon.'),
       actions: [
-        TextButton(key: const Key('mobile-keep-editing'), onPressed: () => Navigator.pop(context, false), child: const Text('Tiếp tục sửa')),
-        FilledButton(key: const Key('mobile-discard'), onPressed: () => Navigator.pop(context, true), child: const Text('Bỏ thay đổi')),
+        TextButton(key: const Key('mobile-keep-editing'), onPressed: () => Navigator.pop(context, false), child: Text(pending ? 'Ở lại kiểm tra' : 'Tiếp tục sửa')),
+        FilledButton(key: const Key('mobile-discard'), onPressed: () => Navigator.pop(context, true), child: Text(pending ? 'Quay lại' : 'Bỏ thay đổi')),
       ])) ?? false;
   }
   Future<void> _back() async {

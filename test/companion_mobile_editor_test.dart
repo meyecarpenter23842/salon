@@ -110,7 +110,12 @@ void main() {
     await tester.enterText(find.byKey(const Key('mobile-field-fullName')), 'Khách mới');
     await tester.enterText(find.byKey(const Key('mobile-field-phone')), '0908888888');
     await fixture.tapMobile(tester, 'mobile-save');
-    expect(commands.pending, isNotNull); client.resolved = true;
+    expect(commands.pending, isNotNull);
+    await tester.pageBack(); await tester.pumpAndSettle();
+    expect(find.text('Quay lại khi yêu cầu đang chờ?'), findsOneWidget);
+    expect(find.text('Thông tin đã nhập chưa được lưu trên máy salon.'), findsNothing);
+    await fixture.tapMobile(tester, 'mobile-keep-editing');
+    client.resolved = true;
     await fixture.tapMobile(tester, 'write-check-result');
     expect(commands.pending, isNull); expect(client.sent.length, 1);
     expect(find.byKey(const Key('mobile-save')), findsNothing);
