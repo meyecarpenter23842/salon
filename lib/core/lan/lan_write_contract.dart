@@ -10,7 +10,7 @@ enum LanWriteOperation {
   customerCreate, customerUpdate, appointmentCreate, appointmentUpdate,
   appointmentStatus, sessionCreate, sessionOpenAppointment, sessionSelectCustomer,
   sessionAddService, sessionAddProduct, sessionQuantity, sessionRemoveLine,
-  sessionAssignEmployee, sessionPayment, sessionDiscount, sessionPrice, sessionCheckout,
+  sessionAssignEmployee, sessionUpdateLine, sessionPayment, sessionDiscount, sessionPrice, sessionCheckout,
 }
 
 extension LanWritePolicy on LanWriteOperation {
@@ -115,3 +115,4 @@ class LanWriteResult {
       revision: json['revision'] as int);
   }
 }
+

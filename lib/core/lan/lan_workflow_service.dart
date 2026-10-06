@@ -251,7 +251,7 @@ class LanWorkflowService implements LanWorkflowBackend {
     final security = _DeviceSecurity(scope, phone.writeRole);
     final sessions = SqliteBillingSessionsRepository(scope, security);
     if ([LanWriteOperation.sessionQuantity, LanWriteOperation.sessionRemoveLine,
-        LanWriteOperation.sessionAssignEmployee, LanWriteOperation.sessionPrice].contains(op)) {
+        LanWriteOperation.sessionAssignEmployee, LanWriteOperation.sessionPrice, LanWriteOperation.sessionUpdateLine].contains(op)) {
       final lineId = p.identity('lineId');
       final bill = await sessions.fetchSession(id!);
       if (!bill.lines.any((line) => line.id == lineId)) {
@@ -292,6 +292,19 @@ class LanWorkflowService implements LanWorkflowBackend {
       case LanWriteOperation.sessionAssignEmployee:
         p.keys(['lineId', 'employeeId']);
         saved = await sessions.updateLineEmployee(id!, p.identity('lineId'), p.optionalIdentity('employeeId'));
+      case LanWriteOperation.sessionUpdateLine:
+        p.keys(['lineId', 'quantity', 'employeeId', if (command.payload.containsKey('unitPrice')) 'unitPrice']);
+        // All changes join the command transaction; a failed owner price guard
+        // or employee validation rolls back quantity as well.
+        final lineId = p.identity('lineId');
+        saved = await sessions.updateLineQuantity(id!, lineId, p.integer('quantity', 1, 1000));
+        final line = saved.lines.singleWhere((line) => line.id == lineId);
+        final employee = p.optionalIdentity('employeeId');
+        if (!line.isService && employee != null) throw const PairingFailure(LanErrorCode.businessRule);
+        if (line.isService) { saved = await sessions.updateLineEmployee(id, lineId, employee); }
+        if (command.payload.containsKey('unitPrice')) {
+          saved = await sessions.updateLineUnitPrice(id, lineId, p.integer('unitPrice', 1, 1000000000000));
+        }
       case LanWriteOperation.sessionDiscount:
         p.keys(['amount']);
         saved = await sessions.updateDiscount(id!, p.integer('amount', 0, 1000000000000));
