@@ -4,7 +4,8 @@ import '../../core/lan/lan_read_client.dart';
 import '../../core/lan/lan_read_models.dart';
 import '../../core/lan/lan_workflow_client.dart';
 import '../../core/lan/lan_write_contract.dart';
-import 'companion_bill_workspace.dart';
+import 'companion_bills_list.dart';
+import 'companion_mobile_bill.dart';
 import 'companion_command_controller.dart';
 import 'companion_mobile_list.dart';
 import 'companion_mobile_editor.dart';
@@ -53,14 +54,17 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
         role: widget.role, onDenied: widget.onDenied, kind: kind, id: id)));
     if (mounted) { refresh++; _changed(); }
   }
-  Future<void> _bills({String? appointmentId}) async {
-    await navigator.currentState!.push(MaterialPageRoute<void>(builder: (_) => Scaffold(
-      appBar: AppBar(title: const Text('Bill đang làm')),
-      body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16),
-        child: CompanionBillWorkspace(connection: widget.connection, readClient: widget.readClient,
-          client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
-          billOnly: true, initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId))))));
+  Future<void> _bills({String? appointmentId, String? id}) async {
+    await navigator.currentState!.push(MaterialPageRoute<void>(builder: (_) =>
+      CompanionMobileBill(connection: widget.connection, readClient: widget.readClient,
+        client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
+        id: id, appointmentId: appointmentId)));
     if (mounted) { refresh++; _changed(); }
+  }
+  Future<void> _receipt(String id) async {
+    await navigator.currentState!.push(MaterialPageRoute<void>(builder: (_) =>
+      CompanionReceipt(connection: widget.connection, token: widget.commands.token,
+        client: widget.readClient, id: id, onDenied: widget.onDenied)));
   }
 
   @override
@@ -75,6 +79,9 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
           if (widget.commands.pending != null || widget.commands.message != null)
             ConstrainedBox(constraints: BoxConstraints(maxHeight: (MediaQuery.sizeOf(context).height - MediaQuery.viewInsetsOf(context).bottom) * .23),
               child: SingleChildScrollView(child: CompanionPendingNotice(commands: widget.commands))),
+          if (widget.commands.lastResult?.type == 'invoice' && widget.commands.pending == null)
+            TextButton(key: const Key('bill-view-recovered-receipt'),
+              onPressed: () => _receipt(widget.commands.lastResult!.id), child: const Text('Xem hóa đơn vừa thanh toán')),
           Expanded(child: IndexedStack(index: tab, children: [
             CompanionMobileList(key: const PageStorageKey('today'), kind: SalonReadKind.appointments,
               today: true, connection: widget.connection, token: widget.commands.token,
@@ -93,9 +100,11 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
               refresh: refresh, onDenied: widget.onDenied,
               onEdit: widget.role == PhoneWriteRole.none || locked ? null : (id) => _edit('customer', id),
               onCreate: widget.role == PhoneWriteRole.none || locked ? null : () => _edit('customer', null)),
-            CompanionMobileList(key: const PageStorageKey('invoices'), kind: SalonReadKind.invoices,
-              connection: widget.connection, token: widget.commands.token, client: widget.readClient,
-              refresh: refresh, onDenied: widget.onDenied, onBills: _bills),
+            CompanionBillsList(key: const PageStorageKey('invoices'),
+              connection: widget.connection, token: widget.commands.token, readClient: widget.readClient,
+              client: widget.client, refresh: refresh, onDenied: widget.onDenied,
+              onOpen: (id) => _bills(id: id),
+              onCreate: widget.role == PhoneWriteRole.none || locked ? null : () => _bills()),
             ListView(padding: const EdgeInsets.all(16), children: [
               const Card(child: ListTile(leading: Icon(Icons.wifi),
                 title: Text('Đang kết nối với máy salon'), subtitle: Text('Dữ liệu được lưu trên máy salon.'))),

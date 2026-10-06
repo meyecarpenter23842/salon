@@ -20,6 +20,9 @@ class CompanionCommandController extends ChangeNotifier {
   bool busy = false;
   String? message;
   LanWriteResult? lastResult;
+  LanErrorCode? failureCode;
+  LanWriteOperation? lastOperation;
+  String? lastTargetId;
   bool canRetry = false;
   bool oldEpoch = false;
   LanWriteCommand? get pending => _credential.pendingCommand;
@@ -39,7 +42,8 @@ class CompanionCommandController extends ChangeNotifier {
   Future<LanWriteResult?> submit(LanWriteOperation operation, LanEditorSnapshot snapshot,
       Map<String, dynamic> payload) async {
     if (blocked || _closed) return null;
-    busy = true; message = null; lastResult = null; canRetry = false; oldEpoch = false; _changed();
+    busy = true; message = null; lastResult = null; failureCode = null;
+    lastOperation = operation; lastTargetId = snapshot.id; canRetry = false; oldEpoch = false; _changed();
     try {
       final command = LanWriteCommand(commandId: newDeviceSecret(), operation: operation,
         expectedEpoch: snapshot.epoch, targetId: operation.creates ? null : snapshot.id,
@@ -61,6 +65,7 @@ class CompanionCommandController extends ChangeNotifier {
       await _finish(result);
       return result;
     } catch (error) {
+      failureCode = error is PairingFailure ? error.code : LanErrorCode.unavailable;
       if (error is PairingFailure && [
         LanErrorCode.invalidRequest, LanErrorCode.businessRule, LanErrorCode.revisionConflict,
         LanErrorCode.notFound, LanErrorCode.alreadyPaid,
@@ -80,7 +85,7 @@ class CompanionCommandController extends ChangeNotifier {
   Future<void> _finish(LanWriteResult result) async {
     // Clearing must be durable before any subsequent command is permitted.
     await _save(null);
-    lastResult = result;
+    lastResult = result; failureCode = null;
     message = result.type == 'invoice' ? 'Đã thanh toán. Mã hóa đơn: ${result.id}' : 'Đã lưu trên máy salon.';
     canRetry = false; oldEpoch = false;
   }
@@ -88,7 +93,8 @@ class CompanionCommandController extends ChangeNotifier {
   Future<void> check() async {
     final command = pending;
     if (busy || command == null || _closed) return;
-    busy = true; canRetry = false; oldEpoch = false; _changed();
+    busy = true; canRetry = false; oldEpoch = false;
+    lastOperation = command.operation; lastTargetId = command.targetId; _changed();
     try {
       final result = await client.result(connection, token, command.commandId);
       if (result != null) {
@@ -137,3 +143,4 @@ class CompanionCommandController extends ChangeNotifier {
   @override
   void dispose() { _closed = true; super.dispose(); }
 }
+

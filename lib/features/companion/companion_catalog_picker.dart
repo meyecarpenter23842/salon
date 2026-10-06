@@ -5,6 +5,7 @@ import '../../core/lan/lan_pairing.dart';
 import '../../core/lan/lan_workflow_client.dart';
 import '../../core/lan/lan_workflow_models.dart';
 import 'companion_mobile_list.dart';
+import 'companion_bill_ui.dart';
 
 /// Server search/pagination preserves IDs, including selections on other pages.
 class CompanionCatalogPicker extends StatefulWidget {
@@ -29,7 +30,7 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
   int? next;
   bool busy = false;
   String get title => switch(widget.kind) {
-    'customers' => 'Chọn khách hàng', 'services' => 'Chọn dịch vụ', _ => 'Chọn nhân viên',
+    'customers' => 'Chọn khách hàng', 'services' => 'Chọn dịch vụ', 'products' => 'Chọn sản phẩm', _ => 'Chọn nhân viên',
   };
   @override void initState() { super.initState(); _load(); }
   Future<void> _load({int offset = 0}) async {
@@ -79,7 +80,11 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
               TextButton(key: const Key('mobile-picker-next'), onPressed: busy ? null : () => _load(offset: next!), child: const Text('Xem thêm')); }
             final item = rows[index];
             return Card(child: ListTile(key: Key('mobile-pick-${item.id}'), title: Text(item.title),
-              subtitle: Text(item.subtitle), onTap: () => _choose(item),
+              subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(item.unitPrice == null ? item.subtitle : '${billMoney(item.unitPrice!)}${item.subtitle.contains(' / ') ? ' / ${item.subtitle.split(' / ').last}' : ''}'),
+                if (item.stockOnHand != null) Text('Tồn ${item.stockOnHand} · ${item.stockLabel}${item.isNegativeStock ? ' · Vẫn được bán' : ''}',
+                  style: TextStyle(color: item.isNegativeStock ? Colors.red : null)),
+              ]), onTap: () => _choose(item),
               trailing: widget.multiple ? Icon(selected.containsKey(item.id) ? Icons.check_circle : Icons.radio_button_unchecked) : const Icon(Icons.chevron_right)));
           })),
     ])),
