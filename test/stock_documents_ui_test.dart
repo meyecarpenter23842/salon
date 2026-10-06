@@ -160,17 +160,18 @@ void main() {
 
 Future<void> _settle(WidgetTester tester) async {
   for (var frame = 0; frame < 20; frame++) {
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
   await tester.pumpAndSettle();
 }
 
 Future<void> _waitFor(WidgetTester tester, Finder finder, {Finder? absent}) async {
+  // Advance animation time as well as the real clock used by SQLite FFI.
   final deadline = DateTime.now().add(const Duration(seconds: 15));
   bool ready() => finder.evaluate().isNotEmpty && (absent == null || absent.evaluate().isEmpty);
   while (!ready() && DateTime.now().isBefore(deadline)) {
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
   expect(ready(), isTrue, reason: 'Stock document operation did not complete');
