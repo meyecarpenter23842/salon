@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
+import '../services/sensitive_action_service.dart';
 
 import '../data/fake/fake_salon_data_source.dart';
 import '../database/salon_database.dart';
@@ -12,11 +13,14 @@ import 'repository_contracts.dart';
 
 class SqliteEmployeesRepository
     implements EmployeesRepository, EmployeeProfileRepository {
-  SqliteEmployeesRepository(this._database, FakeSalonDataSource dataSource)
-      : _seed = SalonDatabaseSeed(dataSource);
+  SqliteEmployeesRepository(this._database, FakeSalonDataSource dataSource,
+      {SensitiveActionService? security})
+      : _seed = SalonDatabaseSeed(dataSource),
+        _security = security ?? SensitiveActionService(_database);
 
   final SalonDatabase _database;
   final SalonDatabaseSeed _seed;
+  final SensitiveActionService _security;
 
   static final NumberFormat _currencyFormatter = NumberFormat.currency(
     locale: 'vi_VN',
@@ -148,23 +152,31 @@ class SqliteEmployeesRepository
       'updated_at': now,
     };
 
-    if (existing == null) {
-      await database.insert(
-        'employees',
-        row,
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-    } else {
-      final updatedCount = await database.update(
-        'employees',
-        row,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      if (updatedCount != 1) {
-        throw StateError('Employee $id disappeared during edit');
+    final changedRate = existing == null ||
+      _toDouble(existing['commission_rate']) != row['commission_rate'];
+    final actor = changedRate
+      ? await _security.authorizeCommissionAction('commission_rate', id) : null;
+    await database.transaction((tx) async {
+      final current = await tx.query('employees', where: 'id=?', whereArgs: [id], limit: 1);
+      if (existing != null && (current.isEmpty ||
+          current.single['updated_at'] != existing['updated_at'])) {
+        throw StateError('Hồ sơ đã thay đổi. Tải lại trước khi lưu.');
       }
-    }
+      if (existing == null) {
+        await tx.insert('employees', row, conflictAlgorithm: ConflictAlgorithm.abort);
+      } else {
+        await tx.update('employees', row, where: 'id=?', whereArgs: [id]);
+      }
+      if (changedRate) {
+        await tx.insert('audit_events', {
+          'id': EntityId.create('commission_rate_audit'), 'actor_name': actor!,
+          'action': 'commission_rate', 'target_type': 'employee', 'target_id': id,
+          'result': 'success',
+          'detail': 'Tỷ lệ mới ${row['commission_rate']}; tỷ lệ cũ ${existing?['commission_rate']}; hiệu lực từ lần thanh toán tiếp theo; không sửa ledger',
+          'created_at': now,
+        });
+      }
+    });
     return _toViewRow(row);
   }
 
@@ -406,7 +418,12 @@ class SqliteEmployeesRepository
 
   double _parseCommissionRate(String label) {
     final digits = label.replaceAll('%', '').trim().replaceAll(',', '.');
-    final raw = double.tryParse(digits) ?? 0;
+    if (label.trim().isEmpty || label.trim() == 'KPI cố định') return 0;
+    final raw = double.tryParse(digits);
+    if (raw == null || !raw.isFinite || raw < 0 || raw > 100 ||
+        (raw * 100 - (raw * 100).round()).abs() > 0.000001) {
+      throw ArgumentError('Hoa hồng phải là tỷ lệ 0–100%, tối đa 2 số thập phân, hoặc KPI cố định (chưa tự tính).');
+    }
     return raw / 100;
   }
 

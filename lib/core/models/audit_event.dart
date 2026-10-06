@@ -3,7 +3,8 @@ enum SensitiveAction {
   billPriceEdit,
   invoiceAdjustment,
   settingsEdit,
-  stockDocument;
+  stockDocument,
+  commission;
 
   String get databaseValue => switch (this) {
     SensitiveAction.billDiscount => 'bill_discount',
@@ -11,6 +12,7 @@ enum SensitiveAction {
     SensitiveAction.invoiceAdjustment => 'invoice_adjustment',
     SensitiveAction.settingsEdit => 'settings_edit',
     SensitiveAction.stockDocument => 'stock_document',
+    SensitiveAction.commission => 'commission',
   };
 
   String get label => switch (this) {
@@ -19,6 +21,7 @@ enum SensitiveAction {
     SensitiveAction.invoiceAdjustment => 'hoàn tiền / hủy giao dịch',
     SensitiveAction.settingsEdit => 'sửa cài đặt',
     SensitiveAction.stockDocument => 'quản lý chứng từ kho',
+    SensitiveAction.commission => 'chốt và trả hoa hồng',
   };
 }
 

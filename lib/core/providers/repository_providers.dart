@@ -25,6 +25,7 @@ import '../repositories/repository_contracts.dart';
 import '../repositories/sqlite_appointments_repository.dart';
 import '../repositories/sqlite_customers_repository.dart';
 import '../repositories/sqlite_employees_repository.dart';
+import '../repositories/sqlite_commission_repository.dart';
 import '../repositories/sqlite_billing_sessions_repository.dart';
 import '../repositories/sqlite_cashier_shift_repository.dart';
 import '../repositories/sqlite_invoices_repository.dart';
@@ -111,7 +112,8 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return SqliteEmployeesRepository(SalonDatabase.instance, fakeDataSource);
+      return SqliteEmployeesRepository(SalonDatabase.instance, fakeDataSource,
+        security: ref.watch(sensitiveActionServiceProvider));
     case AppDataBackend.fake:
       return FakeEmployeesRepository(fakeDataSource);
   }
@@ -145,6 +147,11 @@ final retailProductsRepositoryProvider = Provider<RetailProductsRepository>((
 final sensitiveActionServiceProvider = Provider<SensitiveActionService>(
   (ref) => SensitiveActionService(SalonDatabase.instance),
 );
+
+final commissionRepositoryProvider = Provider<SqliteCommissionRepository?>((ref) {
+  if (ref.watch(appDataBackendProvider) != AppDataBackend.sqlite) return null;
+  return SqliteCommissionRepository(SalonDatabase.instance, ref.watch(sensitiveActionServiceProvider));
+});
 
 final securityProtectionConfiguredProvider = FutureProvider<bool>(
   (ref) => ref.watch(sensitiveActionServiceProvider).isProtectionConfigured(),

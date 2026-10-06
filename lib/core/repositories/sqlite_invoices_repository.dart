@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
+import 'commission_ledger.dart';
 
 import '../database/invoice_draft_mapper.dart';
 import '../database/invoice_mapper.dart';
@@ -798,6 +799,7 @@ class SqliteInvoicesRepository
         );
       }
 
+      await CommissionLedger.reverse(transaction, normalizedInvoiceId, now);
       await _reverseCustomerCheckoutMetrics(transaction, adjustment);
       return adjustment;
     });
@@ -1102,6 +1104,7 @@ class SqliteInvoicesRepository
         );
       }
 
+      await CommissionLedger.capture(transaction, archivedInvoiceId, now);
       await _applyCustomerCheckoutMetrics(transaction, draft, now);
 
       await transaction.delete(

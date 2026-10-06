@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'commission_page.dart';
+import '../../../../core/models/audit_event.dart';
+import '../../../../shared/widgets/sensitive_action_authorization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/employee_upsert_input.dart';
@@ -71,6 +74,11 @@ Future<void> _openEmployeeEditor(
     builder: (_) => _EmployeeEditorDialog(employee: employee),
   );
   if (input == null || !context.mounted) return;
+  if ((employee == null || input.commissionLabel != employee['commission']) &&
+      (!await ensureSensitiveActionAuthorized(context, ref, SensitiveAction.commission) ||
+       !context.mounted)) {
+    return;
+  }
 
   try {
     final saved = await ref
@@ -304,6 +312,11 @@ class _EmployeesToolbar extends ConsumerWidget {
               spacing: 7,
               runSpacing: 7,
               children: [
+                if (ref.watch(commissionRepositoryProvider) != null)
+                  ActionChip(label: const Text('Hoa hồng và chi trả'),
+                    avatar: const Icon(Icons.payments_outlined, size: 18),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const CommissionPage()))),
                 for (final status in statuses)
                   FilterChip(
                     label: Text('${status.$1} ${status.$2}'),

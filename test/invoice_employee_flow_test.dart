@@ -204,6 +204,13 @@ void main() {
     );
     expect(items, isNotEmpty);
     expect(items.first['employee_id'], reassignedEmployeeId);
+    final commissionRows = await db.query('commission_entries',
+      where: 'invoice_id = ?', whereArgs: [paidInvoiceId]);
+    expect(commissionRows, hasLength(1));
+    expect(commissionRows.single['employee_id'], reassignedEmployeeId);
+    expect(commissionRows.single['basis'], servicePrice);
+    expect(commissionRows.single['amount'], 0);
+
 
     // Verify customer stats được cập nhật sau checkout
     final customers = await db.query(
