@@ -254,7 +254,8 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       return Scaffold(appBar: AppBar(title: const Text('Salon — Trang chính')),
         body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));
     }
-    return _content();
+    return LayoutBuilder(builder: (context, constraints) => constraints.hasBoundedHeight
+      ? SingleChildScrollView(padding: const EdgeInsets.all(16), child: _content()) : _content());
   }
 
   Widget _content() {

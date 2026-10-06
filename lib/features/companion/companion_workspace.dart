@@ -36,6 +36,14 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
   void initState() { super.initState(); widget.commands.addListener(_changed); }
   void _changed() { if (mounted) { redraw.value++; } }
   @override
+  void didUpdateWidget(CompanionWorkspace old) {
+    super.didUpdateWidget(old);
+    if (old.commands != widget.commands) {
+      old.commands.removeListener(_changed); widget.commands.addListener(_changed);
+    }
+    _changed();
+  }
+  @override
   void dispose() { widget.commands.removeListener(_changed); redraw.dispose(); super.dispose(); }
 
   Future<void> _edit(String kind, String? id) async {
