@@ -1,3 +1,6 @@
+import '../../../../core/providers/data_backend_provider.dart';
+import '../../../../core/models/stock_document.dart';
+import 'stock_documents_page.dart';
 import '../../../../core/providers/catalog_options_providers.dart';
 import '../../../../core/models/catalog_option.dart';
 import '../../../../shared/widgets/catalog_management_tabs.dart';
@@ -333,6 +336,16 @@ class __InventoryContentState extends ConsumerState<_InventoryContent> {
     List<InventoryProductItem> products,
     _InventoryMutationMode mode,
   ) async {
+    if (ref.read(appDataBackendProvider) == AppDataBackend.sqlite) {
+      final doc = await openStockDocumentEditor(context, ref,
+        kind: mode == _InventoryMutationMode.receive ? StockDocumentKind.receipt : StockDocumentKind.adjustment,
+        seeds: products);
+      if (doc != null && context.mounted) {
+        setState(_checkedProductIds.clear);
+        await showStockDocument(context, ref, doc);
+      }
+      return;
+    }
     if (products.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -711,12 +724,11 @@ class _InventoryDetailPanel extends StatelessWidget {
               Text('${item.metaLabel} • Tồn ${item.stockOnHand} • ${item.stockLabel} • Ngưỡng ${item.lowStockThreshold}',
                 style: TextStyle(color: item.isNegativeStock ? AppColors.danger : AppColors.textMuted, fontSize: 11.5)),
               const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: FilledButton.icon(onPressed: onReceive,
-                  icon: const Icon(Icons.add_box_outlined, size: 17), label: const Text('Nhập kho'))),
-                const SizedBox(width: 8),
-                Expanded(child: OutlinedButton.icon(onPressed: onAdjust,
-                  icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('Điều chỉnh'))),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilledButton.icon(onPressed: onReceive,
+                  icon: const Icon(Icons.add_box_outlined, size: 17), label: const Text('Nhập kho')),
+                OutlinedButton.icon(onPressed: onAdjust,
+                  icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('Điều chỉnh')),
               ]),
               Divider(height: 20, color: AppColors.border),
               Text('Biến động gần đây', style: TextStyle(
@@ -796,7 +808,7 @@ class _MovementRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${item.stockBefore} → ${item.stockAfter} • ${DateFormat('dd/MM HH:mm').format(item.createdAt)}',
+                  '${item.sourceLabel} • ${item.stockBefore} → ${item.stockAfter} • ${DateFormat('dd/MM HH:mm').format(item.createdAt)}',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 10.5),
                 ),
                 if (item.note.trim().isNotEmpty) ...[
@@ -1132,7 +1144,21 @@ class _InventoryConfirmDialog extends StatelessWidget {
 class InventoryPage extends StatelessWidget {
   const InventoryPage({super.key});
   @override
-  Widget build(BuildContext context) => const CatalogManagementTabs(
-    listLabel: 'Tồn kho', kinds: [CatalogOptionKind.productUnit, CatalogOptionKind.productGroup, CatalogOptionKind.productBrand],
-    child: _InventoryContent());
+  Widget build(BuildContext context) => const DefaultTabController(length: 5,
+    child: Column(children: [
+      TabBar(isScrollable: true, tabs: [
+        Tab(text: 'Tồn kho'), Tab(text: 'Phiếu nhập'), Tab(text: 'Phiếu xuất–điều chỉnh'), Tab(text: 'Lịch sử'), Tab(text: 'Thiết lập'),
+      ]),
+      SizedBox(height: 12),
+      Expanded(child: TabBarView(children: [
+        _InventoryContent(), StockDocumentsPage(), StockDocumentsPage(receipts: false), StockMovementHistoryPage(),
+        DefaultTabController(length: 2, child: Column(children: [
+          TabBar(tabs: [Tab(text: 'Danh mục kho'), Tab(text: 'Nhà cung cấp')]),
+          Expanded(child: TabBarView(children: [
+            CatalogSettingsPanel(kinds: [CatalogOptionKind.productGroup, CatalogOptionKind.productUnit, CatalogOptionKind.productBrand]),
+            StockSuppliersPanel(),
+          ])),
+        ])),
+      ])),
+    ]));
 }

@@ -8,4 +8,4 @@ Phiếu đã ghi kho không sửa/xóa header hoặc dòng. Hủy cần lý do, 
 
 Giá nhập chỉ nằm trong chứng từ; không đổi giá bán, ghi chi tiền/công nợ hay giá vốn bình quân. Hoàn tiền hóa đơn giữ nghiệp vụ tài chính hiện có. Lịch sử kho trước schema 20 giữ nguyên delta/trước/sau/note/ngày và đánh dấu legacy, không bịa chứng từ, NCC hoặc giá.
 
-Phần 3B tiếp tục giao diện 5 tab, lập/chỉnh nháp, xác nhận/hủy, quản trị NCC, tra cứu/đối chiếu và bản in. Chưa chạy migration production hoặc thử điện thoại thật.
+Phần 3B bổ sung giao diện 5 tab, lập/chỉnh nháp, xác nhận/hủy, quản trị NCC, tra cứu theo mã/NCC/trạng thái, lọc lịch sử theo nguồn/ngày và phân trang, đối chiếu đầy đủ từng phiếu, xem/in PDF A4 tiếng Việt. Thao tác nhập/kiểm kê trên dữ liệu salon chuyển sang lưu nháp, không tự cộng tồn trước xác nhận. Fake demo giữ luồng thao tác cũ riêng cho kiểm tra UI, không ghi chứng từ SQLite. Chưa chạy migration production hoặc thử điện thoại thật.

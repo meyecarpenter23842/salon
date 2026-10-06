@@ -135,7 +135,7 @@ class SensitiveActionService {
     final protected = await isProtectionConfigured();
     if (protected && !isOwnerSessionActive) {
       await _writeAudit(actorName: 'Chưa xác thực', action: action,
-        targetType: 'stock_document', targetId: targetId, result: 'denied',
+        targetType: action.startsWith('stock_supplier') ? 'stock_supplier' : 'stock_document', targetId: targetId, result: 'denied',
         detail: 'Owner authorization required');
       throw StateError('Thao tác kho cần xác thực Owner.');
     }
