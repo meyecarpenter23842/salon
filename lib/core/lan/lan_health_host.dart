@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'lan_contract.dart';
+import 'lan_changes.dart';
 import 'lan_pairing.dart';
 import 'lan_read_models.dart';
 import 'lan_workflow_service.dart';
@@ -81,11 +82,13 @@ class LanHostConfig {
 
 /// HTTPS host; health stays anonymous, device routes require separate authority.
 class LanHealthHost {
-  LanHealthHost({required this.lockFile, this.pairing, this.reader, this.workflow});
+  LanHealthHost({required this.lockFile, this.pairing, this.reader, this.workflow, this.changes});
 
   final LanPairingRegistry? pairing;
   final SalonReadRepository? reader;
   final LanWorkflowBackend? workflow;
+  final LanChangeSource? changes;
+  int _changeRequests = 0;
   int _commandRequests = 0;
   int _activeRequests = 0;
   DateTime _windowStart = DateTime.now();
@@ -159,6 +162,8 @@ class LanHealthHost {
           request.headers.value(HttpHeaders.transferEncodingHeader) == null) {
         response.statusCode = HttpStatus.ok;
         response.write(jsonEncode(const LanHealth().toJson()));
+      } else if (pairing != null && await _changeRoute(request)) {
+        // Approved change watermarks carry no salon records.
       } else if (pairing != null && await _workflowRoute(request)) {
         // Device writes retain authority until their transaction finishes.
       } else if (pairing != null && await _readRoute(request)) {
@@ -211,7 +216,7 @@ class LanHealthHost {
         _windowStart = now;
         _pairRequests = 0;
         _statusRequests = 0;
-        _commandRequests = 0;
+        _commandRequests = 0; _changeRequests = 0;
       }
       if (exchange ? ++_pairRequests > 20 : ++_statusRequests > 240) {
         throw const PairingFailure(LanErrorCode.rateLimited);
@@ -271,7 +276,7 @@ class LanHealthHost {
       if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
       final now = DateTime.now();
       if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
-        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0;
+        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0; _changeRequests = 0;
       }
       if (++_statusRequests > 240) { throw const PairingFailure(LanErrorCode.rateLimited); }
       if (request.method != 'GET' || request.contentLength > 0 ||
@@ -316,7 +321,7 @@ class LanHealthHost {
       if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
       final now = DateTime.now();
       if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
-        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0;
+        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0; _changeRequests = 0;
       }
       final writing = commands && request.method == 'POST';
       if (writing ? ++_commandRequests > 60 : ++_statusRequests > 240) { throw const PairingFailure(LanErrorCode.rateLimited); }
@@ -372,6 +377,45 @@ class LanHealthHost {
     return true;
   }
 
+  Future<bool> _changeRoute(HttpRequest request) async {
+    if (changes == null || request.uri.path != '${LanContract.basePath}/changes') return false;
+    try {
+      if (_activeRequests > 32) throw const PairingFailure(LanErrorCode.rateLimited);
+      final now = DateTime.now();
+      if (now.difference(_windowStart) >= const Duration(minutes: 1)) {
+        _windowStart = now; _pairRequests = 0; _statusRequests = 0; _commandRequests = 0; _changeRequests = 0;
+      }
+      if (++_changeRequests > 600) throw const PairingFailure(LanErrorCode.rateLimited);
+      if (request.method != 'GET' || request.contentLength > 0 ||
+          request.headers.value(HttpHeaders.transferEncodingHeader) != null ||
+          request.uri.query.length > 200 || request.uri.queryParametersAll.values.any((v) => v.length != 1)) {
+        throw const PairingFailure(LanErrorCode.invalidRequest);
+      }
+      final q = request.uri.queryParameters;
+      final cursor = int.tryParse(q['cursor'] ?? '');
+      if (q.keys.any((k) => !['epoch', 'cursor'].contains(k)) || cursor == null ||
+          cursor < 0 || cursor > 9007199254740991 ||
+          q['epoch'] != null && !RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(q['epoch']!)) {
+        throw const PairingFailure(LanErrorCode.invalidRequest);
+      }
+      final auth = request.headers.value(HttpHeaders.authorizationHeader);
+      if (auth == null || !auth.startsWith('Bearer ')) throw const PairingFailure(LanErrorCode.unauthenticated);
+      final token = auth.substring(7);
+      await pairing!.status(token, requireRead: true);
+      final value = await changes!.read(q['epoch'], cursor).timeout(const Duration(seconds: 5));
+      await pairing!.status(token, requireRead: true);
+      request.response.statusCode = HttpStatus.ok;
+      request.response.write(jsonEncode(value.toJson()));
+    } catch (error) {
+      final code = error is PairingFailure ? error.code :
+        error is FormatException ? LanErrorCode.invalidRequest :
+        error is TimeoutException ? LanErrorCode.unavailable : LanErrorCode.internal;
+      request.response.statusCode = code.httpStatus;
+      request.response.write(jsonEncode(LanFailure(code, requestId: 'changes-${++_requestSequence}').toJson()));
+    }
+    return true;
+  }
+
   Future<void> stop() => _stopping ??= _stop();
 
   Future<void> _stop() async {
@@ -414,3 +458,4 @@ class LanHealthHost {
     }
   }
 }
+

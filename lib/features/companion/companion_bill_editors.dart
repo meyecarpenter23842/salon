@@ -31,6 +31,7 @@ class _CompanionBillLineEditorState extends State<CompanionBillLineEditor> {
     {widget.line['employeeId'] as String: widget.line['employeeLabel']?.toString() ?? 'Nhân viên đã chọn'};
   late String original;
   bool allowExit = false, confirming = false, submitted = false, needsReload = false, completing = false;
+  int observedGeneration = 0;
   bool get locked => widget.commands.blocked || widget.role == PhoneWriteRole.none;
   bool get dirty => jsonEncode(_payload()) != original;
   Map<String, dynamic> _payload() => {
@@ -38,9 +39,12 @@ class _CompanionBillLineEditorState extends State<CompanionBillLineEditor> {
     'employeeId': employee.keys.firstOrNull,
     if (widget.role == PhoneWriteRole.owner) 'unitPrice': int.tryParse(price.text.trim()) ?? 0,
   };
-  @override void initState() { super.initState(); original = jsonEncode(_payload()); widget.commands.addListener(_changed); }
+  @override void initState() { super.initState(); original = jsonEncode(_payload()); observedGeneration = widget.commands.dataGeneration; widget.commands.addListener(_changed); }
   void _changed() {
     if (!mounted) { return; }
+    if (observedGeneration != widget.commands.dataGeneration) {
+      observedGeneration = widget.commands.dataGeneration; needsReload = true;
+    }
     if (submitted && !widget.commands.busy && widget.commands.pending == null) {
       if (widget.commands.lastResult?.type == 'session' && widget.commands.lastResult?.id == widget.snapshot.id) {
         _leave(true); return;
@@ -217,3 +221,4 @@ class _CompanionBillAmountEditorState extends State<CompanionBillAmountEditor> {
               if (form.currentState!.validate()) { _pop(int.parse(amount.text.trim())); }
             }, child: const Text('Áp dụng giảm giá'))))))));
 }
+

@@ -4,6 +4,7 @@ import 'companion_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/lan/lan_health_client.dart';
+import '../../core/lan/lan_changes.dart';
 import '../../core/lan/lan_pairing_client.dart';
 import '../../core/lan/lan_read_client.dart';
 import '../../core/lan/lan_workflow_client.dart';
@@ -17,12 +18,14 @@ class SalonCompanionApp extends StatelessWidget {
     this.pairingClient = const PinnedLanPairingClient(),
     this.readClient = const PinnedSalonReadClient(),
     this.workflowClient = const PinnedLanWorkflowClient(),
+    this.changeClient,
     this.credentialStore = const AndroidCompanionCredentialStore(),
   });
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final SalonReadClient readClient;
   final LanWorkflowClient workflowClient;
+  final LanChangeClient? changeClient;
   final CompanionCredentialStore credentialStore;
 
   @override
@@ -33,17 +36,18 @@ class SalonCompanionApp extends StatelessWidget {
     supportedLocales: const [Locale('vi'), Locale('en')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: companionTheme(),
-    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient),
+    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient, changeClient: changeClient ?? (workflowClient is PinnedLanWorkflowClient ? const PinnedLanChangeClient() : null)),
   );
 }
 
 class _ConnectionPage extends StatefulWidget {
-  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient});
+  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient, this.changeClient});
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final CompanionCredentialStore credentialStore;
   final SalonReadClient readClient;
   final LanWorkflowClient workflowClient;
+  final LanChangeClient? changeClient;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();
@@ -235,7 +239,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
                   height: _authorized ? constraints.maxHeight : null, child: CompanionAccessPanel(
                   key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
                   connection: _connection!, client: widget.pairingClient,
-                  store: widget.credentialStore, readClient: widget.readClient, workflowClient: widget.workflowClient,
+                  store: widget.credentialStore, readClient: widget.readClient, workflowClient: widget.workflowClient, changeClient: widget.changeClient,
                   onAccess: (value) { if (mounted) setState(() => _authorized = value); },
                 )),
               if (!_authorized) ...[
@@ -255,3 +259,4 @@ class _ConnectionPageState extends State<_ConnectionPage>
     ),
   );
 }
+

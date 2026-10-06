@@ -1,3 +1,4 @@
+import 'companion_workspace.dart' show CompanionSyncScope;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/lan/lan_contract.dart';
@@ -154,6 +155,15 @@ class _CompanionReceiptState extends State<CompanionReceipt> {
   SalonReadRecord? record;
   MobileReadProblem? error;
   int generation = 0;
+  int observedGeneration = -1;
+  @override void didChangeDependencies() {
+    super.didChangeDependencies();
+    final commands = CompanionSyncScope.of(context);
+    if (commands == null) return;
+    final current = commands.dataGeneration;
+    if (observedGeneration >= 0 && observedGeneration != current && commands.online && !commands.syncing) { _load(); }
+    observedGeneration = current;
+  }
   @override void initState() { super.initState(); _load(); }
   Future<void> _load() async {
     final current = ++generation;
@@ -212,3 +222,4 @@ class _CompanionReceiptState extends State<CompanionReceipt> {
         key: const Key('bill-receipt-done'), onPressed: () => Navigator.of(context).pop(true), child: const Text('Quay lại công việc')))));
   }
 }
+

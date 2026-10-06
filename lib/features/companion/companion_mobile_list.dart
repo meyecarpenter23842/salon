@@ -1,3 +1,4 @@
+import 'companion_workspace.dart' show CompanionSyncScope;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/lan/lan_contract.dart';
@@ -176,6 +177,15 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
   SalonReadRecord? record;
   MobileReadProblem? error;
   int generation = 0;
+  int observedGeneration = -1;
+  @override void didChangeDependencies() {
+    super.didChangeDependencies();
+    final commands = CompanionSyncScope.of(context);
+    if (commands == null) return;
+    final current = commands.dataGeneration;
+    if (observedGeneration >= 0 && observedGeneration != current && commands.online && !commands.syncing) { _load(); }
+    observedGeneration = current;
+  }
   @override
   void initState() { super.initState(); _load(); }
   Future<void> _load() async {
@@ -258,3 +268,4 @@ class MobileReadProblem {
       'Thử tải lại. Nếu lỗi còn xuất hiện, kiểm tra dữ liệu trên máy salon.');
   }
 }
+
