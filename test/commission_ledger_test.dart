@@ -139,6 +139,9 @@ void main(){
     await repo.pay(requestId:'cash',employeeId:'emp',amount:40000,method:'cash');
     await repo.pay(requestId:'cash',employeeId:'emp',amount:40000,method:'cash');
     expect(await db.query('cash_movements'),hasLength(1));expect(await repo.pendingPayout(),isNull);
+    // Simulate a lost success response: pending was cleared but proof is durable.
+    expect(await repo.resolvePendingPayout('cash'),isTrue);
+    expect(await repo.resolvePendingPayout('unknown'),isFalse);
     await repo.pay(requestId:'transfer',employeeId:'emp',amount:60000,method:'transfer',reference:'bank-001');
     final account=(await repo.fetch()).accounts.single;
     expect(account.settled,100000);expect(account.paid,100000);expect(account.balance,0);

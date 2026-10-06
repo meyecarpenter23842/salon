@@ -41,7 +41,11 @@ class SqliteCommissionRepository {
     final db=await database.database;
     return db.transaction((tx) async {
       final row=await tx.query('app_settings',where:'key=?',whereArgs:['commission.pending_payout']);
-      if(row.isEmpty) return false;
+      if(row.isEmpty) {
+        // A committed transaction clears pending before the caller receives its result.
+        final committed=await tx.query('commission_payouts',where:'id=?',whereArgs:[requestId]);
+        return committed.isNotEmpty;
+      }
       final pending=jsonDecode(row.single['value'] as String) as Map;
       if(pending['requestId'] != requestId) throw StateError('Yêu cầu chi trả đang chờ đã thay đổi.');
       final proof=await tx.query('commission_payouts',where:'id=?',whereArgs:[requestId]);
