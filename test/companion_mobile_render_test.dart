@@ -66,11 +66,11 @@ void main() {
     await fixture.tapMobile(tester, 'mobile-tab-customers'); await capture('02-customers');
     await fixture.tapMobile(tester, 'salon-record-customers-0'); await capture('03-customer-profile');
     await fixture.tapMobile(tester, 'salon-edit'); await capture('04-customer-editor');
-    await tester.pageBack(); await tester.pumpAndSettle(); await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle(); await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
     await fixture.tapMobile(tester, 'mobile-tab-appointments'); await fixture.tapMobile(tester, 'write-new-appointment');
     await capture('05-appointment-editor');
     await fixture.tapMobile(tester, 'mobile-select-services'); await capture('06-service-picker');
-    await tester.pageBack(); await tester.pumpAndSettle(); await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle(); await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox()); await mount(scale: 1.5); await capture('07-today-large-text');
     await tester.pumpWidget(const SizedBox());
     await mount(reader: fixture.MobileTestReader()..fail = true); await capture('08-offline');
