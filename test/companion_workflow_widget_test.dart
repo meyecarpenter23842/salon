@@ -12,6 +12,7 @@ import 'package:salonmanager/core/lan/lan_write_contract.dart';
 import 'package:salonmanager/features/companion/companion_command_controller.dart';
 import 'package:salonmanager/features/companion/companion_credential_store.dart';
 import 'package:salonmanager/features/companion/companion_workspace.dart';
+import 'package:salonmanager/features/companion/companion_bill_workspace.dart';
 
 class _Store implements CompanionCredentialStore {
   CompanionCredential value = CompanionCredential('b' * 64, 'c' * 64);
@@ -67,7 +68,7 @@ void main() {
     final commands = CompanionCommandController(connection: connection, client: client,
       store: store, credential: store.value, onCredential: (_) {});
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
-      child: CompanionWorkspace(connection: connection, readClient: _Reader(), client: client,
+      child: CompanionBillWorkspace(connection: connection, readClient: _Reader(), client: client,
         commands: commands, role: role, onDenied: () {})))));
     await tester.pumpAndSettle(); return commands;
   }
@@ -129,10 +130,11 @@ void main() {
       operation: LanWriteOperation.sessionCheckout, expectedEpoch: 'desktop-epoch',
       targetId: 'session-1', expectedRevision: 1, payload: {}));
     final client = _Client(); final pair = _Pairing();
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
-      child: CompanionAccessPanel(connection: connection, client: pair, store: store,
-        readClient: _Reader(), workflowClient: client, onAccess: (_) {})))));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      CompanionAccessPanel(connection: connection, client: pair, store: store,
+        readClient: _Reader(), workflowClient: client, onAccess: (_) {}))));
     await tester.pumpAndSettle();
+    await tap(tester, 'mobile-tab-more');
     expect((tester.widget<TextButton>(find.byKey(const Key('companion-forget')))).onPressed, isNull);
     pair.state = PhoneAccess.revoked;
     await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();

@@ -11,6 +11,7 @@ import 'package:salonmanager/core/lan/lan_read_models.dart';
 import 'package:salonmanager/features/companion/companion_access_panel.dart';
 import 'package:salonmanager/features/companion/companion_credential_store.dart';
 import 'package:salonmanager/features/companion/companion_data_panel.dart';
+import 'package:salonmanager/features/companion/companion_workspace.dart';
 
 class _ReadClient implements SalonReadClient {
   final queries = <SalonReadQuery>[];
@@ -123,31 +124,31 @@ void main() {
   testWidgets('foreground, connection and owner permission gate all cached mobile data', (tester) async {
     final reader = _ReadClient();
     final pair = _PairClient();
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
-      child: CompanionAccessPanel(connection: connection, client: pair,
-        store: _Store(), readClient: reader, onAccess: (_) {})))));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      CompanionAccessPanel(connection: connection, client: pair,
+        store: _Store(), readClient: reader, onAccess: (_) {}))));
     await tester.pumpAndSettle();
-    expect(find.text('Dữ liệu customers'), findsOneWidget);
+    expect(find.text('Dữ liệu appointments'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pumpAndSettle();
-    expect(find.text('Dữ liệu customers'), findsNothing);
+    expect(find.text('Dữ liệu appointments'), findsNothing);
     pair.readAccess = false;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
-    expect(find.byType(CompanionDataPanel), findsNothing);
+    expect(find.byType(CompanionWorkspace), findsNothing);
     pair.readAccess = true;
     await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
-    expect(find.text('Dữ liệu customers'), findsOneWidget);
+    expect(find.text('Dữ liệu appointments'), findsOneWidget);
     pair.offline = true;
     await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
-    expect(find.text('Dữ liệu customers'), findsNothing);
+    expect(find.text('Dữ liệu appointments'), findsNothing);
     pair.offline = false; pair.state = PhoneAccess.revoked;
     await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
-    expect(find.byType(CompanionDataPanel), findsNothing);
+    expect(find.byType(CompanionWorkspace), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 }
