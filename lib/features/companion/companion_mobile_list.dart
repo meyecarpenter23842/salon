@@ -27,7 +27,8 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
   final scroll = ScrollController();
   List<SalonReadRecord> rows = [];
   String query = '';
-  String? day, salonDate, error;
+  String? day, salonDate;
+  MobileReadProblem? error;
   int? nextOffset;
   int generation = 0;
   int lastOffset = 0;
@@ -67,8 +68,7 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
       });
     } catch (e) {
       if (!mounted || current != generation) { return; }
-      setState(() { busy = false; rows = []; error = e is PairingFailure && e.code == LanErrorCode.notFound
-        ? 'Dữ liệu đã thay đổi. Tải lại danh sách.' : 'Chưa tải được dữ liệu. Kiểm tra Wi-Fi và giữ máy salon mở.'; });
+      setState(() { busy = false; rows = []; error = MobileReadProblem.from(e, missingMessage: 'Dữ liệu đã thay đổi. Tải lại danh sách.'); });
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
@@ -113,7 +113,7 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
         onPressed: busy || error != null ? null : widget.onCreate ?? widget.onBills, icon: Icon(widget.onBills != null ? Icons.receipt_long : Icons.add),
         label: Text(widget.onBills != null ? 'Bill đang làm' : widget.kind == SalonReadKind.customers ? 'Thêm khách hàng' : 'Đặt lịch hẹn')))),
     if (busy) const LinearProgressIndicator(),
-    Expanded(child: error != null ? MobileStatus(icon: Icons.wifi_off, title: 'Chưa kết nối được', message: error!,
+    Expanded(child: error != null ? MobileStatus(icon: error!.icon, title: error!.title, message: error!.message,
         action: 'Thử lại', onAction: () => _load(preserve: true))
       : !busy && rows.isEmpty ? MobileStatus(icon: widget.kind == SalonReadKind.appointments ? Icons.event_available : Icons.search_off,
           title: widget.today ? 'Hôm nay chưa có lịch hẹn' : 'Chưa có $title phù hợp',
@@ -174,7 +174,7 @@ class CompanionMobileDetail extends StatefulWidget {
 }
 class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
   SalonReadRecord? record;
-  String? error;
+  MobileReadProblem? error;
   int generation = 0;
   @override
   void initState() { super.initState(); _load(); }
@@ -188,8 +188,7 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
       setState(() => record = page.records.single);
     } catch(e) {
       if (!mounted || current != generation) { return; }
-      setState(() => error = e is PairingFailure && e.code == LanErrorCode.notFound
-        ? 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.' : 'Chưa tải được thông tin. Kiểm tra kết nối rồi thử lại.');
+      setState(() => error = MobileReadProblem.from(e, missingMessage: 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.'));
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
@@ -200,8 +199,8 @@ class _CompanionMobileDetailState extends State<CompanionMobileDetail> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.kind == SalonReadKind.customers ? 'Hồ sơ khách hàng' :
       widget.kind == SalonReadKind.appointments ? 'Chi tiết lịch hẹn' : 'Chi tiết hóa đơn')),
-    body: SafeArea(child: error != null ? MobileStatus(icon: Icons.cloud_off, title: 'Chưa tải được thông tin',
-      message: error!, action: 'Thử lại', onAction: _load) : record == null ? const Center(child: CircularProgressIndicator())
+    body: SafeArea(child: error != null ? MobileStatus(icon: error!.icon, title: error!.title,
+      message: error!.message, action: 'Thử lại', onAction: _load) : record == null ? const Center(child: CircularProgressIndicator())
       : ListView(padding: const EdgeInsets.all(16), children: [
           Text(record!.title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8), Text(record!.subtitle), const SizedBox(height: 16),
@@ -240,4 +239,22 @@ class MobileStatus extends StatelessWidget {
       const SizedBox(height: 8), Text(message, textAlign: TextAlign.center),
       const SizedBox(height: 16), FilledButton(onPressed: onAction, child: Text(action)),
     ])));
+}
+
+class MobileReadProblem {
+  const MobileReadProblem(this.icon, this.title, this.message);
+  final IconData icon;
+  final String title, message;
+  factory MobileReadProblem.from(Object error, {String? missingMessage}) {
+    if (error is PairingFailure && error.code == LanErrorCode.unavailable) {
+      return const MobileReadProblem(Icons.wifi_off, 'Mất kết nối với máy salon',
+        'Kiểm tra Wi-Fi và giữ máy salon mở, rồi thử lại.');
+    }
+    if (error is PairingFailure && error.code == LanErrorCode.notFound) {
+      return MobileReadProblem(Icons.search_off, 'Dữ liệu đã thay đổi',
+        missingMessage ?? 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.');
+    }
+    return const MobileReadProblem(Icons.error_outline, 'Chưa tải được dữ liệu',
+      'Thử tải lại. Nếu lỗi còn xuất hiện, kiểm tra dữ liệu trên máy salon.');
+  }
 }

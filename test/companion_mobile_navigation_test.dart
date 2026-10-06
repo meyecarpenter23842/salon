@@ -22,10 +22,13 @@ class MobileTestStore implements CompanionCredentialStore {
 }
 class MobileTestReader implements SalonReadClient {
   final queries = <SalonReadQuery>[];
-  bool fail = false;
+  bool fail = false, genericFailure = false;
+  LanErrorCode? failCode;
   @override Future<SalonReadPage> read(LanConnection c, String t, SalonReadQuery query) async {
     queries.add(query);
-    if (fail) { throw StateError('private backend data'); }
+    if (failCode != null) { throw PairingFailure(failCode!); }
+    if (fail) { throw const PairingFailure(LanErrorCode.unavailable); }
+    if (genericFailure) { throw StateError('private backend data'); }
     return SalonReadPage(salonDate: '2026-10-06', records: [
       SalonReadRecord(id: '${query.kind.name}-1', title: query.kind == SalonReadKind.appointments ? '09:00 · Khách Lan' : 'Khách Lan',
         subtitle: query.kind == SalonReadKind.appointments ? 'Gội dưỡng · Đã đặt' : '0901234567 · Member',
@@ -113,9 +116,23 @@ void main() {
   testWidgets('failed reads have retry, safe date label and no enabled create action', (tester) async {
     final commands = await showMobile(tester, MobileTestReader()..fail = true, MobileTestClient());
     expect(find.text('Chưa lấy được ngày'), findsOneWidget);
+    expect(find.text('Mất kết nối với máy salon'), findsOneWidget);
     expect(find.text('Thử lại'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const Key('write-new-appointment'))).onPressed, isNull);
     expect(find.text('private backend data'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
+  testWidgets('missing or failed data has its own error state rather than an offline message', (tester) async {
+    var commands = await showMobile(tester, MobileTestReader()..genericFailure = true, MobileTestClient());
+    expect(find.text('Chưa tải được dữ liệu'), findsOneWidget);
+    expect(find.text('Mất kết nối với máy salon'), findsNothing);
+    expect(find.text('private backend data'), findsNothing);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+    commands = await showMobile(tester, MobileTestReader()..failCode = LanErrorCode.notFound, MobileTestClient());
+    expect(find.text('Dữ liệu đã thay đổi'), findsOneWidget);
+    expect(find.text('Mất kết nối với máy salon'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); commands.dispose();
   });

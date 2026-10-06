@@ -29,7 +29,7 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
   final form = GlobalKey<FormState>();
   final fields = <String, TextEditingController>{};
   LanEditorSnapshot? snapshot;
-  String? error;
+  MobileReadProblem? error;
   String original = '';
   String tier = 'Standard', status = 'Đã đặt';
   Map<String, String> customer = {}, employee = {}, services = {};
@@ -119,8 +119,7 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
       setState(() { snapshot = next; original = jsonEncode(_payload()); busy = false; attempted = false; needsReload = false; submitted = false; awaitingOutcome = false; });
     } catch(e) {
       if (!mounted || generation != current) { return; }
-      setState(() { busy = false; error = e is PairingFailure && e.code == LanErrorCode.notFound
-        ? 'Mục này không còn trên máy salon. Quay lại danh sách để tải lại.' : 'Chưa tải được biểu mẫu. Kiểm tra Wi-Fi rồi thử lại.'; });
+      setState(() { busy = false; error = MobileReadProblem.from(e); });
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
@@ -240,8 +239,8 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
           : widget.id == null ? 'Thêm khách hàng' : 'Sửa khách hàng'),
         actions: [IconButton(key: const Key('mobile-reload-editor'), tooltip: 'Tải lại từ máy salon', onPressed: locked ? null : _reload, icon: const Icon(Icons.refresh))]),
       body: SafeArea(child: busy ? const Center(child: CircularProgressIndicator())
-        : error != null ? MobileStatus(icon: Icons.wifi_off, title: 'Chưa tải được biểu mẫu',
-          message: error!, action: 'Thử lại', onAction: _load)
+        : error != null ? MobileStatus(icon: error!.icon, title: error!.title,
+          message: error!.message, action: 'Thử lại', onAction: _load)
         : Form(key: form, child: ListView(key: const Key('mobile-editor-scroll'), padding: const EdgeInsets.all(12), children: [
           if (widget.commands.message != null || widget.commands.pending != null) CompanionPendingNotice(commands: widget.commands),
           if (needsReload) const Padding(padding: EdgeInsets.all(12), child: Text('Tải lại biểu mẫu trước khi lưu tiếp. Nội dung đang nhập vẫn được giữ để bạn kiểm tra.')),

@@ -24,7 +24,7 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
   late final Map<String, String> selected = Map.of(widget.selected);
   List<LanCatalogItem> rows = [];
   String query = '';
-  String? error;
+  MobileReadProblem? error;
   int generation = 0;
   int? next;
   bool busy = false;
@@ -39,13 +39,13 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
       final page = await widget.client.catalog(widget.connection, widget.token, widget.kind, query, offset);
       if (!mounted || current != generation) { return; }
       if (page.epoch != widget.epoch) {
-        setState(() { busy = false; rows = []; error = 'Máy salon đã khởi động lại. Quay lại và tải lại biểu mẫu trước khi chọn.'; });
+        setState(() { busy = false; rows = []; error = const MobileReadProblem(Icons.refresh, 'Cần tải lại biểu mẫu', 'Máy salon đã khởi động lại. Quay lại và tải lại biểu mẫu trước khi chọn.'); });
         return;
       }
       setState(() { rows = offset == 0 ? page.items : [...rows, ...page.items]; next = page.nextOffset; busy = false; });
     } catch(e) {
       if (!mounted || current != generation) { return; }
-      setState(() { busy = false; rows = []; error = 'Chưa tải được danh sách. Kiểm tra Wi-Fi rồi thử lại.'; });
+      setState(() { busy = false; rows = []; error = MobileReadProblem.from(e); });
       if (e is PairingFailure && [LanErrorCode.forbidden, LanErrorCode.unauthenticated].contains(e.code)) { widget.onDenied(); }
     }
   }
@@ -69,8 +69,8 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
             icon: const Icon(Icons.arrow_forward))),
         onSubmitted: (value) { query = value.trim(); _load(); })),
       if (busy) const LinearProgressIndicator(),
-      Expanded(child: error != null ? MobileStatus(icon: Icons.wifi_off, title: 'Chưa tải được danh sách',
-          message: error!, action: 'Thử lại', onAction: _load)
+      Expanded(child: error != null ? MobileStatus(icon: error!.icon, title: error!.title,
+          message: error!.message, action: 'Thử lại', onAction: _load)
         : !busy && rows.isEmpty ? MobileStatus(icon: Icons.search_off, title: 'Chưa tìm thấy',
           message: 'Thử tên khác hoặc kiểm tra danh mục trên máy salon.', action: 'Tải lại', onAction: _load)
         : ListView.builder(padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: rows.length + 1,
