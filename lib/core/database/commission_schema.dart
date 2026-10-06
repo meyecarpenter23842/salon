@@ -6,9 +6,9 @@ class CommissionSchema {
     for (final sql in statements) { await db.execute(sql); }
   }
   static const statements = [
-    """CREATE TABLE commission_periods (
+    """CREATE TABLE IF NOT EXISTS commission_periods (
       period TEXT PRIMARY KEY, closed_at TEXT NOT NULL, closed_by TEXT NOT NULL)""",
-    """CREATE TABLE commission_entries (
+    """CREATE TABLE IF NOT EXISTS commission_entries (
       id TEXT PRIMARY KEY, invoice_id TEXT NOT NULL, line_id TEXT NOT NULL,
       employee_id TEXT NOT NULL, employee_name TEXT NOT NULL, title TEXT NOT NULL,
       kind TEXT NOT NULL CHECK(kind IN ('earned','reversal')),
@@ -23,7 +23,7 @@ class CommissionSchema {
       FOREIGN KEY(line_id) REFERENCES invoice_items(id) ON DELETE RESTRICT,
       FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
       FOREIGN KEY(original_id) REFERENCES commission_entries(id) ON DELETE RESTRICT)""",
-    """CREATE TABLE commission_payouts (
+    """CREATE TABLE IF NOT EXISTS commission_payouts (
       id TEXT PRIMARY KEY, employee_id TEXT NOT NULL, employee_name TEXT NOT NULL,
       amount INTEGER NOT NULL CHECK(amount > 0),
       method TEXT NOT NULL CHECK(method IN ('cash','transfer')),
@@ -33,28 +33,28 @@ class CommissionSchema {
       CHECK(method != 'transfer' OR length(trim(reference)) > 0),
       FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
       FOREIGN KEY(cash_movement_id) REFERENCES cash_movements(id) ON DELETE RESTRICT)""",
-    "CREATE INDEX idx_commission_employee_period ON commission_entries(employee_id,period)",
-    "CREATE INDEX idx_commission_payout_employee ON commission_payouts(employee_id)",
-    "CREATE UNIQUE INDEX idx_commission_transfer_reference ON commission_payouts(employee_id,reference COLLATE NOCASE) WHERE method='transfer'",
-    """CREATE TRIGGER commission_closed_no_entry BEFORE INSERT ON commission_entries
+    "CREATE INDEX IF NOT EXISTS idx_commission_employee_period ON commission_entries(employee_id,period)",
+    "CREATE INDEX IF NOT EXISTS idx_commission_payout_employee ON commission_payouts(employee_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_commission_transfer_reference ON commission_payouts(employee_id,reference COLLATE NOCASE) WHERE method='transfer'",
+    """CREATE TRIGGER IF NOT EXISTS commission_closed_no_entry BEFORE INSERT ON commission_entries
       WHEN EXISTS(SELECT 1 FROM commission_periods WHERE period=NEW.period)
       BEGIN SELECT RAISE(ABORT,'commission period is closed'); END""",
-    """CREATE TRIGGER commission_entry_no_update BEFORE UPDATE ON commission_entries
+    """CREATE TRIGGER IF NOT EXISTS commission_entry_no_update BEFORE UPDATE ON commission_entries
       BEGIN SELECT RAISE(ABORT,'commission history is immutable'); END""",
-    """CREATE TRIGGER commission_entry_no_delete BEFORE DELETE ON commission_entries
+    """CREATE TRIGGER IF NOT EXISTS commission_entry_no_delete BEFORE DELETE ON commission_entries
       BEGIN SELECT RAISE(ABORT,'commission history is immutable'); END""",
-    """CREATE TRIGGER commission_period_no_update BEFORE UPDATE ON commission_periods
+    """CREATE TRIGGER IF NOT EXISTS commission_period_no_update BEFORE UPDATE ON commission_periods
       BEGIN SELECT RAISE(ABORT,'commission period is immutable'); END""",
-    """CREATE TRIGGER commission_period_no_delete BEFORE DELETE ON commission_periods
+    """CREATE TRIGGER IF NOT EXISTS commission_period_no_delete BEFORE DELETE ON commission_periods
       BEGIN SELECT RAISE(ABORT,'commission period is immutable'); END""",
-    """CREATE TRIGGER commission_payout_no_update BEFORE UPDATE ON commission_payouts
+    """CREATE TRIGGER IF NOT EXISTS commission_payout_no_update BEFORE UPDATE ON commission_payouts
       BEGIN SELECT RAISE(ABORT,'commission payout is immutable'); END""",
-    """CREATE TRIGGER commission_payout_no_delete BEFORE DELETE ON commission_payouts
+    """CREATE TRIGGER IF NOT EXISTS commission_payout_no_delete BEFORE DELETE ON commission_payouts
       BEGIN SELECT RAISE(ABORT,'commission payout is immutable'); END""",
-    """CREATE TRIGGER commission_cash_no_update BEFORE UPDATE ON cash_movements
+    """CREATE TRIGGER IF NOT EXISTS commission_cash_no_update BEFORE UPDATE ON cash_movements
       WHEN EXISTS(SELECT 1 FROM commission_payouts WHERE cash_movement_id=OLD.id)
       BEGIN SELECT RAISE(ABORT,'commission cash proof is immutable'); END""",
-    """CREATE TRIGGER commission_cash_no_delete BEFORE DELETE ON cash_movements
+    """CREATE TRIGGER IF NOT EXISTS commission_cash_no_delete BEFORE DELETE ON cash_movements
       WHEN EXISTS(SELECT 1 FROM commission_payouts WHERE cash_movement_id=OLD.id)
       BEGIN SELECT RAISE(ABORT,'commission cash proof is immutable'); END""",
   ];

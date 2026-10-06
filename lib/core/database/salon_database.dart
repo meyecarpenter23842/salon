@@ -85,7 +85,12 @@ class SalonDatabase {
 
         await batch.commit(noResult: true);
         await CatalogSchema.install(database);
-        await database.execute('ALTER TABLE retail_products ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 5 CHECK(low_stock_threshold >= 0)');
+        await _addColumnIfMissing(
+          database,
+          'retail_products',
+          'low_stock_threshold',
+          'INTEGER NOT NULL DEFAULT 5 CHECK(low_stock_threshold >= 0)',
+        );
         await StockDocumentSchema.install(database);
         await CommissionSchema.install(database);
       },
@@ -435,7 +440,14 @@ class SalonDatabase {
         }
         await batch.commit(noResult: true);
         if (oldVersion < 18) await CatalogSchema.install(database);
-        if (oldVersion < 19) await database.execute('ALTER TABLE retail_products ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 5 CHECK(low_stock_threshold >= 0)');
+        if (oldVersion < 19) {
+          await _addColumnIfMissing(
+            database,
+            'retail_products',
+            'low_stock_threshold',
+            'INTEGER NOT NULL DEFAULT 5 CHECK(low_stock_threshold >= 0)',
+          );
+        }
         if (oldVersion < 20) await StockDocumentSchema.install(database);
         if (oldVersion < 21) await CommissionSchema.install(database);
       },
@@ -514,6 +526,18 @@ class SalonDatabase {
     }
 
     return path.join(Directory.current.path, '.salon_manager_data');
+  }
+
+  Future<void> _addColumnIfMissing(
+    Database database,
+    String tableName,
+    String columnName,
+    String definition,
+  ) async {
+    if (await _tableHasColumn(database, tableName, columnName)) return;
+    await database.execute(
+      'ALTER TABLE $tableName ADD COLUMN $columnName $definition',
+    );
   }
 
   Future<bool> _tableHasColumn(
