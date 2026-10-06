@@ -92,7 +92,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
 
   void _schedule() {
     _poll?.cancel();
-    if (mounted && _foreground && _credential != null &&
+    if (mounted && _foreground && !_needsPairing && _credential != null &&
         (_phone == null || _phone!.state == PhoneAccess.pending ||
          _phone!.state == PhoneAccess.approved)) {
       _poll = Timer(const Duration(seconds: 5), () => _refresh(silent: true));

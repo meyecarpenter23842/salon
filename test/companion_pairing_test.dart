@@ -303,4 +303,22 @@ void main() {
     expect(client.requests, 0); await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('confirmed revoke exposes pairing once; fresh approval uses a new identity', (tester) async {
+    final client = _Client()..state = PhoneAccess.approved;
+    final store = _Store()..value = CompanionCredential('b' * 64, 'c' * 64);
+    await showApp(tester, client, store);
+    client.state = PhoneAccess.revoked;
+    await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
+    expect(find.byKey(const Key('companion-pair-code')), findsOneWidget);
+    final count = client.statusTokens.length;
+    await tester.pump(const Duration(seconds: 15)); await tester.pumpAndSettle();
+    expect(client.statusTokens.length, count);
+    client.state = PhoneAccess.pending;
+    await request(tester);
+    expect(client.requests, 1);
+    expect(store.value!.token, isNot('c' * 64));
+    expect(find.byKey(const Key('companion-pair-code')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
 }
