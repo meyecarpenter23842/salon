@@ -134,10 +134,13 @@ class SqliteInventoryRepository implements InventoryRepository {
     ];
 
     final rows = await database.rawQuery(
-      'SELECT m.id, m.product_id, p.name AS product_name, m.movement_type, '
+      'SELECT m.id, m.product_id, COALESCE(l.product_name, p.name) AS product_name, m.movement_type, '
+      'm.document_id, m.document_line_id, m.source, d.number AS document_number, '
       'm.quantity_delta, m.stock_before, m.stock_after, m.note, m.created_at '
       'FROM inventory_movements m '
       'JOIN retail_products p ON p.id = m.product_id '
+      'LEFT JOIN stock_document_lines l ON l.id = m.document_line_id '
+      'LEFT JOIN stock_documents d ON d.id = m.document_id '
       '$filter'
       'ORDER BY m.created_at DESC LIMIT ?',
       args,
@@ -149,6 +152,8 @@ class SqliteInventoryRepository implements InventoryRepository {
             id: row['id']?.toString() ?? '',
             productId: row['product_id']?.toString() ?? '',
             productName: row['product_name']?.toString() ?? 'Sản phẩm',
+            documentId: row['document_id']?.toString(), documentLineId: row['document_line_id']?.toString(),
+            documentNumber: row['document_number']?.toString(), source: row['source']?.toString() ?? 'legacy',
             movementType: row['movement_type']?.toString() ?? 'adjustment',
             quantityDelta: _toInt(row['quantity_delta']),
             stockBefore: _toInt(row['stock_before']),

@@ -42,5 +42,5 @@ class StockDocument {
   bool get isDraft => status == 'draft';
   bool get isPosted => status == 'posted';
   int get total => lines.fold(0, (sum, line) => sum + line.amount);
-  String get statusLabel => switch(status) {'draft' => 'Nháp', 'posted' => 'Đã nhập / ghi kho', _ => 'Đã hủy'};
+  String get statusLabel => switch(status) {'draft' => 'Nháp', 'posted' => kind == StockDocumentKind.receipt ? 'Đã nhập' : 'Đã ghi kho', _ => 'Đã hủy'};
 }

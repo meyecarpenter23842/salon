@@ -40,6 +40,10 @@ class InventoryMovementItem {
     required this.id,
     required this.productId,
     required this.productName,
+    this.documentId,
+    this.documentNumber,
+    this.documentLineId,
+    this.source = 'legacy',
     required this.movementType,
     required this.quantityDelta,
     required this.stockBefore,
@@ -51,6 +55,9 @@ class InventoryMovementItem {
   final String id;
   final String productId;
   final String productName;
+  final String? documentId, documentNumber, documentLineId;
+  final String source;
+  String get sourceLabel => source == 'document' ? 'Chứng từ ${documentNumber ?? documentId}' : isSale ? 'Bán theo hóa đơn' : movementType == 'void' ? 'Hủy hóa đơn' : 'Lịch sử cũ (legacy)';
   final String movementType;
   final int quantityDelta;
   final int stockBefore;
@@ -66,6 +73,8 @@ class InventoryMovementItem {
     'receive' => 'Nhập kho',
     'sale' => 'Bán hàng',
     'void' => 'Hoàn tồn do hủy bill',
+    'reverse' => 'Đảo phiếu kho',
+    'issue' => 'Xuất kho',
     _ => 'Điều chỉnh',
   };
   String get quantityDeltaLabel => quantityDelta > 0

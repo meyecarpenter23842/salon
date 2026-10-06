@@ -1,3 +1,4 @@
+import '../models/inventory_item.dart';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../database/salon_database.dart';
@@ -38,22 +39,20 @@ class StockDocumentRepository {
     });
   }
 
-  Future<List<StockDocument>> documents({String query = '', String? status, StockDocumentKind? kind}) async {
+  Future<List<StockDocument>> documents({String query = '', String? status, StockDocumentKind? kind,
+      bool excludeReceipts = false, int offset = 0, int limit = 50}) async {
     final db = await database.database;
     return db.transaction((tx) async {
-    final rows = await tx.query('stock_documents',
-      where: [if (status != null) 'status = ?', if (kind != null) 'kind = ?'].join(' AND ').isEmpty
-        ? null : [if (status != null) 'status = ?', if (kind != null) 'kind = ?'].join(' AND '),
-      whereArgs: [status, kind?.value].whereType<Object>().toList(),
-      orderBy: 'document_date DESC, sequence DESC');
-    final q = query.trim().toLowerCase();
-    final result = <StockDocument>[];
-    for (final row in rows) {
-      if (q.isNotEmpty && ![row['number'], row['supplier_name'], row['external_reference'], row['prepared_by']]
-          .any((v) => v.toString().toLowerCase().contains(q))) { continue; }
-      result.add(await _read(tx, row));
-    }
-    return result;
+      final clauses = [if (status != null) 'status = ?', if (kind != null) 'kind = ?', if (excludeReceipts) "kind != 'receipt'"];
+      final rows = await tx.query('stock_documents', where: clauses.isEmpty ? null : clauses.join(' AND '),
+        whereArgs: [status, kind?.value].whereType<Object>().toList(), orderBy: 'document_date DESC, sequence DESC');
+      final q = query.trim().toLowerCase();
+      final headers = rows.where((row) => q.isEmpty || [row['number'], row['supplier_name'], row['external_reference'], row['prepared_by']]
+        .any((v) => v.toString().toLowerCase().contains(q))).skip(offset < 0 ? 0 : offset).take(limit.clamp(1, 500));
+      final result = <StockDocument>[];
+      // Only materialize lines for the current page; search remains Unicode-aware.
+      for (final row in headers) { result.add(await _read(tx, row)); }
+      return result;
     });
   }
 
@@ -137,7 +136,10 @@ class StockDocumentRepository {
     final db = await database.database;
     return db.transaction((tx) async {
       final doc = await _find(tx, id);
-      if (doc.isPosted) return doc; // Retry never applies movements again.
+      if (doc.isPosted) {
+        if (expectedRevision != doc.revision - 1) { throw StateError('Phiếu đã được ghi từ phiên bản khác. Tải lại để đối chiếu.'); }
+        return doc; // Retry never applies movements again.
+      }
       if (!doc.isDraft || doc.revision != expectedRevision) throw StateError('Phiếu đã thay đổi hoặc bị hủy.');
       if (doc.supplierId != null) {
         final supplier = await tx.query('stock_suppliers', where: 'id = ? AND is_active = 1', whereArgs: [doc.supplierId]);
@@ -172,7 +174,7 @@ class StockDocumentRepository {
     return db.transaction((tx) async {
       final doc = await _find(tx, id);
       if (doc.status == 'cancelled') {
-        if (doc.cancellationReason != reason.trim()) throw StateError('Phiếu đã hủy với lý do khác.');
+        if (doc.cancellationReason != reason.trim() || expectedRevision != doc.revision - 1) { throw StateError('Phiếu đã hủy từ phiên bản hoặc lý do khác.'); }
         return doc;
       }
       if (doc.revision != expectedRevision) throw StateError('Phiếu đã thay đổi. Tải lại trước khi hủy.');
@@ -193,6 +195,35 @@ class StockDocumentRepository {
     });
   }
 
+  Future<List<InventoryMovementItem>> movementHistory({String? documentId, String query = '', String source = 'all',
+      DateTime? from, DateTime? to, int offset = 0, int limit = 50}) async {
+    final db = await database.database;
+    final clauses = <String>[];
+    final args = <Object?>[];
+    if (documentId != null) { clauses.add('m.document_id = ?'); args.add(documentId); }
+    if (source == 'document') { clauses.add("m.source = 'document'"); }
+    if (source == 'sale') { clauses.add("m.movement_type IN ('sale','void')"); }
+    if (source == 'legacy') { clauses.add("m.source = 'legacy' AND m.movement_type NOT IN ('sale','void')"); }
+    if (from != null) { clauses.add('date(m.created_at) >= date(?)'); args.add(DateTime(from.year, from.month, from.day).toIso8601String()); }
+    if (to != null) { clauses.add('date(m.created_at) < date(?)'); args.add(DateTime(to.year, to.month, to.day).add(const Duration(days: 1)).toIso8601String()); }
+    if (query.trim().isNotEmpty) {
+      // instr performs literal matching and does not treat % or _ as wildcards.
+      clauses.add('(instr(LOWER(COALESCE(d.number, m.id)), ?) > 0 OR instr(LOWER(COALESCE(l.product_name, p.name)), ?) > 0)');
+      args.addAll([query.trim().toLowerCase(), query.trim().toLowerCase()]);
+    }
+    args.addAll([limit.clamp(1, 500), offset < 0 ? 0 : offset]);
+    final rows = await db.rawQuery('SELECT m.*, COALESCE(l.product_name, p.name) AS product_name, d.number AS document_number '
+      'FROM inventory_movements m JOIN retail_products p ON p.id = m.product_id '
+      'LEFT JOIN stock_document_lines l ON l.id = m.document_line_id LEFT JOIN stock_documents d ON d.id = m.document_id '
+      '${clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}'} ORDER BY m.created_at DESC, m.id DESC LIMIT ? OFFSET ?', args);
+    return rows.map((r) => InventoryMovementItem(id: r['id'] as String, productId: r['product_id'] as String,
+      productName: r['product_name'] as String, movementType: r['movement_type'] as String,
+      quantityDelta: r['quantity_delta'] as int, stockBefore: r['stock_before'] as int, stockAfter: r['stock_after'] as int,
+      note: r['note'] as String, createdAt: DateTime.parse(r['created_at'] as String),
+      documentId: r['document_id'] as String?, documentLineId: r['document_line_id'] as String?,
+      documentNumber: r['document_number'] as String?, source: r['source'] as String)).toList();
+  }
+
   Future<int> _stock(DatabaseExecutor tx, String productId) async {
     final rows = await tx.query('inventory_stock', columns: ['stock_on_hand'], where: 'product_id = ?', whereArgs: [productId]);
     return rows.isEmpty ? 0 : rows.single['stock_on_hand'] as int;
@@ -211,7 +242,7 @@ class StockDocumentRepository {
   }
   Future<void> _audit(DatabaseExecutor tx, String actor, String action, String id, String detail) => tx.insert('audit_events',
     {'id': EntityId.create('stock_audit'), 'actor_name': actor, 'action': action,
-      'target_type': 'stock_document', 'target_id': id, 'result': 'success', 'detail': detail,
+      'target_type': action == 'stock_supplier_save' ? 'stock_supplier' : 'stock_document', 'target_id': id, 'result': 'success', 'detail': detail,
       'created_at': DateTime.now().toIso8601String()}).then((_) {});
   Future<StockDocument> _find(DatabaseExecutor tx, String id) async {
     final rows = await tx.query('stock_documents', where: 'id = ?', whereArgs: [id]);
