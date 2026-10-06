@@ -10,6 +10,8 @@ Hair Spa Manager là ứng dụng Flutter desktop-first để quản lý vận h
 
 Android đã có khách/lịch/bill/thanh toán theo quyền và reconnect; **chưa nghiệm thu điện thoại thật**. CI/emulator không thay gate này. Quy trình dự án hiện tại không chạy app/build/test local hoặc cài/migrate production khi chưa có yêu cầu riêng; các lệnh dev bên dưới chỉ cho môi trường phát triển được cho phép.
 
+[Audit nhân sự và lộ trình hoa hồng/chấm công/payroll](docs/personnel-audit.md) thuộc #112. Hoa hồng hiện chỉ là ước tính, chưa có sổ chốt/chi trả.
+
 ## Phạm vi MVP hiện tại
 
 - Chạy tốt theo hướng desktop-first cho Windows.

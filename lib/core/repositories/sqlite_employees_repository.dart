@@ -106,7 +106,7 @@ class SqliteEmployeesRepository
           ? 'Chưa có lịch sắp tới'
           : '${nextAppointment['timeRange']} · ${nextAppointment['customerName']}',
       'dataNote':
-          'Doanh thu tháng và hoa hồng dùng phần doanh thu dịch vụ sau khi phân bổ giảm giá toàn hóa đơn; không dùng số liệu nhập tay.',
+          'Hoa hồng ước tính = doanh thu dịch vụ tháng sau phân bổ giảm giá × tỷ lệ hiện tại của nhân viên. Đổi tỷ lệ sẽ thay đổi ước tính cả tháng. Chưa phải số đã chốt hoặc đã chi trả; chưa tính hoa hồng bán sản phẩm.',
     };
   }
 
