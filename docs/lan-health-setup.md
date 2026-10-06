@@ -44,3 +44,17 @@ Backend.lock được giải phóng bằng đóng OS handle; không xóa lock đ
 
 Chỉ GET /api/staff/v1/health được phục vụ, không đọc business SQLite.
 Khách hàng/hóa đơn/cấp quyền thiết bị vẫn thuộc các batch tiếp theo.
+
+
+
+## QR và đổi mạng (#110)
+
+Khi backend HTTPS sẵn sàng, desktop hiển thị QR gồm đúng kind/version/url/pin. QR không có mã ghép, token hoặc quyền. Android: Quét QR máy salon → đối chiếu địa chỉ/mã trên desktop → Dùng thông tin này → Kiểm tra kết nối → yêu cầu truy cập → chủ salon duyệt. Camera dùng mobile_scanner 7.4.2 với ML Kit đóng gói; từ chối camera thì dán thông tin QR hoặc nhập thủ công. Không cần tải mô hình qua Internet khi quét. [Tài liệu thư viện](https://pub.dev/packages/mobile_scanner).
+
+Hai máy phải cùng mạng LAN, kể cả PC nối dây và điện thoại Wi-Fi. Tránh mạng khách/AP isolation. Windows Firewall: cho phép app salon trên hồ sơ Riêng tư và cổng TCP trong địa chỉ hiện tại (mặc định 8743); kiểm tra đúng app/port và hồ sơ mạng. Không mở cổng router, mạng Công cộng, hay tắt tường lửa; app chỉ hướng dẫn, không tự sửa firewall.
+
+IP desktop đổi: Tìm lại mạng → chọn Wi-Fi/dây mạng → Áp dụng mạng đã chọn → quét QR mới → kiểm tra kết nối. Chứng chỉ và danh tính đã duyệt được giữ nếu vẫn cùng máy salon. Nếu chứng chỉ đổi, đối chiếu lại và ghép quyền lại; QR khác mã bị chặn khi còn lệnh chưa rõ kết quả. Không tự phát lại lệnh cũ.
+
+Trạng thái foreground mất Wi-Fi giữ màn hình và nhập nháp nhưng khóa ghi. Kết nối lại kiểm tra quyền + watermark trước, tải lại dữ liệu xem; biểu mẫu cũ giữ nội dung và yêu cầu tải snapshot mới trước khi lưu. Background/thu hồi quyền vẫn đóng dữ liệu riêng tư. Restart backend đổi epoch; dữ liệu cũ được resync, kết quả lệnh chưa rõ chỉ được kiểm tra khi người dùng bấm.
+
+Camera thật, Wi-Fi thật, sleep/restart và firewall của máy salon chưa được xác nhận bằng CI; xem checklist #111.

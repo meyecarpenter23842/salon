@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'companion_theme.dart';
+import 'companion_qr_scanner.dart';
+import '../../core/lan/lan_connection_qr.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/lan/lan_health_client.dart';
@@ -19,6 +21,7 @@ class SalonCompanionApp extends StatelessWidget {
     this.readClient = const PinnedSalonReadClient(),
     this.workflowClient = const PinnedLanWorkflowClient(),
     this.changeClient,
+    this.scannerPreview,
     this.credentialStore = const AndroidCompanionCredentialStore(),
   });
   final LanHealthChecker checker;
@@ -26,6 +29,7 @@ class SalonCompanionApp extends StatelessWidget {
   final SalonReadClient readClient;
   final LanWorkflowClient workflowClient;
   final LanChangeClient? changeClient;
+  final SalonScannerPreview? scannerPreview;
   final CompanionCredentialStore credentialStore;
 
   @override
@@ -36,18 +40,19 @@ class SalonCompanionApp extends StatelessWidget {
     supportedLocales: const [Locale('vi'), Locale('en')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: companionTheme(),
-    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient, changeClient: changeClient ?? (workflowClient is PinnedLanWorkflowClient ? const PinnedLanChangeClient() : null)),
+    home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient, scannerPreview: scannerPreview, changeClient: changeClient ?? (workflowClient is PinnedLanWorkflowClient ? const PinnedLanChangeClient() : null)),
   );
 }
 
 class _ConnectionPage extends StatefulWidget {
-  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient, this.changeClient});
+  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient, this.changeClient, this.scannerPreview});
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final CompanionCredentialStore credentialStore;
   final SalonReadClient readClient;
   final LanWorkflowClient workflowClient;
   final LanChangeClient? changeClient;
+  final SalonScannerPreview? scannerPreview;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();
@@ -103,6 +108,56 @@ class _ConnectionPageState extends State<_ConnectionPage>
 
   void _edited(String _) {
     setState(() { _message = null; _connection = null; _authorized = false; });
+  }
+
+  Future<void> _useQr(LanConnection value) async {
+    if (_busy || !mounted) return;
+    final generation = _generation;
+    final credential = await widget.credentialStore.read();
+    if (!mounted || generation != _generation) return;
+    if (credential?.pendingCommand != null && credential!.pin != value.certificateSha256) {
+      setState(() => _message = 'Có yêu cầu chưa rõ kết quả trên máy salon cũ. Kiểm tra yêu cầu đó trước khi đổi máy salon.');
+      return;
+    }
+    final accepted = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Xác nhận máy salon'),
+      content: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Đối chiếu với Cài đặt → Kết nối điện thoại trên máy salon. Quét QR chưa cấp quyền truy cập.'),
+        const SizedBox(height: 16), SelectableText(value.apiUrl.toString()),
+        const SizedBox(height: 12), const Text('Mã xác minh'), SelectableText(value.certificateSha256),
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+        FilledButton(key: const Key('companion-qr-accept'), onPressed: () => Navigator.pop(context, true), child: const Text('Dùng thông tin này'))]));
+    if (!mounted || generation != _generation || accepted != true) return;
+    setState(() {
+      _url.text = value.apiUrl.toString(); _pin.text = value.certificateSha256;
+      _message = 'Đã điền thông tin QR. Bấm Kiểm tra kết nối để xác minh máy salon.';
+      _connection = null; _authorized = false;
+    });
+  }
+  Future<void> _scanQr() async {
+    if (_busy) return;
+    final value = await Navigator.of(context).push<LanConnection>(MaterialPageRoute(builder: (_) =>
+      CompanionQrScanner(preview: widget.scannerPreview)));
+    if (value != null && mounted) {
+      try { await _useQr(value); } catch (_) { if (mounted) setState(() => _message = 'Chưa đọc được cấu hình an toàn. Thử lại.'); }
+    }
+  }
+  Future<void> _pasteQr() async {
+    if (_busy) return;
+    final input = TextEditingController();
+    final text = await showDialog<String>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Dán thông tin QR'),
+      content: TextField(key: const Key('companion-qr-text'), controller: input, maxLength: 1024,
+        maxLines: 5, decoration: const InputDecoration(hintText: 'Sao chép thông tin QR từ máy salon')),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+        FilledButton(key: const Key('companion-qr-import'), onPressed: () => Navigator.pop(context, input.text),
+          child: const Text('Đọc thông tin'))]));
+    // Wait until the dialog has unmounted before disposing its controller.
+    WidgetsBinding.instance.addPostFrameCallback((_) => input.dispose());
+    if (text == null || !mounted) return;
+    try { await _useQr(LanConnectionQr.decode(text)); }
+    catch (_) { if (mounted) setState(() => _message = 'Thông tin QR không hợp lệ. Lấy QR mới từ máy salon, hoặc nhập hai ô bên dưới.'); }
   }
 
   Future<void> _check() async {
@@ -169,6 +224,13 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 'Lấy địa chỉ và mã xác minh rồi nhập vào hai ô bên dưới.',
               ),
               const SizedBox(height: 20),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilledButton.icon(key: const Key('companion-scan-qr'), onPressed: _busy ? null : _scanQr,
+                  icon: const Icon(Icons.qr_code_scanner), label: const Text('Quét QR máy salon')),
+                TextButton(key: const Key('companion-paste-qr'), onPressed: _busy ? null : _pasteQr,
+                  child: const Text('Dán thông tin QR')),
+              ]),
+              const SizedBox(height: 16),
               Form(
                 key: _form,
                 child: Column(

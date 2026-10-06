@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'lan_connection_qr.dart';
+import 'lan_health_client.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -161,6 +164,16 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'thông tin bên dưới vào các ô cùng tên.',
             ),
             const SizedBox(height: 16),
+            Center(child: Semantics(label: 'QR kết nối máy salon', child: Container(
+              color: Colors.white, padding: const EdgeInsets.all(12), child: QrImageView(
+                key: const Key('desktop-phone-qr'), size: 220,
+                data: LanConnectionQr.encode(LanConnection(address.toString(), verification)),
+                backgroundColor: Colors.white)))),
+            const Text('Trên Android bấm Quét QR máy salon. QR chỉ chứa địa chỉ và mã xác minh; chủ salon vẫn duyệt quyền riêng.'),
+            TextButton.icon(key: const Key('desktop-phone-copy-qr'),
+              onPressed: () => _copy(context, LanConnectionQr.encode(LanConnection(address.toString(), verification))),
+              icon: const Icon(Icons.copy), label: const Text('Sao chép thông tin QR')),
+            const SizedBox(height: 16),
             _field(context, 'Địa chỉ máy salon', address.toString(), 'address'),
             const SizedBox(height: 12),
             _field(context, 'Mã xác minh máy salon', verification, 'verification'),
@@ -175,6 +188,12 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Chọn mạng rồi bấm Bật kết nối điện thoại trên app chính của máy salon.',
             ),
           ],
+          const SizedBox(height: 12),
+          const Text('Không kết nối được? Hai máy cần cùng mạng nội bộ. Chọn đúng Wi-Fi/dây mạng, tắt mạng khách có chặn thiết bị, và giữ máy salon mở.'),
+          const SizedBox(height: 8),
+          const Text('Windows Firewall: cho phép app salon trên mạng Riêng tư, cổng TCP đang hiển thị. Không mở cổng router hoặc mạng Công cộng. App không tự đổi firewall.'),
+          const SizedBox(height: 8),
+          const Text('Nếu IP đổi sau khi nối Wi-Fi lại: Tìm lại mạng → Áp dụng mạng đã chọn → quét QR mới trên Android. Mã xác minh vẫn giữ nguyên; không cần duyệt lại điện thoại cùng máy salon.'),
           const DesktopPairingPanel(),
           const SizedBox(height: 16),
           const Text(
@@ -195,3 +214,4 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
     },
   );
 }
+

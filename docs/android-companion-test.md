@@ -61,3 +61,20 @@ Trong Cài đặt, chọn mạng và bấm **Bật kết nối điện thoại**
 identity và mở host ngay. Luồng này không tự thay đổi firewall.
 Giữ máy salon/app mở; thử cùng Wi-Fi trước. 4G/mạng khác cần truy cập từ xa được
 thiết lập riêng. Chủ salon bật **Cho xem dữ liệu salon** cho từng điện thoại đã duyệt để xem khách hàng, hóa đơn và lịch hẹn.
+
+
+
+## Gate điện thoại thật sau #110 (chuyển #111, chưa thực hiện)
+
+Ghi model/Android OS, ngày, phiên bản desktop, SHA nguồn/APK và ảnh/video cho từng bước; phân biệt emulator và CI.
+
+- [ ] Camera quét QR thật, từ chối/cấp lại quyền camera, QR sai/cũ, dán và nhập thủ công; đối chiếu pin trên desktop. QR không tự cấp quyền.
+- [ ] Health HTTPS/pin → yêu cầu/duyệt → xem khách/lịch/bill; đổi desktop/Staff được phản ánh trên điện thoại trong lần poll (khoảng 5 giây), giữ lọc/scroll.
+- [ ] Hai máy cùng Wi-Fi và PC nối dây; mạng khách/AP isolation; hướng dẫn Private Firewall đúng port. Không thay firewall tự động.
+- [ ] PC đổi IP → áp dụng mạng → quét QR mới, cùng pin giữ quyền; đổi pin cần kiểm tra/duyệt mới.
+- [ ] Mất Wi-Fi khi nhập: giữ nháp, cảnh báo offline, khóa ghi; reconnect/resync không ghi dữ liệu cũ; sleep/restart đổi epoch.
+- [ ] Mất mạng lúc checkout: kiểm tra ID yêu cầu để nhận hóa đơn, không tự gửi lại; đảm bảo chỉ một hóa đơn/trừ kho/thanh toán.
+- [ ] Background/resume, revoke/đổi quyền lúc đang mở bill/dialog, hai điện thoại sửa đồng thời; dữ liệu riêng tư và quyền ghi đúng trạng thái.
+- [ ] Bàn phím/back, 360 px/chữ lớn, scroll và tap; ảnh/video owner nghiệm thu.
+
+CI chỉ chứng minh protocol/permission/reconnect/widget/APK compilation. Các ô điện thoại thật vẫn chưa đánh dấu.
