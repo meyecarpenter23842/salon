@@ -112,7 +112,8 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
 
   switch (backend) {
     case AppDataBackend.sqlite:
-      return SqliteEmployeesRepository(SalonDatabase.instance, fakeDataSource);
+      return SqliteEmployeesRepository(SalonDatabase.instance, fakeDataSource,
+        security: ref.watch(sensitiveActionServiceProvider));
     case AppDataBackend.fake:
       return FakeEmployeesRepository(fakeDataSource);
   }

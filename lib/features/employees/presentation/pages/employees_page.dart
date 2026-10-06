@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'commission_page.dart';
+import '../../../../core/models/audit_event.dart';
+import '../../../../shared/widgets/sensitive_action_authorization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/employee_upsert_input.dart';
@@ -72,6 +74,9 @@ Future<void> _openEmployeeEditor(
     builder: (_) => _EmployeeEditorDialog(employee: employee),
   );
   if (input == null || !context.mounted) return;
+  if ((employee == null || input.commissionLabel != employee['commission']) &&
+      (!await ensureSensitiveActionAuthorized(context, ref, SensitiveAction.commission) ||
+       !context.mounted)) return;
 
   try {
     final saved = await ref

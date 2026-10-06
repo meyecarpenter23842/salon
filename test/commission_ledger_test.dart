@@ -5,6 +5,9 @@ import 'package:salonmanager/core/repositories/commission_ledger.dart';
 import 'package:salonmanager/core/repositories/sqlite_commission_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
 import 'package:salonmanager/core/services/backup_service.dart';
+import 'package:salonmanager/core/repositories/sqlite_employees_repository.dart';
+import 'package:salonmanager/core/data/fake/fake_salon_data_source.dart';
+import 'package:salonmanager/core/models/employee_upsert_input.dart';
 
 void main(){
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +40,23 @@ void main(){
   }
   Future<void> capture(String id,DateTime date)=>db.transaction((tx)=>CommissionLedger.capture(tx,id,date));
   Future<void> closeSeptember() async{await invoice('a',total:1000000,line:1000000);await capture('a',DateTime(2026,9,15));await repo.closePeriod('2026-09');}
+
+  test('rate edits require Owner, validate finite precision/range and leave snapshots unchanged',()async{
+    await invoice('a');await capture('a',DateTime(2026,9,15));
+    final employees=SqliteEmployeesRepository(SalonDatabase.instance,const FakeSalonDataSource(),security:security);
+    EmployeeUpsertInput input(String rate)=>EmployeeUpsertInput(fullName:'Thợ A',role:'Stylist',
+      status:'Đang làm việc',phone:'',shift:'',specialty:'',commissionLabel:rate,todaySchedule:'',
+      servicesDone:0,monthlyRevenue:'',rating:'',note:'');
+    for(final bad in ['-1%','101%','NaN','Infinity','10.123%','abc']){
+      await expectLater(employees.saveEmployee(input(bad),existingId:'emp'),throwsArgumentError);
+    }
+    await security.configureOwnerPin('1234');security.lockOwnerSession();
+    await expectLater(employees.saveEmployee(input('25%'),existingId:'emp'),throwsStateError);
+    await security.unlockOwner('1234');await employees.saveEmployee(input('25%'),existingId:'emp');
+    expect((await db.query('employees')).single['commission_rate'],0.25);
+    expect((await db.query('commission_entries')).single['rate_bps'],1000);
+    expect(await db.query('audit_events',where:"action='commission_rate' AND result='success'"),hasLength(1));
+  });
 
   test('net allocation includes retail weight; snapshots rate and excludes retail commission',()async{
     await invoice('a',total:90001,line:100000,retail:true);

@@ -29,3 +29,5 @@ Schema 21 không tạo hoa hồng quá khứ từ tỷ lệ hiện tại, không
 Backup SQLite giữ sổ, chứng từ, audit và yêu cầu chi trả đang chờ. Khôi phục về quá khứ có thể bỏ chứng từ trả tiền đã diễn ra bên ngoài: đối chiếu chứng từ tiền thật, không chi lại chỉ vì bản backup cũ chưa ghi nhận. Tuân thủ [hướng dẫn vận hành](salon-operations.md) trước restore.
 
 Chưa triển khai lương, thuế, chấm công, hoa hồng bán lẻ hay chuyển tiền ngân hàng tự động. Kiểm tra điện thoại thật vẫn chờ thiết bị trong #111; CI không thay thế nghiệm thu thực tế.
+
+Thêm nhân viên hoặc đổi tỷ lệ yêu cầu quyền Owner; audit lưu tỷ lệ cũ/mới và thời điểm có hiệu lực. Tỷ lệ mới chỉ dùng cho lần thanh toán sau đó.

@@ -37,7 +37,7 @@ class SqliteCommissionRepository {
 
   /// Cancel only after checking the live database for a committed receipt.
   Future<void> resolvePendingPayout(String requestId) async {
-    await security.authorizeCommissionAction('commission_resolve',requestId);
+    final actor=await security.authorizeCommissionAction('commission_resolve',requestId);
     final db=await database.database;
     await db.transaction((tx) async {
       final row=await tx.query('app_settings',where:'key=?',whereArgs:['commission.pending_payout']);
@@ -46,7 +46,7 @@ class SqliteCommissionRepository {
       if(pending['requestId'] != requestId) throw StateError('Yêu cầu chi trả đang chờ đã thay đổi.');
       final proof=await tx.query('commission_payouts',where:'id=?',whereArgs:[requestId]);
       await tx.delete('app_settings',where:'key=?',whereArgs:['commission.pending_payout']);
-      await _audit(tx,'Owner','commission_resolve',requestId,
+      await _audit(tx,actor,'commission_resolve',requestId,
         proof.isEmpty?'Đã kiểm tra: chưa ghi chi trả; bỏ yêu cầu':'Đã đối chiếu chứng từ chi trả',clock());
     });
   }
