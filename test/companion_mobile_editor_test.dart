@@ -71,6 +71,7 @@ void main() {
     await fixture.tapMobile(tester, 'mobile-tab-customers'); await fixture.tapMobile(tester, 'write-new-customer');
     await tester.enterText(find.byKey(const Key('mobile-field-fullName')), 'Chưa lưu');
     tester.view.viewInsets = const FakeViewPadding(bottom: 260); await tester.pumpAndSettle();
+    expect(tester.getBottomRight(find.byKey(const Key('mobile-save'))).dy, lessThanOrEqualTo(640 - 260));
     expect(tester.takeException(), isNull);
     tester.view.resetViewInsets(); await tester.pumpAndSettle();
     await tester.binding.handlePopRoute(); await tester.pumpAndSettle();

@@ -249,8 +249,9 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
             child: Text('Bạn có thể quay lại; thao tác chờ vẫn được giữ để đối chiếu trên máy salon.')),
           ...(appointment ? _appointmentFields() : _customerFields()),
         ]))),
-      bottomNavigationBar: snapshot == null || error != null ? null : SafeArea(child: Padding(padding: const EdgeInsets.all(16),
+      bottomNavigationBar: snapshot == null || error != null ? null : Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), child: SafeArea(child: Padding(padding: const EdgeInsets.all(16),
         child: FilledButton.icon(key: const Key('mobile-save'), onPressed: locked || needsReload ? null : _save,
-          icon: const Icon(Icons.check), label: Text(widget.commands.busy ? 'Đang lưu…' : 'Lưu trên máy salon')))),
+          icon: const Icon(Icons.check), label: Text(widget.commands.busy ? 'Đang lưu…' : 'Lưu trên máy salon'))))),
     ));
 }
