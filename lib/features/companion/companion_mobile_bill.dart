@@ -44,15 +44,23 @@ class _CompanionMobileBillState extends State<CompanionMobileBill> {
   String? notice, receiptId;
   bool busy = true, flowBusy = false, needsReload = false, allowExit = false, confirming = false;
   int generation = 0;
+  int observedGeneration = 0;
   bool get locked => busy || flowBusy || needsReload || widget.commands.blocked || widget.role == PhoneWriteRole.none;
   bool get paymentDirty => paymentDraft != null && snapshot != null && jsonEncode(paymentDraft) != jsonEncode(_payments(snapshot!));
   int get total => snapshot?.values['totalAmount'] as int? ?? 0;
   List<Map<String, dynamic>> get payments => paymentDraft ?? (snapshot == null ? [] : _payments(snapshot!));
   List<Map<String, dynamic>> get lines => (snapshot?.values['lines'] as List? ?? []).map((p) => Map<String, dynamic>.from(p as Map)).toList();
   bool _allows(LanWriteOperation op) => op.allows(widget.role);
-  @override void initState() { super.initState(); widget.commands.addListener(_changed); _initialize(); }
+  @override void initState() { super.initState(); observedGeneration = widget.commands.dataGeneration; widget.commands.addListener(_changed); _initialize(); }
   void _changed() {
     if (!mounted) { return; }
+    if (observedGeneration != widget.commands.dataGeneration) {
+      observedGeneration = widget.commands.dataGeneration;
+      if (snapshot?.kind == 'session') {
+        if (paymentDirty || widget.commands.blocked || flowBusy) { needsReload = true; }
+        else { _load(snapshot!.id!); }
+      }
+    }
     if (awaitingOperation != null && !widget.commands.busy && widget.commands.pending == null) {
       final result = widget.commands.lastResult;
       if (result != null && widget.commands.lastOperation == awaitingOperation) { _receive(result); }
@@ -303,3 +311,4 @@ class _CompanionMobileBillState extends State<CompanionMobileBill> {
           ])))));
   }
 }
+

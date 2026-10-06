@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers/repository_providers.dart';
-import '../core/services/backup_service.dart';
+import '../core/database/salon_database.dart';
+import '../core/lan/lan_changes.dart';
 import '../features/appointments/presentation/pages/appointments_page.dart';
 
 typedef CrossProcessFingerprintLoader = Future<String> Function();
@@ -126,17 +126,9 @@ class _MainCrossProcessRefreshGateState
       return injected();
     }
 
-    final databasePath = await const BackupService().resolveDatabasePath();
-    final database = await _fileFingerprint(File(databasePath));
-    final wal = await _fileFingerprint(File('$databasePath-wal'));
-    return '$database|$wal';
+    return sqliteChangeFingerprint(SalonDatabase.instance);
   }
 
-  Future<String> _fileFingerprint(File file) async {
-    if (!await file.exists()) return 'missing';
-    final stat = await file.stat();
-    return '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
-  }
 
   void _refreshOperationalState() {
     if (!mounted || !widget.enabled) return;
@@ -149,8 +141,15 @@ class _MainCrossProcessRefreshGateState
     ref.invalidate(invoiceHistoryProvider);
     ref.invalidate(overviewSummaryProvider);
     ref.invalidate(reportsSummaryProvider);
+    ref.invalidate(servicesViewProvider);
+    ref.invalidate(retailProductsViewProvider);
+    ref.invalidate(employeesViewProvider);
+    ref.invalidate(customerInvoiceHistoryProvider);
+    ref.invalidate(appointmentInvoiceHistoryProvider);
+    ref.invalidate(invoiceSessionProvider);
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
 }
+

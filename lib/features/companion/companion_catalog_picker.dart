@@ -1,3 +1,4 @@
+import 'companion_workspace.dart' show CompanionSyncScope;
 import 'package:flutter/material.dart';
 import '../../core/lan/lan_contract.dart';
 import '../../core/lan/lan_health_client.dart';
@@ -32,6 +33,15 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
   String get title => switch(widget.kind) {
     'customers' => 'Chọn khách hàng', 'services' => 'Chọn dịch vụ', 'products' => 'Chọn sản phẩm', _ => 'Chọn nhân viên',
   };
+  int observedGeneration = -1;
+  @override void didChangeDependencies() {
+    super.didChangeDependencies();
+    final commands = CompanionSyncScope.of(context);
+    if (commands == null) return;
+    final current = commands.dataGeneration;
+    if (observedGeneration >= 0 && observedGeneration != current && commands.online && !commands.syncing) { _load(); }
+    observedGeneration = current;
+  }
   @override void initState() { super.initState(); _load(); }
   Future<void> _load({int offset = 0}) async {
     final current = ++generation;
@@ -93,3 +103,4 @@ class _CompanionCatalogPickerState extends State<CompanionCatalogPicker> {
         child: Text('Chọn ${selected.length} dịch vụ')))) : null,
   );
 }
+

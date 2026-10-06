@@ -32,10 +32,14 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
   final redraw = ValueNotifier<int>(0);
   int tab = 0;
   int refresh = 0;
+  int observedGeneration = 0;
   bool get locked => widget.commands.blocked;
   @override
   void initState() { super.initState(); widget.commands.addListener(_changed); }
-  void _changed() { if (mounted) { redraw.value++; } }
+  void _changed() { if (mounted) {
+    if (observedGeneration != widget.commands.dataGeneration) { observedGeneration = widget.commands.dataGeneration; refresh++; }
+    redraw.value++;
+  } }
   @override
   void didUpdateWidget(CompanionWorkspace old) {
     super.didUpdateWidget(old);
@@ -70,11 +74,11 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
   @override
   Widget build(BuildContext context) => NavigatorPopHandler(
     onPopWithResult: (result) => navigator.currentState!.maybePop(result),
-    child: Navigator(key: navigator, onGenerateRoute: (_) => MaterialPageRoute<void>(
+    child: CompanionSyncScope(commands: widget.commands, child: Navigator(key: navigator, onGenerateRoute: (_) => MaterialPageRoute<void>(
       builder: (context) => AnimatedBuilder(animation: redraw, builder: (context, _) => Scaffold(
         appBar: AppBar(title: Text(['Hôm nay', 'Lịch hẹn', 'Khách hàng', 'Hóa đơn', 'Thêm'][tab]),
-          actions: const [Padding(padding: EdgeInsets.only(right: 16),
-            child: Tooltip(message: 'Đang kết nối với máy salon', child: Icon(Icons.wifi, size: 20)))]),
+          actions: [Padding(padding: EdgeInsets.only(right: 16),
+            child: Tooltip(message: widget.commands.online && !widget.commands.syncing ? 'Đang kết nối với máy salon' : 'Mất kết nối / đang tải lại', child: Icon(widget.commands.online && !widget.commands.syncing ? Icons.wifi : Icons.wifi_off, size: 20)))]),
         body: SafeArea(child: Column(children: [
           if (widget.commands.pending != null || widget.commands.message != null)
             ConstrainedBox(constraints: BoxConstraints(maxHeight: (MediaQuery.sizeOf(context).height - MediaQuery.viewInsetsOf(context).bottom) * .23),
@@ -126,7 +130,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
             NavigationDestination(key: Key('mobile-tab-invoices'), icon: Icon(Icons.receipt_long_outlined), label: 'Hóa đơn'),
             NavigationDestination(key: Key('mobile-tab-more'), icon: Icon(Icons.more_horiz), label: 'Thêm'),
           ]),
-      )))));
+      ))))));
 }
 
 class CompanionPendingNotice extends StatelessWidget {
@@ -139,10 +143,18 @@ class CompanionPendingNotice extends StatelessWidget {
       if (commands.pending != null) ...[
         const Text('Có thao tác chờ kiểm tra. Thao tác mới được khóa để tránh lưu trùng.'),
         Wrap(spacing: 8, children: [
-          TextButton(key: const Key('write-check-result'), onPressed: commands.busy ? null : commands.check, child: const Text('Kiểm tra kết quả')),
-          if (commands.canRetry) TextButton(key: const Key('write-retry-command'), onPressed: commands.busy ? null : commands.retry, child: const Text('Gửi lại thao tác đã lưu')),
+          TextButton(key: const Key('write-check-result'), onPressed: commands.busy || !commands.online || commands.syncing ? null : commands.check, child: const Text('Kiểm tra kết quả')),
+          if (commands.canRetry) TextButton(key: const Key('write-retry-command'), onPressed: commands.busy || !commands.online || commands.syncing ? null : commands.retry, child: const Text('Gửi lại thao tác đã lưu')),
           if (commands.oldEpoch) TextButton(onPressed: commands.busy ? null : commands.discardOldEpoch, child: const Text('Bỏ thao tác cũ chưa thực hiện')),
         ]),
       ],
     ])));
+}
+
+
+/// Nested read routes observe invalidations without replacing editors or their text.
+class CompanionSyncScope extends InheritedNotifier<CompanionCommandController> {
+  const CompanionSyncScope({super.key, required CompanionCommandController commands, required super.child}) : super(notifier: commands);
+  static CompanionCommandController? of(BuildContext context) =>
+    context.dependOnInheritedWidgetOfExactType<CompanionSyncScope>()?.notifier;
 }

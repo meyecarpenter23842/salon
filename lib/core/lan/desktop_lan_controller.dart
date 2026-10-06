@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'lan_health_client.dart';
+import 'lan_changes.dart';
 import 'lan_health_host.dart';
 import 'lan_pairing.dart';
 import 'lan_read_models.dart';
@@ -29,11 +30,12 @@ final desktopPhoneRegistry = ValueNotifier<LanPairingRegistry?>(null);
 Future<void> Function(InternetAddress)? enableDesktopPhoneConnection;
 
 class DesktopLanController {
-  DesktopLanController(this.setup, this.status, {this.reader, this.workflow})
+  DesktopLanController(this.setup, this.status, {this.reader, this.workflow, this.changes})
       : pairing = LanPairingRegistry(file: File('${setup.directory.path}/devices.json'));
   final LanPairingRegistry pairing;
   final SalonReadRepository? reader;
   final LanWorkflowBackend? workflow;
+  final LanChangeSource? changes;
   final LanSetupService setup;
   final ValueNotifier<DesktopBackendStatus> status;
   LanHealthHost? _host;
@@ -67,7 +69,7 @@ class DesktopLanController {
       }
       final fingerprint = await config.certificateSha256();
       if (_closed) return;
-      final host = LanHealthHost(lockFile: File('${setup.directory.path}/backend.lock'), pairing: pairing, reader: reader, workflow: workflow);
+      final host = LanHealthHost(lockFile: File('${setup.directory.path}/backend.lock'), pairing: pairing, reader: reader, workflow: workflow, changes: changes);
       _host = host;
       await host.start(config);
       if (_closed) {
@@ -104,3 +106,4 @@ class DesktopLanController {
     status.value = const DesktopBackendStatus('Kết nối điện thoại đã dừng');
   }
 }
+

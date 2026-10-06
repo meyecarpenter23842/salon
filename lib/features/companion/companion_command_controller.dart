@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../../core/lan/lan_contract.dart';
+import '../../core/lan/lan_changes.dart';
 import '../../core/lan/lan_health_client.dart';
 import '../../core/lan/lan_pairing.dart';
 import '../../core/lan/lan_workflow_client.dart';
@@ -18,6 +19,11 @@ class CompanionCommandController extends ChangeNotifier {
   CompanionCredential _credential;
   bool _closed = false;
   bool busy = false;
+  bool online = true;
+  bool syncing = false;
+  int dataGeneration = 0;
+  String? desktopEpoch;
+  int changeCursor = 0;
   String? message;
   LanWriteResult? lastResult;
   LanErrorCode? failureCode;
@@ -27,7 +33,20 @@ class CompanionCommandController extends ChangeNotifier {
   bool oldEpoch = false;
   LanWriteCommand? get pending => _credential.pendingCommand;
   String get token => _credential.token;
-  bool get blocked => busy || pending != null;
+  bool get blocked => busy || pending != null || !online || syncing;
+
+  void connectionState({required bool connected, bool checking = false}) {
+    if (online == connected && syncing == checking) return;
+    online = connected; syncing = checking; _changed();
+  }
+  void applyChanges(LanChangeSnapshot value, {bool reconnect = false}) {
+    if (desktopEpoch == value.epoch && value.cursor < changeCursor && !value.reset) return;
+    final duplicate = desktopEpoch == value.epoch && value.cursor == changeCursor && !reconnect;
+    final changed = reconnect || desktopEpoch != value.epoch || value.reset || value.changed;
+    desktopEpoch = value.epoch; changeCursor = value.cursor;
+    if (changed && !duplicate) dataGeneration++;
+    online = true; syncing = false; _changed();
+  }
 
   void _changed() { if (!_closed) notifyListeners(); }
   Future<void> _save(LanWriteCommand? command) async {
@@ -92,7 +111,7 @@ class CompanionCommandController extends ChangeNotifier {
 
   Future<void> check() async {
     final command = pending;
-    if (busy || command == null || _closed) return;
+    if (busy || command == null || _closed || !online || syncing) return;
     busy = true; canRetry = false; oldEpoch = false;
     lastOperation = command.operation; lastTargetId = command.targetId; _changed();
     try {
@@ -113,7 +132,7 @@ class CompanionCommandController extends ChangeNotifier {
   }
 
   Future<void> retry() async {
-    if (busy || pending == null || !canRetry || _closed) return;
+    if (busy || pending == null || !canRetry || _closed || !online || syncing) return;
     busy = true; canRetry = false; _changed();
     try { await _save(pending!); await _send(pending!); }
     catch (_) { message = 'Chưa gửi lại: không lưu được thao tác an toàn. Hãy kiểm tra kết quả sau.'; }
@@ -143,4 +162,5 @@ class CompanionCommandController extends ChangeNotifier {
   @override
   void dispose() { _closed = true; super.dispose(); }
 }
+
 

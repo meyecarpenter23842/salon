@@ -39,11 +39,15 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
   bool submitted = false, completing = false, awaitingOutcome = false, needsReload = false;
   int generation = 0;
   bool get appointment => widget.kind == 'appointment';
+  int observedGeneration = 0;
   bool get locked => widget.commands.blocked || widget.role == PhoneWriteRole.none || busy;
   bool get dirty => snapshot != null && jsonEncode(_payload()) != original;
-  @override void initState() { super.initState(); widget.commands.addListener(_changed); _load(); }
+  @override void initState() { super.initState(); observedGeneration = widget.commands.dataGeneration; widget.commands.addListener(_changed); _load(); }
   void _changed() {
     if (!mounted) { return; }
+    if (observedGeneration != widget.commands.dataGeneration) {
+      observedGeneration = widget.commands.dataGeneration; needsReload = true;
+    }
     if (submitted && widget.commands.pending != null) { awaitingOutcome = true; }
     if (submitted && awaitingOutcome && widget.commands.pending == null && !widget.commands.busy) {
       awaitingOutcome = false;
@@ -255,3 +259,4 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
           icon: const Icon(Icons.check), label: Text(widget.commands.busy ? 'Đang lưu…' : 'Lưu trên máy salon'))))),
     ));
 }
+

@@ -97,7 +97,11 @@ class StaffWindowApp extends ConsumerWidget {
         ).copyWith(textScaler: const TextScaler.linear(1.0)),
         child: child!,
       ),
-      home: const StaffIntakeWorkspace(),
+      home: MainCrossProcessRefreshGate(
+        enabled: Platform.isWindows && !Platform.environment.containsKey('FLUTTER_TEST'),
+        child: const StaffIntakeWorkspace(),
+      ),
     );
   }
 }
+
