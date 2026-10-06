@@ -104,13 +104,13 @@ class _CompanionMobileListState extends State<CompanionMobileList> {
     if (widget.kind == SalonReadKind.appointments) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         OutlinedButton.icon(key: const Key('salon-pick-day'), onPressed: widget.today ? null : _pickDay,
-          icon: const Icon(Icons.calendar_month), label: Text(DateTime.tryParse(day ?? salonDate ?? '') == null ? 'Đang tải ngày…' : DateFormat('dd/MM/yyyy').format(DateTime.parse(day ?? salonDate!)))),
+          icon: const Icon(Icons.calendar_month), label: Text(DateTime.tryParse(day ?? salonDate ?? '') == null ? error != null ? 'Chưa lấy được ngày' : 'Đang tải ngày…' : DateFormat('dd/MM/yyyy').format(DateTime.parse(day ?? salonDate!)))),
         if (!widget.today) TextButton(onPressed: () { day = null; lastOffset = 0; _load(); }, child: const Text('Hôm nay')),
       ])),
     if (widget.onCreate != null || widget.onBills != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Align(alignment: Alignment.centerLeft, child: FilledButton.icon(
         key: Key(widget.kind == SalonReadKind.customers ? 'write-new-customer' : widget.kind == SalonReadKind.appointments ? 'write-new-appointment' : 'write-bills'),
-        onPressed: widget.onCreate ?? widget.onBills, icon: Icon(widget.onBills != null ? Icons.receipt_long : Icons.add),
+        onPressed: busy || error != null ? null : widget.onCreate ?? widget.onBills, icon: Icon(widget.onBills != null ? Icons.receipt_long : Icons.add),
         label: Text(widget.onBills != null ? 'Bill đang làm' : widget.kind == SalonReadKind.customers ? 'Thêm khách hàng' : 'Đặt lịch hẹn')))),
     if (busy) const LinearProgressIndicator(),
     Expanded(child: error != null ? MobileStatus(icon: Icons.wifi_off, title: 'Chưa kết nối được', message: error!,

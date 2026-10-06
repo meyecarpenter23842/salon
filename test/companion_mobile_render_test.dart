@@ -10,6 +10,7 @@ import 'package:salonmanager/core/lan/lan_health_client.dart';
 import 'package:salonmanager/core/lan/lan_read_client.dart';
 import 'package:salonmanager/core/lan/lan_read_models.dart';
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
+import 'package:salonmanager/core/lan/lan_workflow_models.dart';
 import 'package:salonmanager/features/companion/companion_command_controller.dart';
 import 'package:salonmanager/features/companion/companion_workspace.dart';
 import 'companion_mobile_navigation_test.dart' as fixture;
@@ -27,18 +28,33 @@ class _PreviewReader implements SalonReadClient {
           'Ghi chú': 'Thích lịch hẹn buổi sáng'})));
   }
 }
+class _PreviewClient extends fixture.MobileTestClient {
+  @override Future<LanEditorSnapshot> editor(LanConnection c, String t, String kind, String? id) async {
+    final snapshot = await super.editor(c, t, kind, id);
+    return kind == 'customer' && id != null ? LanEditorSnapshot(kind: kind, id: id, epoch: snapshot.epoch, revision: snapshot.revision,
+      values: {...snapshot.values, 'fullName': 'Nguyễn Ngọc Lan', 'phone': '0901 234 567', 'email': 'lan@example.com',
+        'favoriteService': 'Gội dưỡng', 'hairProfile': 'Tóc dài, da đầu nhạy cảm', 'note': 'Thích lịch hẹn buổi sáng'}) : snapshot;
+  }
+  @override Future<LanCatalogPage> catalog(LanConnection c, String t, String k, String q, int o) async =>
+    k == 'services' ? LanCatalogPage(List.generate(6, (i) => LanCatalogItem('services-${i + 1}',
+      ['Gội dưỡng', 'Chăm sóc tóc', 'Cắt nữ', 'Sấy tạo kiểu', 'Ủ phục hồi', 'Massage da đầu'][i],
+      '${30 + i * 15} phút · ${120000 + i * 20000} đ')), 'desktop-epoch', null) : super.catalog(c, t, k, q, o);
+}
 void main() {
   testWidgets('CI mobile renders: timeline, customers, profile, edit, pickers, offline and large text', (tester) async {
     tester.view.physicalSize = const Size(390, 844); tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
     final font = File('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
     final bytes = await tester.runAsync(font.readAsBytes);
+    final iconBytes = await tester.runAsync(() => File('${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf').readAsBytes());
+    final icons = FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(iconBytes!)));
+    await tester.runAsync(icons.load);
     final loader = FontLoader('SalonPreview')..addFont(Future.value(ByteData.sublistView(bytes!)));
     await tester.runAsync(loader.load);
     final output = Directory('build/mobile-ui-review');
     await tester.runAsync(() => output.create(recursive: true));
     final boundary = GlobalKey();
-    final store = fixture.MobileTestStore(), client = fixture.MobileTestClient();
+    final store = fixture.MobileTestStore(), client = _PreviewClient();
     final connection = LanConnection('https://192.168.1.20:8743/api/staff/v1', 'b' * 64);
     final commands = CompanionCommandController(connection: connection, client: client, store: store, credential: store.value, onCredential: (_) {});
     Future<void> capture(String name) async {
@@ -53,7 +69,7 @@ void main() {
       expect(tester.takeException(), isNull);
     }
     Future<void> mount({double scale = 1, SalonReadClient? reader}) async {
-      await tester.pumpWidget(RepaintBoundary(key: boundary, child: MaterialApp(
+      await tester.pumpWidget(RepaintBoundary(key: boundary, child: MaterialApp(debugShowCheckedModeBanner: false,
         locale: const Locale('vi'), supportedLocales: const [Locale('vi'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: companionTheme(fontFamily: 'SalonPreview'),
@@ -69,7 +85,9 @@ void main() {
     await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle(); await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
     await fixture.tapMobile(tester, 'mobile-tab-appointments'); await fixture.tapMobile(tester, 'write-new-appointment');
     await capture('05-appointment-editor');
-    await fixture.tapMobile(tester, 'mobile-select-services'); await capture('06-service-picker');
+    await fixture.tapMobile(tester, 'mobile-select-services');
+    await fixture.tapMobile(tester, 'mobile-pick-services-1'); await fixture.tapMobile(tester, 'mobile-pick-services-2');
+    await capture('06-service-picker');
     await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle(); await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox()); await mount(scale: 1.5); await capture('07-today-large-text');
     await tester.pumpWidget(const SizedBox());

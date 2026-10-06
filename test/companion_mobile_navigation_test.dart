@@ -110,4 +110,14 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); commands.dispose();
   });
+  testWidgets('failed reads have retry, safe date label and no enabled create action', (tester) async {
+    final commands = await showMobile(tester, MobileTestReader()..fail = true, MobileTestClient());
+    expect(find.text('Chưa lấy được ngày'), findsOneWidget);
+    expect(find.text('Thử lại'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('write-new-appointment'))).onPressed, isNull);
+    expect(find.text('private backend data'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
 }
