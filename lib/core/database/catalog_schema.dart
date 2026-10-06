@@ -7,12 +7,42 @@ import '../models/entity_id.dart';
 /// invoice snapshots and volume labels are never changed by this migration.
 class CatalogSchema {
   static Future<void> install(DatabaseExecutor db) async {
-    await db.execute('ALTER TABLE catalog_options ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
-    await db.execute('ALTER TABLE retail_products ADD COLUMN group_option_id TEXT REFERENCES catalog_options(id)');
-    await db.execute('ALTER TABLE retail_products ADD COLUMN brand_option_id TEXT REFERENCES catalog_options(id)');
-    await db.execute('ALTER TABLE retail_products ADD COLUMN unit_option_id TEXT REFERENCES catalog_options(id)');
-    await db.execute("ALTER TABLE retail_products ADD COLUMN unit_name TEXT NOT NULL DEFAULT ''");
-    await db.execute('ALTER TABLE services ADD COLUMN group_option_id TEXT REFERENCES catalog_options(id)');
+    await _addColumnIfMissing(
+      db,
+      'catalog_options',
+      'is_active',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _addColumnIfMissing(
+      db,
+      'retail_products',
+      'group_option_id',
+      'TEXT REFERENCES catalog_options(id)',
+    );
+    await _addColumnIfMissing(
+      db,
+      'retail_products',
+      'brand_option_id',
+      'TEXT REFERENCES catalog_options(id)',
+    );
+    await _addColumnIfMissing(
+      db,
+      'retail_products',
+      'unit_option_id',
+      'TEXT REFERENCES catalog_options(id)',
+    );
+    await _addColumnIfMissing(
+      db,
+      'retail_products',
+      'unit_name',
+      "TEXT NOT NULL DEFAULT ''",
+    );
+    await _addColumnIfMissing(
+      db,
+      'services',
+      'group_option_id',
+      'TEXT REFERENCES catalog_options(id)',
+    );
     // Import values which predate configurable catalogs before adding defaults.
     for (final source in [
       ('retail_products', 'product_type', 'group_option_id', CatalogOptionKind.productGroup),
@@ -32,6 +62,22 @@ class CatalogSchema {
       for (final name in kind.defaultNames) { await ensure(db, kind, name); }
     }
     // No inference from volume_label: old products remain "Chưa thiết lập".
+  }
+
+  static Future<void> _addColumnIfMissing(
+    DatabaseExecutor db,
+    String tableName,
+    String columnName,
+    String definition,
+  ) async {
+    final columns = await db.rawQuery('PRAGMA table_info($tableName)');
+    final exists = columns.any(
+      (column) => column['name']?.toString() == columnName,
+    );
+    if (exists) return;
+    await db.execute(
+      'ALTER TABLE $tableName ADD COLUMN $columnName $definition',
+    );
   }
 
   static Future<Map<String, Object?>> ensure(DatabaseExecutor db,
