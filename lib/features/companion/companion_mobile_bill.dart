@@ -232,7 +232,7 @@ class _CompanionMobileBillState extends State<CompanionMobileBill> {
             if (widget.commands.pending?.operation == LanWriteOperation.sessionCheckout)
               const Text('Kết quả thanh toán chưa rõ. Kiểm tra kết quả trước khi thu tiền hoặc thanh toán lại.'),
             if (widget.commands.pending?.operation == LanWriteOperation.sessionPayment)
-              const Text('Khoản thanh toán đang chờ kiểm tra; bill chưa được xác nhận checkout trong luồng này.'),
+              const Text('Đang kiểm tra khoản thanh toán. Chưa gửi yêu cầu chốt hóa đơn.'),
             CompanionPendingNotice(commands: widget.commands),
           ],
           if (needsReload) const Padding(padding: EdgeInsets.symmetric(vertical: 12),
@@ -284,6 +284,9 @@ class _CompanionMobileBillState extends State<CompanionMobileBill> {
             ]),
             billGroup(context, 'Khoản thanh toán', [
               for (final p in payments) billAmountRow(p['method'] as String, billMoney(p['amount'] as int)),
+              if (payments.fold<int>(0, (sum, p) => sum + (p['amount'] as int)) != total)
+                const Text('Khoản thanh toán chưa khớp tổng bill. Chọn lại hoặc điều chỉnh các khoản.',
+                  style: TextStyle(color: Colors.red)),
               if (paymentDirty) const Text('Khoản thanh toán đã chọn chưa lưu; sẽ lưu khi bạn xác nhận thanh toán.'),
               if (_allows(LanWriteOperation.sessionPayment)) OutlinedButton.icon(key: const Key('bill-edit-payment'),
                 onPressed: locked ? null : _payment, icon: const Icon(Icons.payments_outlined), label: const Text('Chọn phương thức / chia khoản')),

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/lan/lan_health_client.dart';
+import 'package:salonmanager/core/lan/lan_pairing.dart';
+import 'package:salonmanager/core/lan/lan_pairing_client.dart';
+import 'package:salonmanager/features/companion/companion_access_panel.dart';
+import 'package:salonmanager/features/companion/companion_catalog_picker.dart';
 import 'package:salonmanager/core/lan/lan_write_contract.dart';
 import 'package:salonmanager/features/companion/companion_bill_editors.dart';
 import 'package:salonmanager/features/companion/companion_command_controller.dart';
@@ -28,6 +32,14 @@ Future<CompanionCommandController> mountBill(WidgetTester tester, BillTestClient
       commands: commands, role: role, onDenied: () {}) : CompanionMobileBill(connection: billConnection,
       readClient: client, client: client, commands: commands, role: role, onDenied: () {}, id: 'bill-a')));
   await tester.pumpAndSettle(); return commands;
+}
+class _BillPairing implements LanPairingClient {
+  PhoneAccess state = PhoneAccess.approved;
+  PairedPhone get phone => PairedPhone('a' * 64, 'Phone', state, DateTime.utc(2026),
+    canReadSalon: state == PhoneAccess.approved, writeRole: PhoneWriteRole.cashier);
+  @override Future<PairedPhone> status(LanConnection c, String token) async => phone;
+  @override Future<PairedPhone> bootstrap(LanConnection c, String token) async => phone;
+  @override Future<PairedPhone> request(LanConnection c, String code, String name, String token) async => phone;
 }
 void main() {
   testWidgets('production bill lists keep filters; atomic edit targets A and switching to B keeps its data', (tester) async {
@@ -144,4 +156,52 @@ void main() {
     expect(find.textContaining('không thanh toán lại'), findsOneWidget); expect(client.invoices, 1);
     expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox()); commands.dispose();
   });
+  testWidgets('unknown payment setup resolves without automatically checking out', (tester) async {
+    final client = BillTestClient()..losePayment = true, store = BillTestStore();
+    final commands = await mountBill(tester, client, store: store);
+    await billTap(tester, 'bill-edit-payment'); await billTap(tester, 'bill-method-Thẻ'); await billTap(tester, 'bill-payment-done');
+    await billTap(tester, 'bill-checkout'); await billTap(tester, 'bill-confirm-checkout');
+    expect(store.value.pendingCommand?.operation, LanWriteOperation.sessionPayment);
+    expect(client.invoices, 0); expect(client.sent, hasLength(1));
+    await billTap(tester, 'write-check-result');
+    expect(store.value.pendingCommand, isNull); expect(client.invoices, 0); expect(client.sent, hasLength(1));
+    await billTap(tester, 'bill-checkout'); await billTap(tester, 'bill-confirm-checkout');
+    expect(client.sent.last.operation, LanWriteOperation.sessionCheckout); expect(client.invoices, 1);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
+  testWidgets('uncommitted lost checkout retries the same durable command only after checking desktop', (tester) async {
+    final client = BillTestClient(), store = BillTestStore(); final commands = await mountBill(tester, client, store: store);
+    await billTap(tester, 'bill-checkout'); client.unavailable = true; await billTap(tester, 'bill-confirm-checkout');
+    expect(client.invoices, 0); expect(client.sent, hasLength(1));
+    final original = store.value.pendingCommand!;
+    expect(find.byKey(const Key('write-retry-command')), findsNothing);
+    client.unavailable = false; await billTap(tester, 'write-check-result');
+    expect(commands.canRetry, isTrue); await billTap(tester, 'write-retry-command');
+    expect(client.sent, hasLength(2)); expect(client.sent.last.commandId, original.commandId);
+    expect(client.sent.last.signature, original.signature); expect(client.invoices, 1);
+    expect(find.text('Thanh toán thành công'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
+  testWidgets('background and revoke remove nested bill editors, pickers and checkout dialogs', (tester) async {
+    final store = BillTestStore(), client = BillTestClient(), pairing = _BillPairing();
+    await tester.pumpWidget(MaterialApp(theme: companionTheme(), home: Scaffold(body:
+      CompanionAccessPanel(connection: billConnection, client: pairing, store: store, readClient: client,
+        workflowClient: client, onAccess: (_) {}))));
+    await tester.pumpAndSettle(); await billTap(tester, 'mobile-tab-invoices');
+    await billTap(tester, 'bill-list-bill-a'); await billTap(tester, 'bill-edit-line-service'); await billTap(tester, 'bill-line-employee');
+    expect(find.byType(CompanionCatalogPicker), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused); await tester.pumpAndSettle();
+    expect(find.byType(CompanionMobileBill), findsNothing); expect(find.byType(CompanionBillLineEditor), findsNothing);
+    expect(find.byType(CompanionCatalogPicker), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
+    await billTap(tester, 'mobile-tab-invoices'); await billTap(tester, 'bill-list-bill-a'); await billTap(tester, 'bill-checkout');
+    expect(find.byType(AlertDialog), findsOneWidget);
+    pairing.state = PhoneAccess.revoked; await tester.pump(const Duration(seconds: 5)); await tester.pumpAndSettle();
+    expect(find.byType(CompanionMobileBill), findsNothing); expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(CompanionWorkspace), findsNothing); expect(client.sent, isEmpty);
+    expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox());
+  });
+
 }

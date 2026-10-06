@@ -20,6 +20,7 @@ class BillTestClient implements LanWorkflowClient, SalonReadClient {
   final sessions = <String, Map<String, dynamic>>{};
   final revisions = <String, int>{};
   final journal = <String, LanWriteResult>{};
+  bool losePayment = false;
   bool conflict = false, loseCheckout = false, unavailable = false, missingResult = false, failReceipt = false;
   int invoices = 0;
   BillTestClient() {
@@ -98,7 +99,9 @@ class BillTestClient implements LanWorkflowClient, SalonReadClient {
     }
     revisions[id] = (revisions[id] ?? 0) + 1;
     final result = LanWriteResult(id: id, type: 'session', revision: revisions[id]!);
-    journal[command.commandId] = result; return result;
+    journal[command.commandId] = result;
+    if (losePayment && command.operation == LanWriteOperation.sessionPayment) { throw const PairingFailure(LanErrorCode.unavailable); }
+    return result;
   }
   @override Future<LanWriteResult?> result(LanConnection c, String t, String id) async =>
     unavailable ? throw const PairingFailure(LanErrorCode.unavailable) : journal[id];

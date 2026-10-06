@@ -56,7 +56,7 @@ class _CompanionBillLineEditorState extends State<CompanionBillLineEditor> {
   Future<void> _back() async {
     if (confirming || widget.commands.busy) { return; }
     confirming = true;
-    final leave = !dirty || await confirmBillDiscard(context, pending: widget.commands.pending != null);
+    final leave = !dirty && widget.commands.pending == null || await confirmBillDiscard(context, pending: widget.commands.pending != null);
     confirming = false; if (mounted && leave) { _leave(false); }
   }
   Future<void> _employee() async {
@@ -126,8 +126,10 @@ class _CompanionBillPaymentEditorState extends State<CompanionBillPaymentEditor>
   late final amounts = {for (final m in billMethods) m: TextEditingController(text: '${widget.payments.where((p) => p['method'] == m).fold<int>(0, (sum, p) => sum + (p['amount'] as int))}')};
   late String original;
   bool allowExit = false, confirming = false;
-  @override void initState() { super.initState(); original = jsonEncode(_payments()); }
-  bool get dirty => jsonEncode(_payments()) != original;
+  @override void initState() { super.initState(); original = _draftSignature(); }
+  String _draftSignature() => jsonEncode({'split': split, 'method': method,
+    'amounts': {for (final e in amounts.entries) e.key: e.value.text}});
+  bool get dirty => _draftSignature() != original;
   int get allocated => split ? amounts.values.fold(0, (sum, c) => sum + (int.tryParse(c.text.trim()) ?? 0)) : widget.total;
   List<Map<String, dynamic>> _payments() => !split || widget.total == 0
     ? [{'method': method, 'amount': widget.total}]
