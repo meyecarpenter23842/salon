@@ -120,6 +120,7 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
         try { discovery = LanConnectionQr.encode(LanConnection(address.toString(), verification)); }
         on FormatException { /* Legacy loopback hosts keep manual status without an unusable QR. */ }
       }
+      final qrPayload = discovery;
       final busy = status.busy || _enabling || _loading;
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -169,15 +170,15 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'hoặc nhập hai thông tin bên dưới vào các ô cùng tên.',
             ),
             const SizedBox(height: 16),
-            if (discovery != null) ...[
+            if (qrPayload != null) ...[
             Center(child: Semantics(label: 'QR kết nối máy salon', child: Container(
               color: Colors.white, padding: const EdgeInsets.all(12), child: QrImageView(
                 key: const Key('desktop-phone-qr'), size: 220,
-                data: discovery,
+                data: qrPayload,
                 backgroundColor: Colors.white)))),
             const Text('Trên Android bấm Quét QR máy salon. QR chỉ chứa địa chỉ và mã xác minh; chủ salon vẫn duyệt quyền riêng.'),
             TextButton.icon(key: const Key('desktop-phone-copy-qr'),
-              onPressed: () => _copy(context, discovery),
+              onPressed: () => _copy(context, qrPayload),
               icon: const Icon(Icons.copy), label: const Text('Sao chép thông tin QR')),
             ] else const Text('Địa chỉ này chỉ dùng trên máy salon. Chọn mạng Wi-Fi/dây mạng và áp dụng để tạo QR dùng được trên điện thoại.'),
             const SizedBox(height: 16),
