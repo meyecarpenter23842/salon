@@ -130,6 +130,20 @@ class SensitiveActionService {
     _authorizedUntil = null;
   }
 
+  /// Inventory authorization is checked before its atomic transaction begins.
+  Future<String> authorizeInventoryAction(String action, String targetId) async {
+    final protected = await isProtectionConfigured();
+    if (protected && !isOwnerSessionActive) {
+      await _writeAudit(actorName: 'Chưa xác thực', action: action,
+        targetType: 'stock_document', targetId: targetId, result: 'denied',
+        detail: 'Owner authorization required');
+      throw StateError('Thao tác kho cần xác thực Owner.');
+    }
+    final db = await _database.database;
+    return protected ? (await _readSetting(db, _actorNameKey) ?? _actorName)
+      : 'Owner mặc định (chưa khóa PIN)';
+  }
+
   Future<T> runSensitive<T>({
     required SensitiveAction action,
     required String targetType,

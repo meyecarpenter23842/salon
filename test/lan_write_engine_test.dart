@@ -1,3 +1,4 @@
+import 'support/stock_schema_fixture.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -166,6 +167,7 @@ void main() {
     }
     await db.execute('ALTER TABLE services DROP COLUMN group_option_id');
     await db.execute('ALTER TABLE catalog_options DROP COLUMN is_active');
+    await removeStockDocumentSchema(db);
     await db.setVersion(16);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);

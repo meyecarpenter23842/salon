@@ -1,3 +1,4 @@
+import 'stock_document_schema.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -84,6 +85,7 @@ class SalonDatabase {
         await batch.commit(noResult: true);
         await CatalogSchema.install(database);
         await database.execute('ALTER TABLE retail_products ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 5 CHECK(low_stock_threshold >= 0)');
+        await StockDocumentSchema.install(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         final batch = database.batch();
@@ -432,6 +434,7 @@ class SalonDatabase {
         await batch.commit(noResult: true);
         if (oldVersion < 18) await CatalogSchema.install(database);
         if (oldVersion < 19) await database.execute('ALTER TABLE retail_products ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 5 CHECK(low_stock_threshold >= 0)');
+        if (oldVersion < 20) await StockDocumentSchema.install(database);
       },
       onOpen: (database) async {
         await database.insert('app_settings', {
