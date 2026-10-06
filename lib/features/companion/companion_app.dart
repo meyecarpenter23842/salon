@@ -145,16 +145,14 @@ class _ConnectionPageState extends State<_ConnectionPage>
   }
   Future<void> _pasteQr() async {
     if (_busy) return;
-    final input = TextEditingController();
+    var input = '';
     final text = await showDialog<String>(context: context, builder: (context) => AlertDialog(
       title: const Text('Dán thông tin QR'),
-      content: TextField(key: const Key('companion-qr-text'), controller: input, maxLength: 1024,
+      content: TextField(key: const Key('companion-qr-text'), onChanged: (value) => input = value, maxLength: 1024,
         maxLines: 5, decoration: const InputDecoration(hintText: 'Sao chép thông tin QR từ máy salon')),
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
-        FilledButton(key: const Key('companion-qr-import'), onPressed: () => Navigator.pop(context, input.text),
+        FilledButton(key: const Key('companion-qr-import'), onPressed: () => Navigator.pop(context, input),
           child: const Text('Đọc thông tin'))]));
-    // Wait until the dialog has unmounted before disposing its controller.
-    WidgetsBinding.instance.addPostFrameCallback((_) => input.dispose());
     if (text == null || !mounted) return;
     try { await _useQr(LanConnectionQr.decode(text)); }
     catch (_) { if (mounted) setState(() => _message = 'Thông tin QR không hợp lệ. Lấy QR mới từ máy salon, hoặc nhập hai ô bên dưới.'); }
