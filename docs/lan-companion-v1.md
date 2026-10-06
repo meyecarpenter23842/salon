@@ -1,120 +1,96 @@
 # Android companion / desktop LAN contract v1
 
-Tracking: #86, Batch 2 #89. Contract/policy landed in #90. The licensed Windows
-main app starts HTTPS after in-app setup. Device pairing, owner approval/revocation
-and Android home bootstrap are implemented; see phone-pairing.md.
-Read-only customers, paid invoices and appointments use a separate desktop Owner grant;
-see [phone-data-read.md](phone-data-read.md). No DB migration or business writes are enabled.
-Firewall rules remain an explicit setup action.
+Current tracking: #104/#111; #86/#89 are historical handoff records. This page
+describes implemented behavior through #110, replacing the earlier route proposal.
+For operators use [salon-operations.md](salon-operations.md); physical acceptance
+uses [salon-qa-acceptance.md](salon-qa-acceptance.md).
 
-## Ownership and lifecycle decision
+## Ownership and lifecycle
 
-V1 backend lives inside the licensed Windows main application, enabled explicitly
-by the owner. Staff windows and Android are clients. Closing the main window
-ends the backend even if Staff remains open; no background Windows service in V1.
-PC shutdown/sleep or Wi-Fi loss makes mobile unavailable and disables writes.
-The phone never owns a business SQLite database and never queues offline writes.
+The licensed Windows main application owns the HTTPS backend and business SQLite.
+Staff remains a separate process using the same database. Main shutdown/license
+loss stops the host; Staff does not take ownership. No background Windows service,
+VPS or phone business database is required for LAN V1.
 
-The host must acquire an exclusive OS lock before binding (covering two main
-processes), retain it through shutdown, and refuse a second owner. A failed lock
-or bind leaves desktop usable with LAN unavailable; no automatic alternate port.
-License loss stops acceptance of new requests. Shutdown first stops new commands,
-drains accepted work through repository transactions, then closes sockets/lock.
-The health host uses an exclusive OS file lock retained for the entire listener
-lifetime plus an in-process guard. It never falls back to another port.
-The server must never depend on the UI's selectedInvoiceSessionIdProvider.
+An exclusive OS lock and in-process guard prevent two main hosts. Bind/lock/TLS
+failure leaves desktop usable with LAN unavailable; no automatic port fallback.
+The configured interface is private IPv4, default TCP port 8743. Firewall setup
+is an explicit owner action restricted to Private profile/LocalSubnet, without
+router forwarding, UPnP or automatic Public rules.
 
-## Transport and discovery decision
+## Transport and discovery
 
-Use HTTPS and WSS. Desktop generates a per-installation certificate/private key;
-The planned QR shown by the owner carries endpoint, API version, certificate SHA-256 pin and
-a short-lived single-use pairing secret. Android pins that certificate for this
-endpoint; never use a global trust-all callback. Pin change requires explicit
-re-pair. API URL is the connection target and can be entered directly; QR is a future
-convenience for exchanging URL/pin and pairing. DHCP address change needs updated
-configuration; the existing certificate identity is retained. No mDNS
-dependency. Bind only configured LAN interfaces; no port-forwarding or UPnP.
-CI proves Dart pin validation with real certificates; a physical Android LAN check remains open.
-Do not expose device tokens, pairing secrets or customer data over plain HTTP.
+Implemented transport is pinned HTTPS with bounded JSON responses. No WebSocket
+event stream is implemented. Desktop generates and protects a machine-only
+certificate/private key; Android verifies the certificate DER SHA-256 pin,
+validity and endpoint on every request, rejecting redirects. Never use trust-all.
 
-Firewall setup is a deliberate owner action limited to Private network profiles
-and local subnet. Do not silently open Public network rules. The health host uses port 8743 by default; configure another port explicitly
-when required. No automatic conflict fallback.
+The implemented QR has exactly kind/version/url/pin, not a pairing code/token.
+Android scan/paste requires endpoint/pin confirmation; it fills connection inputs,
+then pinned health and owner pairing follow separately. DHCP changes update the
+URL while retaining the same certificate identity. A pin change requires explicit
+verification/re-pair; an uncertain command blocks switching salon identity.
+See [lan-health-setup.md](lan-health-setup.md).
 
-## Wire rules
+## Implemented routes
 
-Base path: /api/staff/v1. JSON UTF-8. UTC ISO-8601 times. Money is integer VND;
-percentages must match existing domain representation. Existing TEXT entity IDs
-remain opaque; no mobile-generated database authority.
+Base path: /api/staff/v1. JSON UTF-8; money is integer VND, IDs are opaque TEXT
+identities. Desktop-selected bill is never implicit authority for a phone command.
 
-GET /health beneath the base path returns exactly
-{"apiVersion":1,"status":"ok"}. It proves listener liveness only, not database,
-license, pairing or readiness for checkout. It reads no SQLite and leaks no salon
-name, device ID, version of SQLite, path, PIN or customer data.
+| Method / suffix | Behavior |
+|---|---|
+| GET /health | Anonymous exactly apiVersion/status; no business SQLite or salon details |
+| POST /pair/exchange | Expiring one-use code, named device/token, pending owner approval |
+| GET /pair/status | State of that authenticated device only |
+| GET /bootstrap | Approved device identity, read permissions and write role |
+| GET /customers, /invoices, /appointments | Authorized bounded presentation lists |
+| GET /editor | Authorized customer/appointment/session/invoice snapshot with epoch/revision |
+| GET /catalog | Authorized paged customers/services/products/employees/sessions |
+| POST /commands | Authorized typed operation with commandId and epoch/revision preconditions |
+| GET /commands?commandId=... | Result lookup scoped to the authenticated device |
+| GET /changes | Authorized bounded epoch/cursor/reset/changed invalidation watermark |
 
-Implemented device routes: POST /pair/exchange consumes one expiring code and creates
-an idempotent pending request; GET /pair/status returns only that token's state.
-GET /bootstrap requires desktop-approved device authority and returns its identity
-with permissions: [connection], plus customers.read/invoices.read/appointments.read
-only when the owner enables read access for that individual phone. It has no business snapshot, epoch or event cursor yet.
-Owner decisions are desktop-only; no HTTP administration routes exist.
+There are no HTTP owner administration routes. Desktop approval and canReadSalon
+grant are separate; write roles none/staff/cashier/owner are stored by the desktop,
+not accepted from the command payload. Price/discount require the phone owner
+role; payment/checkout require cashier or owner. QR and health never grant roles.
 
-Implemented GET /customers, /invoices and /appointments use bounded presentation DTOs
-and the existing desktop domain mappers. Business route families and richer bootstrap
-planned for later implementation:
+Customer/appointment edits, walk-in/appointment bills, bill lines, employee/price/
+discount/payment and checkout call existing domain repositories inside the
+command transaction. Server-generated resource revisions advance for desktop and
+mobile changes. Stale epoch/revision fails with revision_conflict and no business
+writes. Successful results and writes are committed atomically to SQLite journal;
+device+commandId replay returns the recorded result before revision/epoch checks.
+A reused ID with changed command reports command_conflict. Successful journal
+entries have no automatic TTL. See [phone-write-foundation.md](phone-write-foundation.md)
+and [android-write-workflows.md](android-write-workflows.md).
 
-| Route | Purpose |
-| --- | --- |
-| GET /bootstrap | Authorized minimal snapshot, backendEpoch and event cursor |
-| GET /events | Authenticated WebSocket; invalidate/reconcile resources |
-| GET/POST /appointments, PATCH /appointments/:id/status | Schedule operations |
-| GET/POST /customers | Search and create under actor permissions |
-| GET /services, /products, /employees | Authorized catalog projections |
-| POST /billing-sessions | Walk-in session with explicit customer |
-| POST /appointments/:id/billing-session | Reuse/create active appointment bill |
-| GET /billing-sessions/:sessionId | Read explicit bill |
-| POST/PATCH/DELETE /billing-sessions/:sessionId/lines | Bill line operations |
-| POST /billing-sessions/:sessionId/checkout | Repository checkout |
+Errors use stable apiVersion/requestId/error-code envelopes without raw SQL,
+paths, stack traces or secrets. Body/query/response sizes, pagination, rate and
+concurrent request limits are enforced in the host/client. Read authority is
+checked before and after reading; write authority spans the transaction.
 
-All future business mutations require authenticated device/actor, commandId and expectedRevision
-on existing resources. Billing envelopes also carry sessionId, matching the route.
-Missing target is invalid_request, never resolved from desktop selection. New
-resource creation uses a separate DTO (not LanCommand) and commandId without a
-fabricated resource revision. Server derives actor from auth; ignores client roles.
-Price/discount/checkout use backend guards. Desktop Owner authorization must not
-implicitly grant remote devices owner privileges.
+## Refresh and recovery
 
-Revision is a server-issued monotonically increasing integer per resource.
-Desktop and mobile mutations must both advance it transactionally; updated_at
-alone is insufficient. Stale revision yields revision_conflict with no writes.
-Do not advertise mutation endpoints until repository revision support is present.
+Changes are an invalidation watermark, not event history or private records.
+Foreground polling is approximately 5 seconds plus network time. Desktop/Staff
+observe SQLite total_changes/data_version; no file-size/mtime heuristic.
+Missing/future cursors or backend epoch changes require fresh reads.
 
-Idempotency scope is authenticated device + commandId. Same normalized command
-and target returns its stored result; reused key with different payload returns
-command_conflict. Persist successful result and business write in the same SQLite
-transaction, including checkout. Check known commands before revision checks so
-a committed retry returns the original result. Retention/TTL must be decided before
-mutation support; no in-memory-only guarantee across restart.
-
-Errors use {apiVersion, requestId, error:{code}} with LanErrorCode stable codes
-and status mapping. Never serialize raw exception, stack, SQL or local paths.
-Optional conflict details require a separate authorized DTO; no unrestricted map.
-Bound body sizes, parser depth, pagination and rate limits at the server boundary.
-
-Events carry apiVersion, backendEpoch, sequence, resourceType, resourceId,
-revision and event type. They invalidate authorized snapshots, not carry PII.
-A changed epoch after restart, sequence gap, expired cursor or reconnect requires
-bootstrap/resync before enabling writes. Device revoke closes its event stream.
-A reconnect never automatically replays mutations; reconcile ambiguous results
-by commandId first.
+Offline foreground retains drafts/routes but disables writes; reconnect verifies
+authority and reloads snapshots before saving. Background/revoke closes private
+routes/dialogs. Pending uncertain commands remain in Android Keystore storage;
+no automatic replay/offline write queue. The user checks a command's result before
+an explicit retry. See [lan-resync.md](lan-resync.md).
 
 ## Evidence and remaining gate
 
-Pure Dart contract/policy tests run in existing Ubuntu and Windows Flutter CI.
-CI additionally exercises a real HTTPS listener with a generated certificate,
-trusted/untrusted clients, unsupported routes, startup/stop races, port conflicts
-and another-process OS lock exclusion on Ubuntu and Windows. This proves host
-behavior, not connectivity from a real phone. Android now has a separate network bootstrap and URL/fingerprint health shell,
-with real TLS client tests and a CI debug APK. Remaining work is QR discovery
-and an actual Android-to-desktop LAN check; see android-companion-test.md. Device pairing/approval/revoke is implemented in PR #100. General business roles, mutation routes,
-revision/idempotency and events remain separate Batch 3 work.
+Existing full CI exercises real fixture SQLite/TLS/OS locks, permissions, revisions,
+atomic checkout/replay, QR widgets, reconnect and Windows/Staff/installer/updater/
+NSIS/APK builds. Flutter engine renders are review evidence.
+
+Physical Android camera, Keystore/network behavior, Wi-Fi isolation/firewall,
+sleep/restart and owner UX acceptance remain #111. Owner currently has no device;
+leave those gates pending. Other-network/4G access remains #112. No local app
+build/test, new checkout, installation/release or production migration is
+performed by this QA source change.

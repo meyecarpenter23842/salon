@@ -2,6 +2,14 @@
 
 Hair Spa Manager là ứng dụng Flutter desktop-first để quản lý vận hành salon tóc trên Windows, tập trung vào lịch hẹn, khách hàng, dịch vụ, nhân sự, hóa đơn và thiết lập cục bộ.
 
+## Vận hành và nghiệm thu desktop–Android LAN
+
+- [Hướng dẫn vận hành](docs/salon-operations.md): APK đúng nguồn/hash, QR/ghép quyền, reconnect, kho, backup và rollback.
+- [Biên bản nghiệm thu điện thoại thật](docs/salon-qa-acceptance.md): model/OS/bản đã cài, từng ca và bằng chứng.
+- [Contract LAN hiện hành](docs/lan-companion-v1.md), [roadmap #104](https://github.com/meyecarpenter23842/salon/issues/104) và [QA #111](https://github.com/meyecarpenter23842/salon/issues/111).
+
+Android đã có khách/lịch/bill/thanh toán theo quyền và reconnect; **chưa nghiệm thu điện thoại thật**. CI/emulator không thay gate này. Quy trình dự án hiện tại không chạy app/build/test local hoặc cài/migrate production khi chưa có yêu cầu riêng; các lệnh dev bên dưới chỉ cho môi trường phát triển được cho phép.
+
 ## Phạm vi MVP hiện tại
 
 - Chạy tốt theo hướng desktop-first cho Windows.
@@ -42,7 +50,7 @@ Thư mục chứa bản sao lưu (Windows): `%APPDATA%\HairSpaManager\data\backu
 ### Cách sao lưu dữ liệu
 
 1. Mở màn hình **Cài đặt**.
-2. Kéo xuống section **Sao lưu dữ liệu**.
+2. Chọn **Backup & Restore**.
 3. Nhấn **Tạo bản sao lưu** — file `.db` sẽ được tạo tự động với tên có timestamp, ví dụ: `salon_manager_backup_2026-05-05_2130.db`.
 4. File được lưu vào thư mục backup mặc định phía trên.
 
@@ -50,11 +58,11 @@ Thư mục chứa bản sao lưu (Windows): `%APPDATA%\HairSpaManager\data\backu
 
 > ⚠️ **Cảnh báo**: Phục hồi sẽ thay thế hoàn toàn dữ liệu hiện tại. Ứng dụng tự tạo bản sao lưu dự phòng `pre_restore` trước khi ghi đè.
 
-1. Mở màn hình **Cài đặt** → section **Sao lưu dữ liệu**.
+1. Mở màn hình **Cài đặt → Backup & Restore**.
 2. Nhấn **Phục hồi từ bản sao lưu**.
 3. Chọn tệp `.db` từ danh sách backup có sẵn, hoặc nhập đường dẫn tùy chỉnh.
 4. Xác nhận cảnh báo rồi nhấn **Phục hồi**.
-5. Dữ liệu trên màn hình tự cập nhật sau khi phục hồi thành công.
+5. Đối chiếu dữ liệu sau phục hồi trước mở lại Staff/điện thoại; theo [quy trình restore](docs/salon-operations.md). Dừng ghi và đóng Staff trước restore.
 
 ### Khuyến nghị
 
@@ -222,3 +230,4 @@ Kiểm tra cập nhật
 ```
 
 Release được build local. Upload R2 thủ công theo thứ tự installer trước và `latest.json` cuối cùng. Xem `WINDOWS_RELEASE.md` để biết quy trình chi tiết.
+
