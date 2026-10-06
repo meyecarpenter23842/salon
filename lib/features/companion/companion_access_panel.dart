@@ -236,6 +236,29 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
 
   @override
   Widget build(BuildContext context) {
+    final ready = _phone?.state == PhoneAccess.approved && _phone!.canReadSalon &&
+      _online && _foreground && _credential != null;
+    if (ready) {
+      return CompanionWorkspace(
+        key: ValueKey('${_credential!.token}:${_phone!.writeRole.name}'),
+        connection: widget.connection, readClient: widget.readClient, client: widget.workflowClient,
+        commands: _commands!, role: _phone!.writeRole,
+        connectionOptions: (_) => _content(),
+        onDenied: () {
+          if (!mounted) { return; }
+          setState(() => _online = false);
+          _refresh();
+        });
+    }
+    if (_phone?.state == PhoneAccess.approved) {
+      return Scaffold(appBar: AppBar(title: const Text('Salon — Trang chính')),
+        body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));
+    }
+    return LayoutBuilder(builder: (context, constraints) => constraints.hasBoundedHeight
+      ? SingleChildScrollView(padding: const EdgeInsets.all(16), child: _content()) : _content());
+  }
+
+  Widget _content() {
     final approved = _phone?.state == PhoneAccess.approved;
     final pending = _phone?.state == PhoneAccess.pending;
     return Column(
@@ -289,18 +312,6 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
             }, child: const Text('Kết thúc yêu cầu đã đối chiếu')),
           if (_commands!.message != null) Text(_commands!.message!),
         ],
-        if (approved && _phone!.canReadSalon && _online && _foreground && _credential != null)
-            CompanionWorkspace(
-              key: ValueKey('${_credential!.token}:${_phone!.writeRole.name}'),
-              connection: widget.connection, readClient: widget.readClient,
-              client: widget.workflowClient, commands: _commands!,
-              role: _phone!.writeRole,
-              onDenied: () {
-                if (!mounted) return;
-                setState(() => _online = false);
-                _refresh();
-              },
-            ),
 
         if (approved || pending || _credential != null)
           TextButton.icon(key: const Key('companion-access-refresh'),

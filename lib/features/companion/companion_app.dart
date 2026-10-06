@@ -30,6 +30,13 @@ class SalonCompanionApp extends StatelessWidget {
     theme: ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF805A45)),
+      scaffoldBackgroundColor: const Color(0xFFFAF7F2),
+      inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
+      cardTheme: CardThemeData(color: Colors.white, elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(48, 48))),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48))),
     ),
     home: _ConnectionPage(checker: checker, pairingClient: pairingClient, credentialStore: credentialStore, readClient: readClient, workflowClient: workflowClient),
   );
@@ -149,13 +156,14 @@ class _ConnectionPageState extends State<_ConnectionPage>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(_authorized ? 'Salon — Trang chính' : 'Kết nối máy salon')),
+    appBar: _authorized ? null : AppBar(title: const Text('Kết nối máy salon')),
     body: SafeArea(
       child: _loading
         ? const Center(child: CircularProgressIndicator())
-        : ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
+        : LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
+            physics: _authorized ? const NeverScrollableScrollPhysics() : null,
+            padding: _authorized ? EdgeInsets.zero : const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (!_authorized) ...[
               const Text(
                 'Trên máy salon, mở Cài đặt → Kết nối điện thoại. '
@@ -228,12 +236,14 @@ class _ConnectionPageState extends State<_ConnectionPage>
               ],
               ],
               if (_connection != null)
-                CompanionAccessPanel(
+                SizedBox(key: ValueKey('access-${_connection!.apiUrl}|${_connection!.certificateSha256}'),
+                  height: _authorized ? constraints.maxHeight : null, child: CompanionAccessPanel(
                   key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
                   connection: _connection!, client: widget.pairingClient,
                   store: widget.credentialStore, readClient: widget.readClient, workflowClient: widget.workflowClient,
                   onAccess: (value) { if (mounted) setState(() => _authorized = value); },
-                ),
+                )),
+              if (!_authorized) ...[
               const SizedBox(height: 24),
               const Text(
                 'Sau khi chủ salon bật quyền xem, điện thoại có thể xem khách hàng, '
@@ -244,8 +254,9 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 'Lần đầu, dùng cùng Wi-Fi với máy salon và giữ app salon mở. '
                 'Dùng 4G hoặc mạng khác cần thiết lập truy cập từ xa trước.',
               ),
-            ],
-          ),
+              ],
+            ]),
+          )),
     ),
   );
 }
