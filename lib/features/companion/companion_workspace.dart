@@ -44,7 +44,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
       body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16),
         child: CompanionBillWorkspace(connection: widget.connection, readClient: widget.readClient,
           client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
-          initialKind: kind, initialId: id)))));
+          initialKind: kind, initialId: id))))));
     if (mounted) { refresh++; _changed(); }
   }
   Future<void> _bills({String? appointmentId}) async {
@@ -53,7 +53,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
       body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16),
         child: CompanionBillWorkspace(connection: widget.connection, readClient: widget.readClient,
           client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
-          initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId)))));
+          initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId))))));
     if (mounted) { refresh++; _changed(); }
   }
 
