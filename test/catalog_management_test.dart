@@ -44,7 +44,7 @@ void main() {
     final oldMovement = await legacy.query('inventory_movements');
     await legacy.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 19);
+    expect(await upgraded.getVersion(), 20);
     final row = (await upgraded.query('retail_products')).single;
     expect(row['id'], 'legacy-product');
     expect(row['group_option_id'], 'old-group');
@@ -52,7 +52,8 @@ void main() {
     expect(row['unit_name'], '');
     expect(row['unit_option_id'], isNull);
     expect((await upgraded.query('inventory_stock')).single['stock_on_hand'], 7);
-    expect(await upgraded.query('inventory_movements'), oldMovement);
+    expect(await upgraded.query('inventory_movements', columns: oldMovement.single.keys.toList()), oldMovement);
+    expect((await upgraded.query('inventory_movements')).single['source'], 'legacy');
     expect(await upgraded.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     await SalonDatabase.instance.close();
     final reopened = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);

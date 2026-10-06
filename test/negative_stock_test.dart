@@ -1,3 +1,4 @@
+import 'support/stock_schema_fixture.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,10 +46,11 @@ void main() {
       'note': 'Original', 'created_at': '2026-10-05'});
     final movements = await db.query('inventory_movements');
     await db.execute('ALTER TABLE retail_products DROP COLUMN low_stock_threshold');
+    await removeStockDocumentSchema(db);
     await db.setVersion(18);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 19);
+    expect(await upgraded.getVersion(), 20);
     expect((await upgraded.query('retail_products')).single['low_stock_threshold'], 5);
     expect((await upgraded.query('inventory_stock')).single['stock_on_hand'], -5);
     expect(await upgraded.query('inventory_movements'), movements);

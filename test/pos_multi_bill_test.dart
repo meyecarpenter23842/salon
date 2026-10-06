@@ -128,14 +128,16 @@ void main() {
       }
 
       await tester.tap(find.byKey(const Key('billing-new-walkin')));
-      await _settle(tester);
+      await _settleUntil(tester, () => !drafts.any((draft) =>
+          draft.id == container.read(selectedInvoiceSessionIdProvider)));
       final walkInId = container.read(selectedInvoiceSessionIdProvider);
       expect(drafts.map((draft) => draft.id), isNot(contains(walkInId)));
       expect((await sessions.fetchActiveSessions()).map((draft) => draft.id),
           containsAll([...drafts.map((draft) => draft.id), walkInId]));
 
       await tester.tap(find.byKey(const Key('test-open-appointment')));
-      await _settle(tester);
+      await _settleUntil(tester, () =>
+          container.read(selectedInvoiceSessionIdProvider) == drafts[2].id);
       expect(container.read(selectedInvoiceSessionIdProvider), drafts[2].id);
       expect((await sessions.fetchActiveSessions())
           .where((draft) => draft.appointmentId == fixture.appointments[2].id),
@@ -175,6 +177,18 @@ Future<void> _settle(WidgetTester tester) async {
     await Future<void>.delayed(const Duration(milliseconds: 60));
   }
   await tester.pumpAndSettle();
+}
+
+Future<void> _settleUntil(WidgetTester tester, bool Function() completed) async {
+  // Pump frames while SQLite FFI completes on the real clock. Animation
+  // settling alone does not mean the asynchronous session mutation finished.
+  final deadline = DateTime.now().add(const Duration(seconds: 15));
+  while (!completed() && DateTime.now().isBefore(deadline)) {
+    await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  expect(completed(), isTrue, reason: 'Session mutation did not complete');
+  await _settle(tester);
 }
 
 class _Fixture {
