@@ -26,8 +26,12 @@ class _Health implements LanHealthChecker {
 class _Store implements CompanionCredentialStore {
   CompanionCredential? value;
   bool fail = false;
+  bool failRead = false;
   @override
-  Future<CompanionCredential?> read() async => value;
+  Future<CompanionCredential?> read() async {
+    if (failRead) throw StateError('secure storage locked');
+    return value;
+  }
   @override
   Future<void> write(CompanionCredential credential) async {
     if (fail) throw StateError('private store');
@@ -42,6 +46,10 @@ class _Client implements LanPairingClient {
   int requests = 0;
   bool offline = false;
   Completer<void>? delayed;
+  Completer<void>? statusDelay;
+  final statusTokens = <String>[];
+  int activeStatuses = 0;
+  int maxStatuses = 0;
   PairedPhone get phone => PairedPhone('a' * 64, 'Phone A', state, DateTime.utc(2026));
   @override
   Future<PairedPhone> request(LanConnection connection, String code, String name, String token) async {
@@ -51,8 +59,14 @@ class _Client implements LanPairingClient {
   }
   @override
   Future<PairedPhone> status(LanConnection connection, String token) async {
-    if (offline) throw const PairingFailure(LanErrorCode.unavailable);
-    return phone;
+    statusTokens.add(token);
+    activeStatuses++;
+    if (activeStatuses > maxStatuses) maxStatuses = activeStatuses;
+    try {
+      if (statusDelay != null) await statusDelay!.future;
+      if (offline) throw const PairingFailure(LanErrorCode.unavailable);
+      return phone;
+    } finally { activeStatuses--; }
   }
   @override
   Future<PairedPhone> bootstrap(LanConnection connection, String token) async {
@@ -226,6 +240,67 @@ void main() {
       desktopPhoneRegistry.value = old;
       registry.dispose();
     }
+  });
+
+  testWidgets('saved identity survives offline restart; automatic probes stay quiet and do not pair again', (tester) async {
+    final client = _Client()..offline = true;
+    final store = _Store()..value = CompanionCredential('b' * 64, 'c' * 64);
+    await showApp(tester, client, store);
+    expect(find.byKey(const Key('companion-url')), findsNothing);
+    expect(find.byKey(const Key('companion-pair-code')), findsNothing);
+    expect(find.textContaining('Mất kết nối'), findsOneWidget);
+    client.statusDelay = Completer<void>();
+    await tester.pump(const Duration(seconds: 5)); await tester.pump();
+    expect(find.text('Đang kiểm tra…'), findsNothing);
+    expect(find.byKey(const Key('companion-pair-code')), findsNothing);
+    await tester.pump(const Duration(seconds: 15));
+    expect(client.maxStatuses, 1);
+    client.offline = false; client.state = PhoneAccess.approved;
+    client.statusDelay!.complete(); client.statusDelay = null;
+    await tester.pumpAndSettle();
+    expect(find.text('Salon — Trang chính'), findsOneWidget);
+    expect(client.requests, 0); expect(client.statusTokens.toSet(), {'c' * 64});
+    expect(store.value!.token, 'c' * 64);
+    await tester.pumpWidget(const SizedBox());
+    await showApp(tester, client, store);
+    expect(find.byKey(const Key('companion-pair-code')), findsNothing);
+    expect(client.requests, 0); await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('editing connection is deliberate; cancel and same-pin IP change retain device identity', (tester) async {
+    final client = _Client()..state = PhoneAccess.approved;
+    final store = _Store()..value = CompanionCredential('b' * 64, 'c' * 64);
+    await showApp(tester, client, store);
+    await tester.tap(find.byKey(const Key('companion-connection-settings')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextFormField>(find.byKey(const Key('companion-pin'))).controller!.text, 'b' * 64);
+    await tester.enterText(find.byKey(const Key('companion-url')), 'https://192.168.1.21:8743/api/staff/v1');
+    await tester.pageBack(); await tester.pumpAndSettle();
+    expect((await SharedPreferences.getInstance()).getString('companion_api_url'), contains('192.168.1.20'));
+    expect(find.byKey(const Key('companion-url')), findsNothing);
+    await tester.tap(find.byKey(const Key('companion-connection-settings')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('companion-url')), 'https://192.168.1.21:8743/api/staff/v1');
+    await tester.ensureVisible(find.byKey(const Key('companion-check')));
+    await tester.tap(find.byKey(const Key('companion-check'))); await tester.pumpAndSettle();
+    expect(find.byKey(const Key('companion-url')), findsNothing);
+    expect((await SharedPreferences.getInstance()).getString('companion_api_url'), contains('192.168.1.21'));
+    expect(client.requests, 0); expect(store.value!.token, 'c' * 64);
+    expect(client.statusTokens.toSet(), {'c' * 64});
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('unreadable secure storage never presents a fresh pairing form; retry restores saved identity', (tester) async {
+    final client = _Client()..state = PhoneAccess.approved;
+    final store = _Store()..value = CompanionCredential('b' * 64, 'c' * 64)..failRead = true;
+    await showApp(tester, client, store);
+    expect(find.byKey(const Key('companion-pair-code')), findsNothing);
+    expect(find.textContaining('không cần lấy mã ghép mới'), findsOneWidget);
+    store.failRead = false;
+    await tester.tap(find.byKey(const Key('companion-storage-retry')));
+    await tester.pumpAndSettle();
+    expect(find.text('Salon — Trang chính'), findsOneWidget);
+    expect(client.requests, 0); await tester.pumpWidget(const SizedBox());
   });
 
 }
