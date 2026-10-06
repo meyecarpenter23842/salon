@@ -160,8 +160,8 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
           ],
           if (ready) ...[
             const Text(
-              'Trên điện thoại, mở Kết nối máy salon và nhập đúng hai '
-              'thông tin bên dưới vào các ô cùng tên.',
+              'Trên điện thoại, mở Kết nối máy salon để quét QR, '
+              'hoặc nhập hai thông tin bên dưới vào các ô cùng tên.',
             ),
             const SizedBox(height: 16),
             Center(child: Semantics(label: 'QR kết nối máy salon', child: Container(
@@ -206,8 +206,8 @@ class _DesktopPhoneConnectionPanelState extends ConsumerState<DesktopPhoneConnec
               'Nếu điện thoại chưa vào được, kiểm tra Tường lửa Windows và mạng Wi-Fi.'),
           const SizedBox(height: 8),
           const Text(
-            'Có thể ghép quyền và thu hồi điện thoại; chức năng khách hàng và hóa đơn '
-            'trên điện thoại đang được phát triển.',
+            'Chủ salon duyệt và thu hồi quyền từng điện thoại. Sau khi được bật quyền, '
+            'điện thoại xem khách hàng, lịch hẹn và hóa đơn; thao tác sửa và thanh toán theo vai trò được cấp.',
           ),
         ],
       );
