@@ -26,9 +26,19 @@ it is not a store release. The artifact includes qa-provenance.json with the APK
    API version 1; it does not grant staff access or pair the device.
 
 The Android shell remembers the successfully checked URL and fingerprint using
-device preferences; it does not store salon business data. It forgets the success
-indicator on app background/reopen or edited input, so it never promises continued
-connectivity from a stale health check. Pairing and owner approval/revocation now follow the health check; see
+device preferences; it does not store salon business data. Setup is shown once.
+On later launches it restores the encrypted device identity and checks authority
+in the background. A network timeout does not require a new pairing code. If the
+desktop is unavailable at launch, the saved-connection shell offers retry and
+connection settings without showing a fresh pairing form. Secure-storage errors
+offer retry without overwriting identity. Revocation/denial/expiry still require
+a new owner-approved pairing; background still removes private routes.
+Change URL/pin under **Thêm → Cài đặt kết nối máy salon** (or the settings icon
+on the saved-connection shell). Cancel preserves the current configuration.
+An IP change on the same desktop certificate retains approval; changing the pin
+is blocked while an uncertain command remains. Foreground disconnect retains
+open drafts with writes locked; automatic probes keep controls stable.
+Pairing and owner approval/revocation follow the first health check; see
 [phone-pairing.md](phone-pairing.md). Read-only salon access requires a separate owner grant; see [phone-data-read.md](phone-data-read.md).
 
 The client uses HTTPS, endpoint-specific certificate fingerprint and certificate

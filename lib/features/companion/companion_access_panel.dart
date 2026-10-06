@@ -297,8 +297,11 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
             onPressed: widget.onConnectionSettings, icon: const Icon(Icons.settings_outlined), tooltip: 'Kết nối máy salon')]),
         body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));
     }
-    return LayoutBuilder(builder: (context, constraints) => constraints.hasBoundedHeight
-      ? SingleChildScrollView(padding: const EdgeInsets.all(16), child: _content()) : _content());
+    return Scaffold(appBar: AppBar(title: const Text('Ghép điện thoại'), actions: [
+      if (widget.onConnectionSettings != null) IconButton(key: const Key('companion-connection-settings'),
+        onPressed: widget.onConnectionSettings, icon: const Icon(Icons.settings_outlined), tooltip: 'Kết nối máy salon')]),
+      body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));
+
   }
 
   Widget _content() {
