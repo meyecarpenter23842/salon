@@ -210,7 +210,7 @@ class StockDocumentRepository {
       'note': note, 'created_at': now, 'document_id': doc.id, 'document_line_id': line.id, 'source': 'document'});
   }
   Future<void> _audit(DatabaseExecutor tx, String actor, String action, String id, String detail) => tx.insert('audit_events',
-    {'id': EntityId.create('stock-audit'), 'actor_name': actor, 'action': action,
+    {'id': EntityId.create('stock_audit'), 'actor_name': actor, 'action': action,
       'target_type': 'stock_document', 'target_id': id, 'result': 'success', 'detail': detail,
       'created_at': DateTime.now().toIso8601String()}).then((_) {});
   Future<StockDocument> _find(DatabaseExecutor tx, String id) async {
