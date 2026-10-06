@@ -14,7 +14,7 @@ const _methods = ['Tiền mặt', 'Chuyển khoản', 'Thẻ'];
 
 class CompanionBillWorkspace extends StatefulWidget {
   const CompanionBillWorkspace({super.key, required this.connection, required this.readClient,
-    required this.client, required this.commands, required this.role, required this.onDenied, this.initialKind, this.initialId});
+    required this.client, required this.commands, required this.role, required this.onDenied, this.initialKind, this.initialId, this.billOnly = false});
   final LanConnection connection;
   final SalonReadClient readClient;
   final LanWorkflowClient client;
@@ -22,6 +22,7 @@ class CompanionBillWorkspace extends StatefulWidget {
   final PhoneWriteRole role;
   final VoidCallback onDenied;
   final String? initialKind, initialId;
+  final bool billOnly;
   @override
   State<CompanionBillWorkspace> createState() => _CompanionBillWorkspaceState();
 }
@@ -352,8 +353,8 @@ class _CompanionBillWorkspaceState extends State<CompanionBillWorkspace> {
         child: const Text('Bỏ thao tác cũ chưa thực hiện')),
     ],
     if (widget.role != PhoneWriteRole.none) Wrap(spacing: 8, children: [
-      _button('Thêm khách hàng', () => _edit('customer', null), key: 'write-new-customer'),
-      _button('Thêm lịch hẹn', () => _edit('appointment', null), key: 'write-new-appointment'),
+      if (!widget.billOnly) _button('Thêm khách hàng', () => _edit('customer', null), key: 'write-new-customer'),
+      if (!widget.billOnly) _button('Thêm lịch hẹn', () => _edit('appointment', null), key: 'write-new-appointment'),
       _button('Bill đang làm', _bills, key: 'write-bills'),
       _button('Tạo bill khách vãng lai', _newBill, key: 'write-new-bill'),
     ]),
@@ -372,7 +373,8 @@ class _CompanionBillWorkspaceState extends State<CompanionBillWorkspace> {
     ] else if (_sessions) ...[
       _catalogView(), _button('Tải lại bill', () => _loadCatalog()),
       _button('Về dữ liệu salon', () => setState(() { _sessions = false; _picker = null; })),
-    ] else CompanionDataPanel(key: ValueKey(_readVersion), connection: widget.connection,
+    ] else if (widget.billOnly) const Padding(padding: EdgeInsets.all(16), child: Text('Chọn Bill đang làm hoặc tạo bill khách vãng lai.'))
+    else CompanionDataPanel(key: ValueKey(_readVersion), connection: widget.connection,
       token: widget.commands.token, client: widget.readClient, onDenied: widget.onDenied,
       onEdit: widget.role == PhoneWriteRole.none || widget.commands.blocked ? null : _edit,
       onOpenAppointment: widget.role == PhoneWriteRole.none || widget.commands.blocked ? null : _appointmentBill),

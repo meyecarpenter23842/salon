@@ -51,7 +51,7 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
       body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16),
         child: CompanionBillWorkspace(connection: widget.connection, readClient: widget.readClient,
           client: widget.client, commands: widget.commands, role: widget.role, onDenied: widget.onDenied,
-          initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId))))));
+          billOnly: true, initialKind: appointmentId == null ? 'bills' : 'appointmentBill', initialId: appointmentId))))));
     if (mounted) { refresh++; _changed(); }
   }
 

@@ -35,7 +35,7 @@ class MobileTestReader implements SalonReadClient {
 class MobileTestClient implements LanWorkflowClient {
   final sent = <LanWriteCommand>[];
   final searches = <String>[];
-  bool conflict = false, unavailable = false;
+  bool conflict = false, unavailable = false, resolved = false;
   Completer<LanWriteResult>? sending;
   @override Future<LanCatalogPage> catalog(LanConnection c, String t, String k, String q, int o) async {
     searches.add('$k|$q|$o');
@@ -59,7 +59,7 @@ class MobileTestClient implements LanWorkflowClient {
     if (sending != null) { return sending!.future; }
     return LanWriteResult(id: command.targetId ?? 'new-1', type: command.operation.resourceType, revision: 2);
   }
-  @override Future<LanWriteResult?> result(LanConnection c, String t, String id) async => null;
+  @override Future<LanWriteResult?> result(LanConnection c, String t, String id) async => resolved ? LanWriteResult(id: sent.last.targetId ?? 'new-1', type: sent.last.operation.resourceType, revision: 2) : null;
 }
 Future<CompanionCommandController> showMobile(WidgetTester tester, MobileTestReader reader, MobileTestClient client,
     {PhoneWriteRole role = PhoneWriteRole.staff, double textScale = 1}) async {

@@ -16,8 +16,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('salon-customer-search')), 'Lan');
     await fixture.tapMobile(tester, 'salon-search');
     await fixture.tapMobile(tester, 'salon-record-customers-1'); await fixture.tapMobile(tester, 'salon-edit');
-    expect(tester.widget<TextFormField>(find.byKey(const Key('mobile-field-phone'))).keyboardType, TextInputType.phone);
-    expect(tester.widget<TextFormField>(find.byKey(const Key('mobile-field-email'))).keyboardType, TextInputType.emailAddress);
+    expect(tester.widget<TextField>(find.descendant(of: find.byKey(const Key('mobile-field-phone')), matching: find.byType(TextField))).keyboardType, TextInputType.phone);
+    expect(tester.widget<TextField>(find.descendant(of: find.byKey(const Key('mobile-field-email')), matching: find.byType(TextField))).keyboardType, TextInputType.emailAddress);
     await tester.enterText(find.byKey(const Key('mobile-field-phone')), 'abc');
     await fixture.tapMobile(tester, 'mobile-save');
     expect(find.textContaining('ít nhất 6 chữ số'), findsOneWidget);
@@ -101,4 +101,21 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); commands.dispose();
   });
+  testWidgets('checking an uncertain create closes the completed editor without creating a second customer', (tester) async {
+    phone(tester);
+    final client = fixture.MobileTestClient()..unavailable = true;
+    final commands = await fixture.showMobile(tester, fixture.MobileTestReader(), client);
+    await fixture.tapMobile(tester, 'mobile-tab-customers'); await fixture.tapMobile(tester, 'write-new-customer');
+    await tester.enterText(find.byKey(const Key('mobile-field-fullName')), 'Khách mới');
+    await tester.enterText(find.byKey(const Key('mobile-field-phone')), '0908888888');
+    await fixture.tapMobile(tester, 'mobile-save');
+    expect(commands.pending, isNotNull); client.resolved = true;
+    await fixture.tapMobile(tester, 'write-check-result');
+    expect(commands.pending, isNull); expect(client.sent.length, 1);
+    expect(find.byKey(const Key('mobile-save')), findsNothing);
+    expect(find.byKey(const Key('write-new-customer')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox()); commands.dispose();
+  });
+
 }

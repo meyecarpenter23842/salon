@@ -36,12 +36,29 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
   DateTime? day;
   TimeOfDay? time;
   bool busy = true, allowExit = false, confirming = false, attempted = false;
+  bool submitted = false, completing = false, awaitingOutcome = false, needsReload = false;
   int generation = 0;
   bool get appointment => widget.kind == 'appointment';
   bool get locked => widget.commands.blocked || widget.role == PhoneWriteRole.none || busy;
   bool get dirty => snapshot != null && jsonEncode(_payload()) != original;
   @override void initState() { super.initState(); widget.commands.addListener(_changed); _load(); }
-  void _changed() { if (mounted) { setState(() {}); } }
+  void _changed() {
+    if (!mounted) { return; }
+    if (submitted && widget.commands.pending != null) { awaitingOutcome = true; }
+    if (submitted && awaitingOutcome && widget.commands.pending == null && !widget.commands.busy) {
+      awaitingOutcome = false;
+      if (widget.commands.lastResult != null) { _finish(); return; }
+      // A rejected/discarded command cannot reuse its old snapshot after recovery.
+      needsReload = true;
+    }
+    setState(() {});
+  }
+  void _finish() {
+    if (!mounted || completing) { return; }
+    completing = true;
+    setState(() { allowExit = true; original = jsonEncode(_payload()); });
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) { Navigator.of(context).pop(true); } });
+  }
   TextEditingController _field(String name) => fields.putIfAbsent(name, TextEditingController.new);
   String _text(String name) => _field(name).text.trim();
   Map<String, dynamic> _payload() => appointment ? {
@@ -99,7 +116,7 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
         tier = values['tier']?.toString() ?? 'Standard';
         for(final name in ['fullName', 'phone', 'email', 'favoriteService', 'hairProfile', 'note']) { _field(name).text = values[name]?.toString() ?? ''; }
       }
-      setState(() { snapshot = next; original = jsonEncode(_payload()); busy = false; attempted = false; });
+      setState(() { snapshot = next; original = jsonEncode(_payload()); busy = false; attempted = false; needsReload = false; submitted = false; awaitingOutcome = false; });
     } catch(e) {
       if (!mounted || generation != current) { return; }
       setState(() { busy = false; error = e is PairingFailure && e.code == LanErrorCode.notFound
@@ -128,7 +145,7 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
     if (mounted && selected != null) { setState(() => time = selected); }
   }
   Future<void> _save() async {
-    if (locked || snapshot == null) { return; }
+    if (locked || needsReload || snapshot == null) { return; }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => attempted = true);
     if (!form.currentState!.validate() || (appointment && (customer.isEmpty || employee.isEmpty || services.isEmpty || day == null || time == null))) { return; }
@@ -136,10 +153,10 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
       ? widget.id == null ? LanWriteOperation.appointmentCreate : LanWriteOperation.appointmentUpdate
       : widget.id == null ? LanWriteOperation.customerCreate : LanWriteOperation.customerUpdate;
     if (!operation.allows(widget.role)) { return; }
+    submitted = true;
     final result = await widget.commands.submit(operation, snapshot!, _payload());
     if (!mounted || result == null) { return; }
-    setState(() { allowExit = true; original = jsonEncode(_payload()); });
-    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) { Navigator.of(context).pop(true); } });
+    _finish();
   }
   Widget _input(String name, String label, int max, {bool required = false, TextInputType? keyboard, int lines = 1, String? Function(String)? validate}) =>
     Padding(padding: const EdgeInsets.only(bottom: 16), child: TextFormField(key: Key('mobile-field-$name'),
@@ -227,12 +244,13 @@ class _CompanionMobileEditorState extends State<CompanionMobileEditor> {
           message: error!, action: 'Thử lại', onAction: _load)
         : Form(key: form, child: ListView(key: const Key('mobile-editor-scroll'), padding: const EdgeInsets.all(12), children: [
           if (widget.commands.message != null || widget.commands.pending != null) CompanionPendingNotice(commands: widget.commands),
+          if (needsReload) const Padding(padding: EdgeInsets.all(12), child: Text('Tải lại biểu mẫu trước khi lưu tiếp. Nội dung đang nhập vẫn được giữ để bạn kiểm tra.')),
           if (widget.commands.pending != null) const Padding(padding: EdgeInsets.all(12),
             child: Text('Bạn có thể quay lại; thao tác chờ vẫn được giữ để đối chiếu trên máy salon.')),
           ...(appointment ? _appointmentFields() : _customerFields()),
         ]))),
       bottomNavigationBar: snapshot == null || error != null ? null : SafeArea(child: Padding(padding: const EdgeInsets.all(16),
-        child: FilledButton.icon(key: const Key('mobile-save'), onPressed: locked ? null : _save,
+        child: FilledButton.icon(key: const Key('mobile-save'), onPressed: locked || needsReload ? null : _save,
           icon: const Icon(Icons.check), label: Text(widget.commands.busy ? 'Đang lưu…' : 'Lưu trên máy salon')))),
     ));
 }
