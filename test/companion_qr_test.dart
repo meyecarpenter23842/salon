@@ -77,4 +77,27 @@ void main() {
     expect(store.value.pendingCommand!.commandId, 'pending-qr');
     expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('manual settings cannot replace pin while an uncertain command is saved', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'companion_api_url': 'https://192.168.1.20:8743/api/staff/v1',
+      'companion_certificate_sha256': 'b' * 64,
+    });
+    final store = BillTestStore(), checker = _Checker(), client = BillTestClient();
+    store.value = CompanionCredential('b' * 64, 'c' * 64, pendingCommand:
+      LanWriteCommand(commandId: 'pending-manual', operation: LanWriteOperation.sessionCheckout,
+        targetId: 'bill-a', expectedEpoch: 'epoch-a', expectedRevision: 1, payload: {}));
+    await tester.pumpWidget(SalonCompanionApp(checker: checker, pairingClient: _Pending(),
+      credentialStore: store, readClient: client, workflowClient: client));
+    await tester.pumpAndSettle();
+    await billTap(tester, 'companion-connection-settings');
+    await tester.enterText(find.byKey(const Key('companion-pin')), 'a' * 64);
+    await billTap(tester, 'companion-check');
+    expect(find.textContaining('Có yêu cầu chưa rõ kết quả'), findsOneWidget);
+    expect(checker.checked, isEmpty);
+    expect(store.value.token, 'c' * 64);
+    expect(store.value.pendingCommand!.commandId, 'pending-manual');
+    expect((await SharedPreferences.getInstance()).getString('companion_certificate_sha256'), 'b' * 64);
+    await tester.pumpWidget(const SizedBox());
+  });
+
 }

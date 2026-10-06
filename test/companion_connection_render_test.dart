@@ -93,5 +93,23 @@ void main() {
     await tester.tap(find.byKey(const Key('mobile-reconnect'))); await tester.pump(); await capture('23-connection-resync', settle: false);
     changes.delayed!.complete(const LanChangeSnapshot('epoch-restarted', 1, reset: true, changed: true));
     await tester.pumpAndSettle(); await capture('24-connection-stale-editor'); await tester.pumpWidget(const SizedBox());
+    SharedPreferences.setMockInitialValues({
+      'companion_api_url': 'https://192.168.1.20:8743/api/staff/v1',
+      'companion_certificate_sha256': 'b' * 64,
+    });
+    pair.offline = true;
+    await tester.pumpWidget(RepaintBoundary(key: boundary, child: SalonCompanionApp(
+      checker: _Health(), pairingClient: pair, credentialStore: store, readClient: client,
+      workflowClient: client, changeClient: changes)));
+    await capture('25-connection-saved-offline');
+    expect(find.byKey(const Key('companion-url')), findsNothing);
+    expect(find.byKey(const Key('companion-pair-code')), findsNothing);
+    await billTap(tester, 'companion-connection-settings');
+    await capture('26-connection-settings');
+    await tester.tap(find.byKey(const Key('companion-settings-back'))); await tester.pumpAndSettle();
+    pair.offline = false; changes.delayed = null;
+    await billTap(tester, 'companion-access-refresh');
+    await capture('27-connection-restored-home');
+    await tester.pumpWidget(const SizedBox());
   }, skip: !Platform.isLinux || Platform.environment['GITHUB_ACTIONS'] != 'true');
 }

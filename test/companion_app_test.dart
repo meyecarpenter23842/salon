@@ -5,6 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:salonmanager/core/lan/lan_health_client.dart';
 import 'package:salonmanager/features/companion/companion_app.dart';
+import 'package:salonmanager/features/companion/companion_credential_store.dart';
+
+class _Store implements CompanionCredentialStore {
+  @override Future<CompanionCredential?> read() async => null;
+  @override Future<void> write(CompanionCredential credential) async {}
+  @override Future<void> clear() async {}
+}
 
 class _Checker implements LanHealthChecker {
   int calls = 0;
@@ -29,9 +36,9 @@ void main() {
   testWidgets('phone shell starts without desktop bootstrap and validates form',
     (tester) async {
       final checker = _Checker();
-      await tester.pumpWidget(SalonCompanionApp(checker: checker));
+      await tester.pumpWidget(SalonCompanionApp(checker: checker, credentialStore: _Store()));
       await tester.pumpAndSettle();
-      expect(find.text('Kết nối máy salon'), findsOneWidget);
+      expect(find.text('Thiết lập lần đầu'), findsOneWidget);
       await tester.tap(find.byKey(const Key('companion-check')));
       await tester.pumpAndSettle();
       expect(checker.calls, 0);
@@ -45,17 +52,21 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(SalonCompanionApp(checker: checker));
+      await tester.pumpWidget(SalonCompanionApp(checker: checker, credentialStore: _Store()));
       await tester.pumpAndSettle();
       await fill(tester);
       await tester.ensureVisible(find.byKey(const Key('companion-check')));
       await tester.tap(find.byKey(const Key('companion-check')));
       await tester.pumpAndSettle();
       expect(checker.calls, 1);
-      expect(find.textContaining('Máy salon đang phản hồi'), findsOneWidget);
+      expect(find.byKey(const Key('companion-url')), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
-      await tester.pumpWidget(SalonCompanionApp(checker: checker));
+      await tester.pumpWidget(SalonCompanionApp(checker: checker, credentialStore: _Store()));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('companion-url')), findsNothing);
+      await tester.ensureVisible(find.byKey(const Key('companion-edit-connection')));
+      await tester.tap(find.byKey(const Key('companion-edit-connection')));
       await tester.pumpAndSettle();
       final url = tester.widget<TextFormField>(
         find.byKey(const Key('companion-url')));
@@ -65,7 +76,7 @@ void main() {
 
   testWidgets('failure is safe and does not persist a new endpoint', (tester) async {
     final checker = _Checker()..fail = true;
-    await tester.pumpWidget(SalonCompanionApp(checker: checker));
+    await tester.pumpWidget(SalonCompanionApp(checker: checker, credentialStore: _Store()));
     await tester.pumpAndSettle();
     await fill(tester);
     await tester.tap(find.byKey(const Key('companion-check')));
@@ -79,7 +90,7 @@ void main() {
   testWidgets('busy disables double tap; background invalidates late success',
     (tester) async {
       final checker = _Checker()..completion = Completer<void>();
-      await tester.pumpWidget(SalonCompanionApp(checker: checker));
+      await tester.pumpWidget(SalonCompanionApp(checker: checker, credentialStore: _Store()));
       await tester.pumpAndSettle();
       await fill(tester);
       await tester.tap(find.byKey(const Key('companion-check')));

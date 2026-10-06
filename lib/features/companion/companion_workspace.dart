@@ -110,8 +110,9 @@ class _CompanionWorkspaceState extends State<CompanionWorkspace> {
               onOpen: (id) => _bills(id: id),
               onCreate: widget.role == PhoneWriteRole.none || locked ? null : () => _bills()),
             ListView(padding: const EdgeInsets.all(16), children: [
-              const Card(child: ListTile(leading: Icon(Icons.wifi),
-                title: Text('Đang kết nối với máy salon'), subtitle: Text('Dữ liệu được lưu trên máy salon.'))),
+              Card(child: ListTile(leading: Icon(widget.commands.online ? Icons.wifi : Icons.wifi_off),
+                title: Text(widget.commands.online ? 'Đang kết nối với máy salon' : 'Mất kết nối với máy salon'),
+                subtitle: const Text('Dữ liệu được lưu trên máy salon.'))),
               Card(child: ListTile(leading: const Icon(Icons.badge_outlined),
                 title: const Text('Quyền của điện thoại'),
                 subtitle: Text(switch(widget.role) { PhoneWriteRole.none => 'Chỉ xem',

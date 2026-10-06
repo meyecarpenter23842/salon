@@ -18,7 +18,8 @@ class CompanionAccessPanel extends StatefulWidget {
   const CompanionAccessPanel({super.key, required this.connection,
     required this.client, required this.store, required this.onAccess,
     this.readClient = const PinnedSalonReadClient(),
-    this.workflowClient = const PinnedLanWorkflowClient(), this.changeClient});
+    this.workflowClient = const PinnedLanWorkflowClient(), this.changeClient, this.onConnectionSettings});
+  final VoidCallback? onConnectionSettings;
   final LanConnection connection;
   final LanPairingClient client;
   final SalonReadClient readClient;
@@ -39,6 +40,9 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   PairedPhone? _phone;
   Timer? _poll;
   bool _busy = false;
+  bool _checking = false;
+  bool _needsPairing = false;
+  bool _storageFailed = false;
   bool _foreground = true;
   bool _online = false;
   bool _wasReady = false;
@@ -66,7 +70,8 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
         _message = 'Có thao tác chưa rõ kết quả trên kết nối cũ. Khôi phục địa chỉ và mã xác minh cũ để kiểm tra.';
       }
     } catch (_) {
-      // A fresh request remains possible; never fall back to plaintext storage.
+      _storageFailed = true;
+      _message = 'Chưa đọc được quyền đã lưu. Thử lại; không cần lấy mã ghép mới.';
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -87,10 +92,10 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
 
   void _schedule() {
     _poll?.cancel();
-    if (mounted && _foreground && _credential != null &&
+    if (mounted && _foreground && !_needsPairing && _credential != null &&
         (_phone == null || _phone!.state == PhoneAccess.pending ||
          _phone!.state == PhoneAccess.approved)) {
-      _poll = Timer(const Duration(seconds: 5), _refresh);
+      _poll = Timer(const Duration(seconds: 5), () => _refresh(silent: true));
     }
   }
 
@@ -98,6 +103,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
     if (_phone?.state != phone.state || _phone?.writeRole != phone.writeRole ||
         _phone?.canReadSalon != phone.canReadSalon) { _reviewedOnDesktop = false; }
     _phone = phone;
+    _needsPairing = phone.state == PhoneAccess.denied || phone.state == PhoneAccess.revoked || phone.state == PhoneAccess.expired;
     if (phone.state != PhoneAccess.approved || !phone.canReadSalon) { _wasReady = false; }
     _online = true;
     _message = switch (phone.state) {
@@ -110,13 +116,14 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
     widget.onAccess(phone.state == PhoneAccess.approved);
   }
 
-  Future<void> _refresh() async {
-    if (_busy || !_foreground || _credential == null) return;
+  Future<void> _refresh({bool silent = false}) async {
+    if (_busy || _checking || !_foreground || _credential == null || _needsPairing) return;
     final generation = ++_generation;
-    setState(() { _busy = true; _syncing = !_online; });
+    _checking = true;
+    if (!silent) setState(() { _busy = true; _syncing = !_online; });
     try {
       final reconnect = !_online;
-      if (reconnect) { _commands?.connectionState(connected: false, checking: true); }
+      if (reconnect && !silent) { _commands?.connectionState(connected: false, checking: true); }
       var phone = await widget.client.status(widget.connection, _credential!.token);
       if (phone.state == PhoneAccess.approved) {
         phone = await widget.client.bootstrap(widget.connection, _credential!.token);
@@ -137,7 +144,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
         _message = 'Mất kết nối. Giữ máy salon mở và kiểm tra Wi-Fi.';
         if (error is PairingFailure &&
             (error.code == LanErrorCode.unauthenticated || error.code == LanErrorCode.forbidden)) {
-          _phone = null; _wasReady = false;
+          _phone = null; _wasReady = false; _needsPairing = true;
           _message = 'Quyền truy cập không còn hiệu lực. Hãy xin mã ghép mới.';
           widget.onAccess(false);
           // Keep the encrypted identity while an uncertain command is unresolved.
@@ -145,14 +152,15 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       });
     } finally {
       if (mounted && generation == _generation) {
-        setState(() => _busy = false);
+        _checking = false;
+        if (_busy) setState(() => _busy = false);
         _schedule();
       }
     }
   }
 
   Future<void> _request() async {
-    if (_busy || _loading || !_foreground) return;
+    if (_busy || _checking || _loading || _storageFailed || !_foreground || (_credential != null && !_needsPairing)) return;
     if ((_commands?.pending != null || _commands?.busy == true)) {
       setState(() => _message = 'Kiểm tra thao tác chưa rõ kết quả trước khi ghép lại điện thoại.'); return;
     }
@@ -171,7 +179,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       }
       final previous = _credential;
       // Reuse an uncertain request token, but never resurrect a terminal identity.
-      final credential = previous != null && (_phone == null || _phone!.state == PhoneAccess.pending)
+      final credential = previous != null && !_needsPairing && (_phone == null || _phone!.state == PhoneAccess.pending)
           ? previous : CompanionCredential(
         widget.connection.certificateSha256, newDeviceSecret());
       await widget.store.write(credential);
@@ -211,7 +219,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
     _poll?.cancel();
     if (mounted) {
       setState(() {
-        _busy = false;
+        _busy = false; _checking = false;
         _online = false; _wasReady = false; _syncing = true;
         _commands?.connectionState(connected: false, checking: true);
         _message = 'Đang kiểm tra lại kết nối…';
@@ -221,7 +229,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
   }
 
   Future<void> _forget() async {
-    if (_busy || (_commands?.pending != null || _commands?.busy == true)) {
+    if (_busy || _checking || (_commands?.pending != null || _commands?.busy == true)) {
       setState(() => _message = 'Không thể quên quyền khi có thao tác chưa rõ kết quả. Hãy kiểm tra với máy salon.'); return;
     }
     _generation++;
@@ -232,7 +240,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       if (!mounted) return;
       setState(() {
         _commands?.removeListener(_commandChanged); _commands?.dispose(); _commands = null;
-        _credential = null; _phone = null; _online = false; _message = null;
+        _credential = null; _phone = null; _online = false; _message = null; _needsPairing = false; _wasReady = false;
       });
       widget.onAccess(false);
     } catch (_) {
@@ -283,12 +291,17 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
         })),
       ])));
     }
-    if (_phone?.state == PhoneAccess.approved) {
-      return Scaffold(appBar: AppBar(title: const Text('Salon — Trang chính')),
+    if (_phone?.state == PhoneAccess.approved || _credential != null && !_needsPairing || _storageFailed) {
+      return Scaffold(appBar: AppBar(title: Text(_phone?.state == PhoneAccess.approved ? 'Salon — Trang chính' : 'Kết nối máy salon'), actions: [
+          if (widget.onConnectionSettings != null) IconButton(key: const Key('companion-connection-settings'),
+            onPressed: widget.onConnectionSettings, icon: const Icon(Icons.settings_outlined), tooltip: 'Kết nối máy salon')]),
         body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));
     }
-    return LayoutBuilder(builder: (context, constraints) => constraints.hasBoundedHeight
-      ? SingleChildScrollView(padding: const EdgeInsets.all(16), child: _content()) : _content());
+    return Scaffold(appBar: AppBar(title: const Text('Ghép điện thoại'), actions: [
+      if (widget.onConnectionSettings != null) IconButton(key: const Key('companion-connection-settings'),
+        onPressed: widget.onConnectionSettings, icon: const Icon(Icons.settings_outlined), tooltip: 'Kết nối máy salon')]),
+      body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: _content())));
+
   }
 
   Widget _content() {
@@ -298,7 +311,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 20),
-        Text(approved ? 'Salon của bạn' : 'Xin quyền truy cập',
+        Text(approved ? 'Salon của bạn' : _storageFailed || _credential != null && !_needsPairing ? 'Kết nối đã lưu' : 'Xin quyền truy cập',
           style: Theme.of(context).textTheme.titleLarge),
         if (approved) ...[
           const SizedBox(height: 12),
@@ -308,7 +321,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
             const Text('Chủ salon cần bật “Cho xem dữ liệu salon” cho điện thoại này '
                 'trong Cài đặt → Kết nối điện thoại.'),
         ],
-        if (!approved && !pending && !_loading) ...[
+        if (!approved && !pending && !_loading && !_storageFailed && (_credential == null || _needsPairing)) ...[
           const Text('Trên máy salon, mở Cài đặt → Kết nối điện thoại '
               '→ Tạo mã ghép điện thoại.'),
           const SizedBox(height: 12),
@@ -322,6 +335,16 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
             onPressed: _busy ? null : _request,
             child: const Text('Yêu cầu truy cập')),
         ],
+        if (_credential != null && _phone == null && !_needsPairing)
+          const Text('Điện thoại đã lưu thông tin ghép. App tự kết nối lại khi máy salon sẵn sàng.'),
+        if (_storageFailed)
+          TextButton(key: const Key('companion-storage-retry'), onPressed: _loading ? null : () {
+            setState(() { _loading = true; _storageFailed = false; });
+            _load();
+          }, child: const Text('Thử lại')),
+        if (widget.onConnectionSettings != null)
+          TextButton.icon(key: const Key('companion-edit-connection'), onPressed: widget.onConnectionSettings,
+            icon: const Icon(Icons.settings_outlined), label: const Text('Cài đặt kết nối máy salon')),
         if (_phone != null) Text('Mã thiết bị: ${_phone!.id.substring(0, 8)}'),
         if (_message != null) ...[
           const SizedBox(height: 12),
@@ -346,7 +369,7 @@ class _CompanionAccessPanelState extends State<CompanionAccessPanel>
           if (_commands!.message != null) Text(_commands!.message!),
         ],
 
-        if (approved || pending || _credential != null)
+        if (!_needsPairing && (approved || pending || _credential != null))
           TextButton.icon(key: const Key('companion-access-refresh'),
             onPressed: _busy ? null : _refresh,
             icon: Icon(_online ? Icons.wifi : Icons.wifi_off),

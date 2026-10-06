@@ -45,7 +45,7 @@ class SalonCompanionApp extends StatelessWidget {
 }
 
 class _ConnectionPage extends StatefulWidget {
-  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient, this.changeClient, this.scannerPreview});
+  const _ConnectionPage({required this.checker, required this.pairingClient, required this.credentialStore, required this.readClient, required this.workflowClient, this.changeClient, this.scannerPreview, this.settingsOnly = false});
   final LanHealthChecker checker;
   final LanPairingClient pairingClient;
   final CompanionCredentialStore credentialStore;
@@ -53,6 +53,7 @@ class _ConnectionPage extends StatefulWidget {
   final LanWorkflowClient workflowClient;
   final LanChangeClient? changeClient;
   final SalonScannerPreview? scannerPreview;
+  final bool settingsOnly;
 
   @override
   State<_ConnectionPage> createState() => _ConnectionPageState();
@@ -70,7 +71,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
   String? _message;
   int _generation = 0;
   LanConnection? _connection;
-  bool _authorized = false;
+
 
   @override
   void initState() {
@@ -85,7 +86,9 @@ class _ConnectionPageState extends State<_ConnectionPage>
       if (!mounted) return;
       _url.text = preferences.getString(_urlKey) ?? '';
       _pin.text = preferences.getString(_pinKey) ?? '';
-      try { _connection = LanConnection(_url.text, _pin.text); } catch (_) {}
+      if (!widget.settingsOnly) {
+        try { _connection = LanConnection(_url.text, _pin.text); } catch (_) {}
+      }
     } catch (_) {
       // Connection can still be entered if preferences are unavailable.
     } finally {
@@ -107,7 +110,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
   }
 
   void _edited(String _) {
-    setState(() { _message = null; _connection = null; _authorized = false; });
+    setState(() => _message = null);
   }
 
   Future<void> _useQr(LanConnection value) async {
@@ -132,7 +135,7 @@ class _ConnectionPageState extends State<_ConnectionPage>
     setState(() {
       _url.text = value.apiUrl.toString(); _pin.text = value.certificateSha256;
       _message = 'Đã điền thông tin QR. Bấm Kiểm tra kết nối để xác minh máy salon.';
-      _connection = null; _authorized = false;
+      _connection = null;
     });
   }
   Future<void> _scanQr() async {
@@ -167,6 +170,12 @@ class _ConnectionPageState extends State<_ConnectionPage>
       _message = 'Đang kiểm tra máy salon…';
     });
     try {
+      final credential = await widget.credentialStore.read();
+      if (!mounted || generation != _generation) return;
+      if (credential?.pendingCommand != null && credential!.pin != connection.certificateSha256) {
+        setState(() => _message = 'Có yêu cầu chưa rõ kết quả trên máy salon cũ. Kiểm tra yêu cầu đó trước khi đổi máy salon.');
+        return;
+      }
       await widget.checker.check(connection);
       if (!mounted || generation != _generation) return;
       var saved = true;
@@ -178,12 +187,15 @@ class _ConnectionPageState extends State<_ConnectionPage>
         saved = false;
       }
       if (!mounted || generation != _generation) return;
-      setState(() {
-        _connection = connection;
-        _message = saved
-        ? 'Máy salon đang phản hồi. Đã lưu cấu hình kết nối.'
-        : 'Máy salon đang phản hồi. Chưa lưu được cấu hình.';
-      });
+      if (!saved) {
+        setState(() => _message = 'Máy salon đang phản hồi. Chưa lưu được cấu hình. Hãy thử lại.');
+        return;
+      }
+      if (widget.settingsOnly) {
+        Navigator.of(context).pop(connection);
+      } else {
+        setState(() => _connection = connection);
+      }
     } catch (_) {
       if (mounted && generation == _generation) {
         setState(() => _message =
@@ -207,16 +219,27 @@ class _ConnectionPageState extends State<_ConnectionPage>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: _authorized ? null : AppBar(title: const Text('Kết nối máy salon')),
+  Widget build(BuildContext context) {
+    if (!_loading && _connection != null) {
+      return Scaffold(body: SafeArea(child: CompanionAccessPanel(
+        key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
+        connection: _connection!, client: widget.pairingClient,
+        store: widget.credentialStore, readClient: widget.readClient,
+        workflowClient: widget.workflowClient, changeClient: widget.changeClient,
+        onAccess: (_) {}, onConnectionSettings: _settings,
+      )));
+    }
+    return Scaffold(
+    appBar: AppBar(title: Text(widget.settingsOnly ? 'Kết nối máy salon' : 'Thiết lập lần đầu'),
+      leading: widget.settingsOnly ? BackButton(key: const Key('companion-settings-back'),
+        onPressed: () => Navigator.of(context).pop()) : null),
     body: SafeArea(
       child: _loading
         ? const Center(child: CircularProgressIndicator())
         : LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
-            physics: _authorized ? const NeverScrollableScrollPhysics() : null,
-            padding: _authorized ? EdgeInsets.zero : const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (!_authorized) ...[
+
               const Text(
                 'Trên máy salon, mở Cài đặt → Kết nối điện thoại. '
                 'Lấy địa chỉ và mã xác minh rồi nhập vào hai ô bên dưới.',
@@ -293,16 +316,6 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 const SizedBox(height: 16),
                 Text(_message!, key: const Key('companion-result')),
               ],
-              ],
-              if (_connection != null)
-                SizedBox(key: ValueKey('access-${_connection!.apiUrl}|${_connection!.certificateSha256}'),
-                  height: _authorized ? constraints.maxHeight : null, child: CompanionAccessPanel(
-                  key: ValueKey('${_connection!.apiUrl}|${_connection!.certificateSha256}'),
-                  connection: _connection!, client: widget.pairingClient,
-                  store: widget.credentialStore, readClient: widget.readClient, workflowClient: widget.workflowClient, changeClient: widget.changeClient,
-                  onAccess: (value) { if (mounted) setState(() => _authorized = value); },
-                )),
-              if (!_authorized) ...[
               const SizedBox(height: 24),
               const Text(
                 'Sau khi chủ salon bật quyền xem, điện thoại có thể xem khách hàng, '
@@ -313,10 +326,22 @@ class _ConnectionPageState extends State<_ConnectionPage>
                 'Lần đầu, dùng cùng Wi-Fi với máy salon và giữ app salon mở. '
                 'Dùng 4G hoặc mạng khác cần thiết lập truy cập từ xa trước.',
               ),
-              ],
             ]),
           )),
     ),
   );
-}
+  }
 
+  Future<void> _settings() async {
+    final value = await Navigator.of(context).push<LanConnection>(MaterialPageRoute(
+      builder: (_) => _ConnectionPage(checker: widget.checker, pairingClient: widget.pairingClient,
+        credentialStore: widget.credentialStore, readClient: widget.readClient,
+        workflowClient: widget.workflowClient, scannerPreview: widget.scannerPreview,
+        changeClient: widget.changeClient, settingsOnly: true)));
+    if (mounted && value != null &&
+        (value.apiUrl != _connection?.apiUrl || value.certificateSha256 != _connection?.certificateSha256)) {
+      setState(() => _connection = value);
+    }
+  }
+
+}
