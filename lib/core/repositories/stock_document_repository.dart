@@ -44,13 +44,13 @@ class StockDocumentRepository {
     final rows = await tx.query('stock_documents',
       where: [if (status != null) 'status = ?', if (kind != null) 'kind = ?'].join(' AND ').isEmpty
         ? null : [if (status != null) 'status = ?', if (kind != null) 'kind = ?'].join(' AND '),
-      whereArgs: [if (status != null) status, if (kind != null) kind.value],
+      whereArgs: [status, kind?.value].whereType<Object>().toList(),
       orderBy: 'document_date DESC, sequence DESC');
     final q = query.trim().toLowerCase();
     final result = <StockDocument>[];
     for (final row in rows) {
       if (q.isNotEmpty && ![row['number'], row['supplier_name'], row['external_reference'], row['prepared_by']]
-          .any((v) => v.toString().toLowerCase().contains(q))) continue;
+          .any((v) => v.toString().toLowerCase().contains(q))) { continue; }
       result.add(await _read(tx, row));
     }
     return result;
@@ -65,7 +65,7 @@ class StockDocumentRepository {
   Future<StockDocument> saveDraft(StockDocumentInput input) async {
     if (input.id.trim().isEmpty || input.preparedBy.trim().isEmpty || input.preparedBy.length > 200 ||
         input.externalReference.length > 200 || input.note.length > 2000 ||
-        input.lines.isEmpty || input.lines.length > 200) throw ArgumentError('Phiếu thiếu thông tin hoặc quá nhiều dòng.');
+        input.lines.isEmpty || input.lines.length > 200) { throw ArgumentError('Phiếu thiếu thông tin hoặc quá nhiều dòng.'); }
     final ids = <String>{};
     for (final line in input.lines) {
       if (!ids.add(line.productId) || line.quantity < 0 || line.quantity > 1000000 ||
