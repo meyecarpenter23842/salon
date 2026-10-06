@@ -108,21 +108,30 @@ void main() {
   testWidgets('five inventory tabs fit small desktop and expose draft, confirmation and supplier setup', (tester) async {
     tester.view.physicalSize = const Size(1024,768); tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+    final priorErrorHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      debugPrint(details.toString());
+      priorErrorHandler?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = priorErrorHandler);
     await tester.runAsync(() async {
     final draft = await repo.saveDraft(input('ui'));
     await tester.pumpWidget(ProviderScope(overrides: [stockDocumentRepositoryProvider.overrideWithValue(repo)],
       child: const MaterialApp(home: Scaffold(body: Padding(padding: EdgeInsets.all(18), child: InventoryPage())))));
     await _settle(tester);
     expect(find.text('Tồn kho'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'Stock tab at 1024 px');
     await tester.tap(find.text('Phiếu nhập')); await _waitFor(tester, find.byKey(const Key('stock-document-ui')));
     expect(find.byKey(const Key('stock-new-receipt')), findsOneWidget);
     await tester.tap(find.byKey(const Key('stock-document-ui'))); await _waitFor(tester, find.byKey(const Key('stock-post')));
     expect(find.byKey(const Key('stock-post')), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'Draft detail at 1024 px');
     expect(find.text('Nháp — chưa thay đổi tồn kho.'), findsOneWidget);
     await tester.tap(find.byKey(const Key('stock-post'))); await _settle(tester);
     await tester.tap(find.text('Ghi kho')); await _waitFor(tester, find.text('Bút toán đối chiếu chứng từ'));
     expect((await repo.document(draft.id)).isPosted, isTrue);
     expect(find.byKey(const Key('stock-post')), findsNothing);
+    expect(tester.takeException(), isNull, reason: 'Posted detail at 1024 px');
     expect(find.text('Bút toán đối chiếu chứng từ'), findsOneWidget);
     await tester.tap(find.text('Đóng')); await _settle(tester);
     await tester.tap(find.text('Thiết lập')); await _settle(tester);

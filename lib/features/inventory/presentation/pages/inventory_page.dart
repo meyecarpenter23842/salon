@@ -724,12 +724,11 @@ class _InventoryDetailPanel extends StatelessWidget {
               Text('${item.metaLabel} • Tồn ${item.stockOnHand} • ${item.stockLabel} • Ngưỡng ${item.lowStockThreshold}',
                 style: TextStyle(color: item.isNegativeStock ? AppColors.danger : AppColors.textMuted, fontSize: 11.5)),
               const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: FilledButton.icon(onPressed: onReceive,
-                  icon: const Icon(Icons.add_box_outlined, size: 17), label: const Text('Nhập kho'))),
-                const SizedBox(width: 8),
-                Expanded(child: OutlinedButton.icon(onPressed: onAdjust,
-                  icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('Điều chỉnh'))),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilledButton.icon(onPressed: onReceive,
+                  icon: const Icon(Icons.add_box_outlined, size: 17), label: const Text('Nhập kho')),
+                OutlinedButton.icon(onPressed: onAdjust,
+                  icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('Điều chỉnh')),
               ]),
               Divider(height: 20, color: AppColors.border),
               Text('Biến động gần đây', style: TextStyle(
