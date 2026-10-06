@@ -189,7 +189,7 @@ class _CompanionReceiptState extends State<CompanionReceipt> {
           billGroup(context, 'Thông tin hóa đơn', [
             Text(record!.title, style: Theme.of(context).textTheme.titleLarge),
             for (final key in ['Mã hóa đơn', 'Thanh toán lúc', 'Trạng thái'])
-              if (fields[key] != null) Padding(padding: const EdgeInsets.only(top: 8), child: SelectableText('$key: ${fields[key]}')),
+              if (fields[key] != null && !(widget.success && key == 'Mã hóa đơn')) Padding(padding: const EdgeInsets.only(top: 8), child: SelectableText('$key: ${fields[key]}')),
           ]),
           billGroup(context, 'Dịch vụ và sản phẩm', [
             for (final line in lines) Padding(padding: const EdgeInsets.only(bottom: 12),

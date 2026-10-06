@@ -19,7 +19,7 @@ Future<void> billTap(WidgetTester tester, String key) async {
   FocusManager.instance.primaryFocus?.unfocus(); await tester.pumpAndSettle();
   final finder = find.byKey(Key(key));
   if (finder.evaluate().isEmpty) {
-    await tester.scrollUntilVisible(finder, 180, scrollable: find.byType(Scrollable).last, maxScrolls: 30);
+    await tester.scrollUntilVisible(finder, key.startsWith('write-') ? -180 : 180, scrollable: find.byType(Scrollable).last, maxScrolls: 30);
   }
   await tester.ensureVisible(finder); await tester.pumpAndSettle();
   await tester.tap(finder); await tester.pumpAndSettle();
@@ -79,7 +79,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('bill-payment-Chuyển khoản')), '100000');
     await billTap(tester, 'bill-payment-done');
     final button = find.byKey(const Key('bill-checkout'));
-    await tester.tap(button); await tester.tap(button); await tester.pumpAndSettle();
+    final point = tester.getCenter(button);
+    await tester.tapAt(point); await tester.tapAt(point); await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget); expect(client.sent, isEmpty);
     expect(find.text('Xác nhận thanh toán'), findsNWidgets(2));
     await billTap(tester, 'bill-confirm-checkout');
@@ -196,9 +197,13 @@ void main() {
     await tester.pumpAndSettle(); await billTap(tester, 'mobile-tab-invoices');
     await billTap(tester, 'bill-list-bill-a'); await billTap(tester, 'bill-edit-line-service'); await billTap(tester, 'bill-line-employee');
     expect(find.byType(CompanionCatalogPicker), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused); await tester.pumpAndSettle();
     expect(find.byType(CompanionMobileBill), findsNothing); expect(find.byType(CompanionBillLineEditor), findsNothing);
     expect(find.byType(CompanionCatalogPicker), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
     await billTap(tester, 'mobile-tab-invoices'); await billTap(tester, 'bill-list-bill-a'); await billTap(tester, 'bill-checkout');
     expect(find.byType(AlertDialog), findsOneWidget);
