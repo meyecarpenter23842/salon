@@ -35,6 +35,7 @@ class CommissionSchema {
       FOREIGN KEY(cash_movement_id) REFERENCES cash_movements(id) ON DELETE RESTRICT)""",
     "CREATE INDEX idx_commission_employee_period ON commission_entries(employee_id,period)",
     "CREATE INDEX idx_commission_payout_employee ON commission_payouts(employee_id)",
+    "CREATE UNIQUE INDEX idx_commission_transfer_reference ON commission_payouts(employee_id,reference COLLATE NOCASE) WHERE method='transfer'",
     """CREATE TRIGGER commission_closed_no_entry BEFORE INSERT ON commission_entries
       WHEN EXISTS(SELECT 1 FROM commission_periods WHERE period=NEW.period)
       BEGIN SELECT RAISE(ABORT,'commission period is closed'); END""",

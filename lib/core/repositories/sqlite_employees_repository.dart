@@ -169,7 +169,7 @@ class SqliteEmployeesRepository
       }
       if (changedRate) {
         await tx.insert('audit_events', {
-          'id': EntityId.create('commission-rate-audit'), 'actor_name': actor!,
+          'id': EntityId.create('commission_rate_audit'), 'actor_name': actor!,
           'action': 'commission_rate', 'target_type': 'employee', 'target_id': id,
           'result': 'success',
           'detail': 'Tỷ lệ mới ${row['commission_rate']}; tỷ lệ cũ ${existing?['commission_rate']}; hiệu lực từ lần thanh toán tiếp theo; không sửa ledger',

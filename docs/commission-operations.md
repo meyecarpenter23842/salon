@@ -31,3 +31,5 @@ Backup SQLite giữ sổ, chứng từ, audit và yêu cầu chi trả đang ch�
 Chưa triển khai lương, thuế, chấm công, hoa hồng bán lẻ hay chuyển tiền ngân hàng tự động. Kiểm tra điện thoại thật vẫn chờ thiết bị trong #111; CI không thay thế nghiệm thu thực tế.
 
 Thêm nhân viên hoặc đổi tỷ lệ yêu cầu quyền Owner; audit lưu tỷ lệ cũ/mới và thời điểm có hiệu lực. Tỷ lệ mới chỉ dùng cho lần thanh toán sau đó.
+
+Mã chuyển khoản đã ghi cho cùng nhân viên không được dùng lần nữa (không phân biệt hoa/thường). Nếu mã từ nhiều ngân hàng có thể trùng, nhập thêm tên ngân hàng để chứng từ có tham chiếu duy nhất.

@@ -147,6 +147,17 @@ void main(){
     await expectLater(db.delete('cash_movements'),throwsA(isA<DatabaseException>()));
     await expectLater(db.update('commission_payouts',{'amount':1}),throwsA(isA<DatabaseException>()));
   });
+  test('changed request payload and duplicate bank proof cannot create another partial payout',()async{
+    await closeSeptember();
+    await repo.pay(requestId:'one',employeeId:'emp',amount:10000,method:'transfer',reference:'BANK-001');
+    await expectLater(repo.pay(requestId:'one',employeeId:'emp',amount:20000,method:'transfer',reference:'BANK-001'),throwsStateError);
+    expect(await repo.resolvePendingPayout('one'),isTrue);
+    await expectLater(repo.pay(requestId:'two',employeeId:'emp',amount:10000,method:'transfer',reference:'bank-001'),throwsStateError);
+    expect(await repo.resolvePendingPayout('two'),isFalse);
+    expect((await repo.fetch()).accounts.single.paid,10000);
+    expect(await db.query('commission_payouts'),hasLength(1));
+  });
+
   test('audit insert failure rolls back payout and cash together, retains retry ID',()async{
     await closeSeptember();
     await db.insert('cashier_shifts',{'id':'shift','opening_cash':200000,'opened_at':now.toIso8601String()});

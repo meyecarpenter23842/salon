@@ -76,10 +76,11 @@ class _CommissionPageState extends ConsumerState<CommissionPage> {
           'Hoàn/hủy ghi giảm ở tháng kế tiếp. Hóa đơn trước khi có sổ này chỉ có báo cáo ước tính.'),
         const SizedBox(height:16),
         Wrap(spacing:12,runSpacing:12,crossAxisAlignment:WrapCrossAlignment.center,children:[
-          SizedBox(width:190,child:DropdownButtonFormField<String>(
+          SizedBox(width:240,child:DropdownButtonFormField<String>(
+            isExpanded:true,
             key:ValueKey('period-$selectedPeriod'),initialValue:selectedPeriod,
             decoration:const InputDecoration(labelText:'Tháng phát sinh'),
-            items:data.periods.map((p)=>DropdownMenuItem(value:p,child:Text('$p ${data.closed.contains(p)?'· Đã chốt':''}'))).toList(),
+            items:data.periods.map((p)=>DropdownMenuItem(value:p,child:Text('$p ${data.closed.contains(p)?'· Đã chốt':''}',overflow:TextOverflow.ellipsis))).toList(),
             onChanged:busy?null:(v)=>setState(()=>period=v))),
           OutlinedButton.icon(onPressed:busy||selectedPeriod==null||data.closed.contains(selectedPeriod)
             ||selectedPeriod.compareTo(CommissionLedger.month(DateTime.now()))>=0?null:()=>_close(selectedPeriod),
@@ -140,7 +141,7 @@ class _PayoutDialogState extends State<_PayoutDialog> {
   @override void initState(){
     super.initState();
     final p=widget.pending;
-    requestId=p?['requestId']?.toString()??EntityId.create('commission-payout');
+    requestId=p?['requestId']?.toString()??EntityId.create('commission_payout');
     method=p?['method']?.toString()??'transfer';
     amount=TextEditingController(text:(p?['amount']??widget.account.balance).toString());
     reference=TextEditingController(text:p?['reference']?.toString()??'');
@@ -172,7 +173,15 @@ class _PayoutDialogState extends State<_PayoutDialog> {
   }
   Future<void> _resolve() async {
     setState(()=>busy=true);
-    try{await widget.repository.resolvePendingPayout(requestId);if(mounted)Navigator.pop(context);}
+    try{
+      final committed=await widget.repository.resolvePendingPayout(requestId);
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(committed
+          ?'Đã có chứng từ khoản trả này. Đã đối chiếu; không trả thêm.'
+          :'Đã kiểm tra sổ: chưa ghi khoản trả. Đã bỏ yêu cầu.')));
+        Navigator.pop(context);
+      }
+    }
     catch(e){if(mounted)setState(()=>error='$e');}
     finally{if(mounted)setState(()=>busy=false);}
   }

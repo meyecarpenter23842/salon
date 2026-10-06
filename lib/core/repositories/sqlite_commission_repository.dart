@@ -36,18 +36,19 @@ class SqliteCommissionRepository {
   }
 
   /// Cancel only after checking the live database for a committed receipt.
-  Future<void> resolvePendingPayout(String requestId) async {
+  Future<bool> resolvePendingPayout(String requestId) async {
     final actor=await security.authorizeCommissionAction('commission_resolve',requestId);
     final db=await database.database;
-    await db.transaction((tx) async {
+    return db.transaction((tx) async {
       final row=await tx.query('app_settings',where:'key=?',whereArgs:['commission.pending_payout']);
-      if(row.isEmpty) return;
+      if(row.isEmpty) return false;
       final pending=jsonDecode(row.single['value'] as String) as Map;
       if(pending['requestId'] != requestId) throw StateError('Yêu cầu chi trả đang chờ đã thay đổi.');
       final proof=await tx.query('commission_payouts',where:'id=?',whereArgs:[requestId]);
       await tx.delete('app_settings',where:'key=?',whereArgs:['commission.pending_payout']);
       await _audit(tx,actor,'commission_resolve',requestId,
         proof.isEmpty?'Đã kiểm tra: chưa ghi chi trả; bỏ yêu cầu':'Đã đối chiếu chứng từ chi trả',clock());
+      return proof.isNotEmpty;
     });
   }
 
@@ -141,6 +142,12 @@ class SqliteCommissionRepository {
         COALESCE((SELECT SUM(c.amount) FROM commission_entries c JOIN commission_periods p ON p.period=c.period WHERE c.employee_id=?),0)
         - COALESCE((SELECT SUM(amount) FROM commission_payouts WHERE employee_id=?),0) balance""",[employeeId,employeeId]);
       if(amount>(sums.single['balance'] as int)) throw StateError('Số trả vượt số còn phải trả đã chốt. Tải lại sổ hoa hồng.');
+      if(method=='transfer') {
+        final duplicate=await tx.query('commission_payouts',
+          where:"employee_id=? AND method='transfer' AND reference=? COLLATE NOCASE",
+          whereArgs:[employeeId,reference.trim()],limit:1);
+        if(duplicate.isNotEmpty) throw StateError('Mã chuyển khoản đã ghi trả cho nhân viên này. Đối chiếu chứng từ cũ.');
+      }
       final now=clock();
       String? movementId;
       if(method=='cash') {
@@ -162,7 +169,7 @@ class SqliteCommissionRepository {
   }
 
   Future<void> _audit(DatabaseExecutor tx,String actor,String action,String target,String detail,DateTime now) =>
-    tx.insert('audit_events',{'id':EntityId.create('commission-audit'),'actor_name':actor,
+    tx.insert('audit_events',{'id':EntityId.create('commission_audit'),'actor_name':actor,
       'action':action,'target_type':'commission','target_id':target,'result':'success',
       'detail':detail,'created_at':now.toIso8601String()}).then((_) {});
 }
