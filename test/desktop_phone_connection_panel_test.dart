@@ -133,5 +133,16 @@ void main() {
     expect(find.text('Tìm lại mạng'), findsOneWidget);
   });
 
+  testWidgets('legacy loopback backend preserves status and manual values with LAN guidance', (tester) async {
+    desktopBackendStatus.value = DesktopBackendStatus('Sẵn sàng',
+      apiUrl: Uri.parse('https://127.0.0.1:8743/api/staff/v1'), certificateSha256: 'b' * 64);
+    await showPanel(tester);
+    expect(find.byKey(const Key('desktop-phone-qr')), findsNothing);
+    expect(find.byKey(const Key('desktop-phone-copy-qr')), findsNothing);
+    expect(find.byKey(const Key('desktop-phone-address')), findsOneWidget);
+    expect(find.textContaining('Địa chỉ này chỉ dùng trên máy salon'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
 
