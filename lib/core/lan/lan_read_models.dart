@@ -32,11 +32,12 @@ class SalonReadQuery {
   SalonReadQuery(this.kind, {this.offset = 0, this.limit = 25,
     this.query = '', this.day, this.id}) {
     if (offset < 0 || offset > 100000 || limit < 1 || limit > 25 ||
-        query.length > 80 || (query.isNotEmpty && kind != SalonReadKind.customers) ||
-        (day != null && kind != SalonReadKind.appointments) ||
+        query.length > 80 || (query.isNotEmpty && kind == SalonReadKind.appointments) ||
+        (day != null && kind == SalonReadKind.customers) ||
         (id != null && (offset != 0 || query.isNotEmpty || day != null))) {
       throw const FormatException('Invalid read query');
     }
+    if (RegExp(r'[\x00-\x1f]').hasMatch(query)) throw const FormatException('Invalid search');
     if (id != null) LanContract.validateIdentity(id!, 'id');
     if (day != null) {
       final parsed = DateTime.tryParse(day!);

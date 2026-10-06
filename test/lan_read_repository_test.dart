@@ -111,4 +111,35 @@ void main() {
     }
     expect(() => SalonReadQuery(SalonReadKind.customers, query: 'x' * 81), throwsFormatException);
   });
+  test('paid invoice search by name, phone or id and date is literal, paginated and read-only', () async {
+    final db = await SalonDatabase.instance.database;
+    const stamp = '2026-10-06T09:00:00';
+    await db.insert('customers', {'id': 'customer-paid', 'full_name': 'Đỗ Lan 100%', 'phone': '0901234567',
+      'created_at': stamp, 'updated_at': stamp});
+    for (var i = 0; i < 28; i++) {
+      await db.insert('invoices', {'id': 'paid-${i.toString().padLeft(2, '0')}', 'customer_id': 'customer-paid',
+        'subtotal': 100000, 'discount_amount': 0, 'total_amount': 100000, 'payment_method': 'Tiền mặt',
+        'paid_at': i == 27 ? '2026-10-05T09:00:00' : stamp, 'created_at': stamp, 'updated_at': stamp});
+    }
+    await db.insert('invoices', {'id': 'private-unpaid', 'customer_id': 'customer-paid',
+      'subtotal': 0, 'discount_amount': 0, 'total_amount': 0, 'payment_method': 'Tiền mặt',
+      'created_at': stamp, 'updated_at': stamp});
+    final reader = SqliteLanReadRepository(() async => db);
+    final before = (await db.rawQuery('SELECT total_changes() AS n')).single['n'];
+    for (final query in ['đỗ', '0901234567', '%']) {
+      final first = await reader.read(SalonReadQuery(SalonReadKind.invoices, query: query, day: '2026-10-06'));
+      expect(first.records, hasLength(25)); expect(first.nextOffset, 25);
+      final last = await reader.read(SalonReadQuery(SalonReadKind.invoices, query: query, day: '2026-10-06', offset: 25));
+      expect(last.records, hasLength(2)); expect(last.nextOffset, isNull);
+      expect({...first.records.map((r) => r.id), ...last.records.map((r) => r.id)}, hasLength(27));
+    }
+    expect((await reader.read(SalonReadQuery(SalonReadKind.invoices, query: 'paid-27'))).records.single.id, 'paid-27');
+    expect((await reader.read(SalonReadQuery(SalonReadKind.invoices, day: '2026-10-05'))).records.single.id, 'paid-27');
+    expect((await reader.read(SalonReadQuery(SalonReadKind.invoices, query: 'private-unpaid'))).records, isEmpty);
+    expect(() => SalonReadQuery(SalonReadKind.invoices, query: '\n'), throwsFormatException);
+    expect(() => SalonReadQuery(SalonReadKind.invoices, day: '2026-02-30'), throwsFormatException);
+    expect((await db.rawQuery('SELECT total_changes() AS n')).single['n'], before);
+  });
+
 }
+

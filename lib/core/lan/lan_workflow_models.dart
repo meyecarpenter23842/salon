@@ -26,26 +26,40 @@ class LanEditorSnapshot {
 }
 
 class LanCatalogItem {
-  const LanCatalogItem(this.id, this.title, this.subtitle, {this.stockOnHand, this.lowStockThreshold = 5});
+  const LanCatalogItem(this.id, this.title, this.subtitle, {this.stockOnHand, this.lowStockThreshold = 5,
+    this.unitPrice, this.totalAmount, this.lineCount, this.updatedAt});
   final String id;
   final String title;
   final String subtitle;
   final int? stockOnHand;
   final int lowStockThreshold;
+  final int? unitPrice, totalAmount, lineCount;
+  final String? updatedAt;
   bool get isNegativeStock => (stockOnHand ?? 0) < 0;
   String get stockLabel => isNegativeStock ? 'Âm kho' : stockOnHand == 0 ? 'Hết hàng' :
       stockOnHand != null && stockOnHand! <= lowStockThreshold ? 'Sắp hết' : 'Còn hàng';
   Map<String, Object?> toJson() => {'id': id, 'title': title, 'subtitle': subtitle,
     if (stockOnHand != null) 'stockOnHand': stockOnHand,
-    if (stockOnHand != null) 'lowStockThreshold': lowStockThreshold};
+    if (stockOnHand != null) 'lowStockThreshold': lowStockThreshold,
+    if (unitPrice != null) 'unitPrice': unitPrice,
+    if (totalAmount != null) 'totalAmount': totalAmount,
+    if (lineCount != null) 'lineCount': lineCount,
+    if (updatedAt != null) 'updatedAt': updatedAt};
   factory LanCatalogItem.fromJson(Map<String, dynamic> json) {
+    if (['unitPrice', 'totalAmount', 'lineCount'].any((key) =>
+        json[key] != null && (json[key] is! int || (json[key] as int) < 0)) ||
+        (json['updatedAt'] != null && json['updatedAt'] is! String)) {
+      throw const FormatException('Invalid catalog amount');
+    }
     if (json['id'] is! String || json['title'] is! String || json['subtitle'] is! String ||
         (json['stockOnHand'] != null && json['stockOnHand'] is! int) ||
         (json['lowStockThreshold'] != null && (json['lowStockThreshold'] is! int || (json['lowStockThreshold'] as int) < 0))) {
       throw const FormatException('Invalid catalog item');
     }
     return LanCatalogItem(json['id'] as String, json['title'] as String, json['subtitle'] as String,
-      stockOnHand: json['stockOnHand'] as int?, lowStockThreshold: json['lowStockThreshold'] as int? ?? 5);
+      stockOnHand: json['stockOnHand'] as int?, lowStockThreshold: json['lowStockThreshold'] as int? ?? 5,
+      unitPrice: json['unitPrice'] as int?, totalAmount: json['totalAmount'] as int?,
+      lineCount: json['lineCount'] as int?, updatedAt: json['updatedAt'] as String?);
   }
 }
 
