@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'commission_page.dart';
+import 'attendance_page.dart';
 import '../../../../core/models/audit_event.dart';
 import '../../../../shared/widgets/sensitive_action_authorization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -312,6 +313,11 @@ class _EmployeesToolbar extends ConsumerWidget {
               spacing: 7,
               runSpacing: 7,
               children: [
+                if (ref.watch(attendanceRepositoryProvider) != null)
+                  ActionChip(label: const Text('Chấm công'),
+                    avatar: const Icon(Icons.schedule, size: 18),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const AttendancePage()))),
                 if (ref.watch(commissionRepositoryProvider) != null)
                   ActionChip(label: const Text('Hoa hồng và chi trả'),
                     avatar: const Icon(Icons.payments_outlined, size: 18),

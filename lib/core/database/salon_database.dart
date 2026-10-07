@@ -1,5 +1,6 @@
 import 'stock_document_schema.dart';
 import 'commission_schema.dart';
+import 'attendance_schema.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -93,6 +94,7 @@ class SalonDatabase {
         );
         await StockDocumentSchema.install(database);
         await CommissionSchema.install(database);
+        await AttendanceSchema.install(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         final batch = database.batch();
@@ -450,6 +452,7 @@ class SalonDatabase {
         }
         if (oldVersion < 20) await StockDocumentSchema.install(database);
         if (oldVersion < 21) await CommissionSchema.install(database);
+        if (oldVersion < 22) await AttendanceSchema.install(database);
       },
       onOpen: (database) async {
         await database.insert('app_settings', {

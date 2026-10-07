@@ -3,7 +3,7 @@ import 'lan_write_schema.dart';
 class DatabaseSchema {
   const DatabaseSchema._();
 
-  static const int version = 21;
+  static const int version = 22;
 
   static const String createInvoiceAdjustmentsTable = '''
     CREATE TABLE IF NOT EXISTS invoice_adjustments (
