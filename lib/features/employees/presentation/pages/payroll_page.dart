@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/models/payroll.dart';
+import '../../../../core/models/attendance.dart';
 import '../../../../core/models/audit_event.dart';
 import '../../../../core/models/entity_id.dart';
 import '../../../../core/providers/repository_providers.dart';
@@ -322,7 +323,7 @@ class _PayrollPageState extends ConsumerState<PayrollPage>
                   const Text('Công dùng trong bảng lương'),
                   for (final a in (run.snapshot['attendance'] as List))
                     Text(
-                      '${a['work_day']} · ${a['label']} · ${a['state']} · phiên bản ${a['revision']}',
+                      '${a['work_day']} · ${a['label']} · ${AttendanceShift(Map<String, Object?>.from(a as Map)).statusLabel} · phiên bản ${a['revision']}',
                     ),
                   const Divider(),
                   const Text('Khoản phụ cấp / khấu trừ / điều chỉnh'),
@@ -344,7 +345,7 @@ class _PayrollPageState extends ConsumerState<PayrollPage>
                   const Text('Lịch sử thao tác'),
                   for (final e in history)
                     Text(
-                      '${e['operation']} · ${e['actor']} · ${e['created_at']}\n${e['reason']}',
+                      '${payrollOperationLabel(e['operation'] as String)} · ${e['actor']} · ${e['created_at']}\n${e['reason']}',
                     ),
                   const Divider(),
                   const Text('Lịch sử chính sách lương'),
@@ -572,7 +573,9 @@ class _PayrollPageState extends ConsumerState<PayrollPage>
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(run.name, style: Theme.of(context).textTheme.titleMedium),
-                Chip(label: Text(run.closed ? 'Đã chốt' : 'Nháp')),
+                Chip(label: Text(run.closed
+                    ? (run.balance <= 0 ? 'Đã trả đủ' : (run.paid > 0 ? 'Đã trả một phần' : 'Đã chốt · chưa trả'))
+                    : 'Nháp')),
                 Text(payrollModeLabel(run.policy['mode'] as String)),
               ],
             ),

@@ -71,7 +71,7 @@ Future<Uint8List> buildPayrollPdf(PayrollView run) async {
           data: run.items
               .map(
                 (i) => [
-                  i['kind'],
+                  payrollItemLabel(i['kind'] as String),
                   m(i['amount'] as int),
                   i['reason'],
                   i['actor'],

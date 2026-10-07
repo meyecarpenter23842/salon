@@ -79,3 +79,19 @@ class PayrollWorkspace {
   final Map<String, Object?>? pending;
 }
 
+
+String payrollItemLabel(String kind) => switch (kind) {
+  'allowance' => 'Phụ cấp / thưởng',
+  'deduction' => 'Khấu trừ',
+  'correction' => 'Điều chỉnh kỳ trước',
+  'reversal' => 'Đảo khoản đã nhập',
+  _ => kind,
+};
+String payrollOperationLabel(String operation) => switch (operation) {
+  'policy' => 'Thiết lập lương',
+  'create' => 'Lập kỳ nháp',
+  'item' => 'Ghi khoản lương',
+  'close' => 'Chốt kỳ',
+  'pay' => 'Ghi nhận đã trả',
+  _ => operation,
+};
