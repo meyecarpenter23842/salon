@@ -70,7 +70,7 @@ void main() {
           );
           await tester.runAsync(
             (FontLoader(
-              'Roboto',
+              'Segoe UI',
             )..addFont(Future.value(ByteData.sublistView(font!)))).load,
           );
           await tester.runAsync(
