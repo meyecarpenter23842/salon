@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:salonmanager/core/providers/data_backend_provider.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,17 +36,41 @@ void main(){
     testWidgets('attendance desktop controls and history fit ${size.width}',(tester)async{
       tester.view.physicalSize=size;tester.view.devicePixelRatio=1;
       addTearDown(tester.view.resetPhysicalSize);addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(ProviderScope(overrides:[
+      final boundary=GlobalKey();
+      if(Platform.isLinux) {
+        final font=await tester.runAsync(()=>File('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf').readAsBytes());
+        final icon=await tester.runAsync(()=>File('${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf').readAsBytes());
+        await tester.runAsync((FontLoader('Roboto')..addFont(Future.value(ByteData.sublistView(font!)))).load);
+        await tester.runAsync((FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(icon!)))).load);
+      }
+      Future<void> capture(String name) async {
+        if(!Platform.isLinux) return;
+        await tester.runAsync(()async {
+          final image=await (boundary.currentContext!.findRenderObject() as RenderRepaintBoundary).toImage();
+          final png=await image.toByteData(format:ui.ImageByteFormat.png);
+          final output=Directory('build/mobile-ui-review')..createSync(recursive:true);
+          await File('${output.path}/$name.png').writeAsBytes(png!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      await tester.pumpWidget(RepaintBoundary(key:boundary,child:ProviderScope(overrides:[
+        appDataBackendProvider.overrideWithValue(AppDataBackend.fake),
         attendanceRepositoryProvider.overrideWithValue(_ViewRepository())],
-        child:const MaterialApp(home:AttendancePage())));
+        child:MaterialApp(debugShowCheckedModeBanner:false,theme:ThemeData(fontFamily:'Roboto'),home:const AttendancePage()))));
       await tester.pumpAndSettle();
       expect(find.text('Chấm công'),findsOneWidget);
       expect(find.text('Bắt đầu nghỉ'),findsOneWidget);
       expect(find.text('Ra ca'),findsOneWidget);
       expect(tester.takeException(),isNull);
+      await capture('28-attendance-${size.width.toInt()}');
       await tester.tap(find.text('Lịch sử'));await tester.pumpAndSettle();
       expect(find.text('Lịch sử công · Thợ A'),findsOneWidget);
       expect(find.text('Lý do: Chấm tại desktop'),findsOneWidget);
+      await tester.tap(find.text('Đóng'));await tester.pumpAndSettle();
+      await tester.tap(find.text('Sửa công / nghỉ ca'));await tester.pumpAndSettle();
+      expect(find.text('Sửa công · Thợ A'),findsOneWidget);
+      expect(find.text('Lý do sửa (bắt buộc)'),findsOneWidget);
+      await capture('29-attendance-edit-${size.width.toInt()}');
       expect(tester.takeException(),isNull);
     });
   }

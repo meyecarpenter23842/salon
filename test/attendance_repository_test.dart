@@ -148,6 +148,23 @@ void main() {
     expect(await repo.history(s.id),hasLength(3));
   });
 
+  test('actual hours cannot overlap another completed shift; cancelled plans cannot reopen over replacement',()async{
+    await plan('plan');await stamp('in','in');
+    now=DateTime(2026,10,8,5);await stamp('out','out');
+    await plan('day',start:DateTime(2026,10,8,7),end:DateTime(2026,10,8,15));
+    final planned=(await repo.fetch(DateTime(2026,10,8))).shifts.single;
+    now=DateTime(2026,10,8,15);
+    await expectLater(repo.correct(requestId:'overlap',shift:planned,state:'completed',
+      clockIn:DateTime(2026,10,8,4),clockOut:now,breaks:[],reason:'Bổ sung'),throwsStateError);
+    expect((await repo.fetch(DateTime(2026,10,8))).shifts.single.revision,1);
+    await repo.correct(requestId:'cancel-day',shift:planned,state:'cancelled',
+      clockIn:null,clockOut:null,breaks:[],reason:'Đổi lịch');
+    await plan('replace-day',start:DateTime(2026,10,8,7),end:DateTime(2026,10,8,15));
+    final cancelled=(await repo.fetch(DateTime(2026,10,8))).shifts.singleWhere((s)=>s.state=='cancelled');
+    await expectLater(repo.correct(requestId:'restore',shift:cancelled,state:'planned',
+      clockIn:null,clockOut:null,breaks:[],reason:'Khôi phục'),throwsStateError);
+  });
+
   test('atomic event failure rolls back the clock and revision',()async{
     await plan('plan');final s=await shift();
     await db.execute("""CREATE TRIGGER attendance_fixture_failure BEFORE INSERT ON attendance_events
