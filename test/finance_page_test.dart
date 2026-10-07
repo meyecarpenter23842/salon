@@ -129,7 +129,7 @@ Future<void> fonts(WidgetTester tester) async {
       '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
     ).readAsBytes(),
   );
-  for (final name in ['Roboto', 'Inter', 'Manrope', 'Playfair Display']) {
+  for (final name in ['Segoe UI', 'Georgia', 'Roboto', 'Inter', 'Manrope', 'Playfair Display']) {
     await tester.runAsync(
       (FontLoader(
         name,
