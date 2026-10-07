@@ -62,6 +62,16 @@ void main() {
     )).singleWhere((o) => catalogNameKey(o.name) == catalogNameKey(name));
   }
 
+  test('stale open profile cannot overwrite another window status or title', () async {
+    final t = await title('Thợ A');
+    final e = await employees.saveEmployee(input(t.name, titleId: t.id));
+    await employees.updateEmployeeStatus(e['id'] as String, 'Tạm nghỉ');
+    await expectLater(
+      employees.saveEmployee(input(t.name, titleId: t.id, expected: e['updatedAt'] as String),
+        existingId: e['id'] as String), throwsStateError);
+    expect((await employees.fetchEmployeesView()).single['status'], 'Tạm nghỉ');
+  });
+
   test(
     'custom title stable ID, normalized uniqueness, usage and rename refresh current profile',
     () async {
