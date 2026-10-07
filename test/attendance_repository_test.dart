@@ -174,6 +174,14 @@ void main() {
     expect(await repo.history(s.id),hasLength(1));
   });
 
+  test('current-version backup missing attendance history is rejected',()async{
+    await plan('plan');
+    await db.execute('DROP TABLE attendance_events');
+    final validation=await const BackupService().validateBackupFile(db.path);
+    expect(validation.isValid,isFalse);
+    expect(validation.message,contains('attendance_events'));
+  });
+
   test('schema 21 partial migration preserves attendance and backup restore keeps history',()async{
     await plan('plan');await stamp('in','in');
     final old=await shift();

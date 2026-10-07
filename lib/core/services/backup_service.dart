@@ -267,6 +267,18 @@ class BackupService {
         );
       }
 
+      if (userVersion >= 22) {
+        const attendanceTables = {'attendance_shifts', 'attendance_events'};
+        final missingAttendance = attendanceTables.difference(tables);
+        if (missingAttendance.isNotEmpty) {
+          return BackupValidationResult(
+            isValid: false,
+            message: 'Backup schema $userVersion thiếu sổ chấm công: ${missingAttendance.join(', ')}.',
+            schemaVersion: userVersion,
+          );
+        }
+      }
+
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],
