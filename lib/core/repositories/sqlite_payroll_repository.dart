@@ -486,6 +486,25 @@ class SqlitePayrollRepository {
             'Mã chuyển khoản đã ghi trả lương/hoa hồng cho nhân viên.',
           );
         }
+        final expense = await tx.query(
+          'expense_payments',
+          columns: const ['id'],
+          where: "method='transfer' AND reference=? COLLATE NOCASE",
+          whereArgs: [reference.trim()],
+          limit: 1,
+        );
+        final supplier = await tx.query(
+          'supplier_payments',
+          columns: const ['id'],
+          where: "method='transfer' AND reference=? COLLATE NOCASE",
+          whereArgs: [reference.trim()],
+          limit: 1,
+        );
+        if (expense.isNotEmpty || supplier.isNotEmpty) {
+          throw StateError(
+            'Mã chuyển khoản đã dùng cho chứng từ chi phí/NCC.',
+          );
+        }
       }
       String? movementId;
       final now = clock().toIso8601String();

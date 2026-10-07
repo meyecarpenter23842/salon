@@ -155,6 +155,15 @@ class SqliteCommissionRepository {
           where:"employee_id=? AND method='transfer' AND reference=? COLLATE NOCASE",
           whereArgs:[employeeId,reference.trim()],limit:1);
         if(salaryDuplicate.isNotEmpty) { throw StateError('Mã chuyển khoản đã ghi trả lương cho nhân viên. Đối chiếu chứng từ cũ.'); }
+        final expenseDuplicate=await tx.query('expense_payments',
+          where:"method='transfer' AND reference=? COLLATE NOCASE",
+          whereArgs:[reference.trim()],limit:1);
+        final supplierDuplicate=await tx.query('supplier_payments',
+          where:"method='transfer' AND reference=? COLLATE NOCASE",
+          whereArgs:[reference.trim()],limit:1);
+        if(expenseDuplicate.isNotEmpty || supplierDuplicate.isNotEmpty) {
+          throw StateError('Mã chuyển khoản đã dùng cho chứng từ chi phí/NCC. Đối chiếu chứng từ cũ.');
+        }
       }
       final now=clock();
       String? movementId;

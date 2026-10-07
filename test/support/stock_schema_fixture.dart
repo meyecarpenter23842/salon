@@ -2,6 +2,19 @@ import 'package:sqflite/sqflite.dart';
 
 // Reconstruct a real pre-20 file, preserving business rows.
 Future<void> removeStockDocumentSchema(Database db) async {
+  // Schema 26 points at stock suppliers/documents, so remove it first when
+  // reconstructing a genuine pre-20 file. No business rows are synthesized.
+  await db.execute('DROP TRIGGER IF EXISTS supplier_cash_no_update');
+  await db.execute('DROP TRIGGER IF EXISTS supplier_cash_no_delete');
+  for (final table in [
+    'supplier_payment_allocations',
+    'supplier_payable_events',
+    'supplier_payments',
+    'supplier_payable_obligations',
+  ]) {
+    await db.execute('DROP TABLE IF EXISTS $table');
+  }
+
   // Remove schema 21 too when reconstructing a pre-20 backup.
   for (final table in ['commission_payouts', 'commission_entries', 'commission_periods']) {
     await db.execute('DROP TABLE IF EXISTS $table');

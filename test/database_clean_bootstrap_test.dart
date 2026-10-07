@@ -96,6 +96,10 @@ void main() {
       'invoices',
       'invoice_items',
       'invoice_adjustments',
+      'supplier_payable_obligations',
+      'supplier_payments',
+      'supplier_payment_allocations',
+      'supplier_payable_events',
     ]) {
       expect(
         await _countRows(database, table),

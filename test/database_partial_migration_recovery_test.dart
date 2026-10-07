@@ -6,6 +6,7 @@ import 'package:salonmanager/core/database/expense_schema.dart';
 import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/database/stock_document_schema.dart';
+import 'package:salonmanager/core/database/supplier_payable_schema.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +20,7 @@ void main() {
   });
 
   test(
-    'partially applied schema 18-25 resumes without duplicate DDL',
+    'partially applied schema 18-26 resumes without duplicate DDL',
     () async {
       final current = await SalonDatabase.instance.initialize();
       final location = current.path;
@@ -117,6 +118,9 @@ void main() {
       for (final statement in ExpenseSchema.statements.take(2)) {
         await legacy.execute(statement);
       }
+      for (final statement in SupplierPayableSchema.statements.take(2)) {
+        await legacy.execute(statement);
+      }
       await legacy.close();
 
       final upgraded = await SalonDatabase.instance.initialize(
@@ -168,6 +172,10 @@ void main() {
       expect(await upgraded.query('expense_entries'), isEmpty);
       expect(await upgraded.query('expense_payments'), isEmpty);
       expect(await upgraded.query('expense_events'), isEmpty);
+      expect(await upgraded.query('supplier_payable_obligations'), isEmpty);
+      expect(await upgraded.query('supplier_payments'), isEmpty);
+      expect(await upgraded.query('supplier_payment_allocations'), isEmpty);
+      expect(await upgraded.query('supplier_payable_events'), isEmpty);
       expect(await upgraded.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     },
   );

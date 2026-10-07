@@ -5,6 +5,7 @@ import '../database/salon_database.dart';
 import '../models/entity_id.dart';
 import '../models/stock_document.dart';
 import '../services/sensitive_action_service.dart';
+import 'supplier_payable_ledger.dart';
 
 class StockDocumentRepository {
   StockDocumentRepository(this.database, this.security);
@@ -159,8 +160,10 @@ class StockDocumentRepository {
         };
         await _movement(tx, doc, line, 'post', before, after, doc.note);
       }
+      final now = DateTime.now();
+      await SupplierPayableLedger.captureReceipt(tx, doc, actor, now);
       await tx.update('stock_documents', {'status': 'posted', 'posted_by': actor,
-        'posted_at': DateTime.now().toIso8601String(), 'updated_at': DateTime.now().toIso8601String(),
+        'posted_at': now.toIso8601String(), 'updated_at': now.toIso8601String(),
         'revision': doc.revision + 1}, where: 'id = ?', whereArgs: [id]);
       await _audit(tx, actor, 'stock_document_post', id, 'total=${doc.total};number=${doc.number}');
       return _find(tx, id);
@@ -178,7 +181,15 @@ class StockDocumentRepository {
         return doc;
       }
       if (doc.revision != expectedRevision) throw StateError('Phiếu đã thay đổi. Tải lại trước khi hủy.');
+      final now = DateTime.now();
       if (doc.isPosted) {
+        await SupplierPayableLedger.reverseReceipt(
+          tx,
+          doc,
+          actor,
+          reason.trim(),
+          now,
+        );
         for (final line in doc.lines) {
           final movements = await tx.query('inventory_movements', where: 'id = ?', whereArgs: ['stock-doc-$id-${line.id}-post']);
           if (movements.length != 1) throw StateError('Không đối chiếu được bút toán gốc.');
@@ -187,8 +198,8 @@ class StockDocumentRepository {
           await _movement(tx, doc, line, 'reverse', before, after, reason.trim());
         }
       }
-      await tx.update('stock_documents', {'status': 'cancelled', 'cancelled_at': DateTime.now().toIso8601String(),
-        'cancellation_reason': reason.trim(), 'updated_at': DateTime.now().toIso8601String(),
+      await tx.update('stock_documents', {'status': 'cancelled', 'cancelled_at': now.toIso8601String(),
+        'cancellation_reason': reason.trim(), 'updated_at': now.toIso8601String(),
         'revision': doc.revision + 1}, where: 'id = ?', whereArgs: [id]);
       await _audit(tx, actor, 'stock_document_cancel', id, reason.trim());
       return _find(tx, id);

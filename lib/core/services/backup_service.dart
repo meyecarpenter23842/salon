@@ -313,6 +313,24 @@ class BackupService {
           );
         }
       }
+
+      if (userVersion >= 26) {
+        const supplierPayableTables = {
+          'supplier_payable_obligations',
+          'supplier_payments',
+          'supplier_payment_allocations',
+          'supplier_payable_events',
+        };
+        final missingSupplierPayables = supplierPayableTables.difference(tables);
+        if (missingSupplierPayables.isNotEmpty) {
+          return BackupValidationResult(
+            isValid: false,
+            schemaVersion: userVersion,
+            message:
+                'Backup schema $userVersion thiếu sổ công nợ NCC: ${missingSupplierPayables.join(', ')}.',
+          );
+        }
+      }
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],

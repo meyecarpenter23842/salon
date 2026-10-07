@@ -457,6 +457,7 @@ class SqliteExpenseRepository {
       _verifyProof(existing.single, signature, 'payment');
       return requestId;
     }
+    await _ensureExternalRequestIdAvailable(db, requestId);
     await _preparePending(
       db,
       requestId,
@@ -597,6 +598,7 @@ class SqliteExpenseRepository {
       _verifyProof(existing.single, signature, 'reversal');
       return requestId;
     }
+    await _ensureExternalRequestIdAvailable(db, requestId);
     await _preparePending(
       db,
       requestId,
@@ -1008,12 +1010,31 @@ class SqliteExpenseRepository {
     }
   }
 
+  Future<void> _ensureExternalRequestIdAvailable(
+    DatabaseExecutor db,
+    String requestId,
+  ) async {
+    final rows = await db.query(
+      'supplier_payments',
+      columns: const ['id'],
+      where: 'id=?',
+      whereArgs: [requestId],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      throw StateError(
+        'Mã yêu cầu đã được dùng cho chứng từ thanh toán NCC.',
+      );
+    }
+  }
+
   Future<void> _ensureTransferReferenceAvailable(
     DatabaseExecutor db,
     String reference,
   ) async {
     for (final table in [
       'expense_payments',
+      'supplier_payments',
       'commission_payouts',
       'payroll_payouts',
     ]) {
