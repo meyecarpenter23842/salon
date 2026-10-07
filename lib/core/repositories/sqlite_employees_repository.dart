@@ -131,6 +131,10 @@ class SqliteEmployeesRepository
       throw StateError('Employee $existingId not found');
     }
 
+    if(existing!=null && input.expectedUpdatedAt!=null &&
+        input.expectedUpdatedAt!=existing['updated_at']) {
+      throw StateError('Hồ sơ đã thay đổi ở cửa sổ khác. Tải lại trước khi lưu.');
+    }
     final now = DateTime.now().toIso8601String();
     final id = existing?['id']?.toString() ?? EntityId.create('emp');
 
@@ -404,6 +408,7 @@ class SqliteEmployeesRepository
       'name': row['full_name']?.toString() ?? '',
       'role': row['role']?.toString() ?? '',
       'titleOptionId':row['title_option_id'],
+      'updatedAt':row['updated_at'],
       'status': row['status']?.toString() ?? 'Đang làm việc',
       'phone': row['phone']?.toString() ?? '',
       'shift': row['shift_label']?.toString() ?? '',

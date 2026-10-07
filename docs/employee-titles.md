@@ -19,7 +19,7 @@ trước/sau. Thiết lập PIN Owner trong Cài đặt nếu chưa có. Chức 
 hay “Chủ salon” chỉ là vị trí công việc, không tạo phiên Owner và không cấp quyền điện thoại.
 Quyền điện thoại và PIN Owner tiếp tục được quản lý ở phần bảo mật hiện có.
 
-Nếu tên/chức danh đã thay đổi trong lúc biểu mẫu mở, tải lại biểu mẫu thay vì tự tạo
+Nếu hồ sơ hoặc tên/chức danh đã thay đổi trong lúc biểu mẫu mở, tải lại biểu mẫu thay vì tự tạo
 lại tên cũ. Các client cũ truyền tên không có ID tiếp tục được hỗ trợ qua thao tác
 gán chức danh có quyền Owner; tên được nhập vào cùng danh mục, kiểm tra trạng thái ngừng dùng.
 

@@ -1461,6 +1461,7 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
         fullName: _nameController.text.trim(),
         role: _role,
         titleOptionId:_titleOptionId,
+        expectedUpdatedAt:existing?['updatedAt'] as String?,
         status: _status,
         phone: _phoneController.text.trim(),
         shift: _shiftController.text.trim(),

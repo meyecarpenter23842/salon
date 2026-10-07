@@ -15,10 +15,12 @@ EmployeeUpsertInput input(
   String role, {
   String? titleId,
   String name = 'Thợ A',
+  String? expected,
 }) => EmployeeUpsertInput(
   fullName: name,
   role: role,
   titleOptionId: titleId,
+  expectedUpdatedAt:expected,
   status: 'Đang làm việc',
   phone: '0900000000',
   shift: 'Ca sáng',
