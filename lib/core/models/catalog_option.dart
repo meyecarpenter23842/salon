@@ -2,13 +2,15 @@ enum CatalogOptionKind {
   productGroup,
   productBrand,
   serviceGroup,
-  productUnit;
+  productUnit,
+  employeeTitle;
 
   String get databaseValue => switch (this) {
     CatalogOptionKind.productGroup => 'product_group',
     CatalogOptionKind.productBrand => 'product_brand',
     CatalogOptionKind.serviceGroup => 'service_group',
     CatalogOptionKind.productUnit => 'product_unit',
+    CatalogOptionKind.employeeTitle => 'employee_title',
   };
 
   String get displayLabel => switch (this) {
@@ -16,6 +18,7 @@ enum CatalogOptionKind {
     CatalogOptionKind.productBrand => 'thương hiệu',
     CatalogOptionKind.serviceGroup => 'nhóm dịch vụ',
     CatalogOptionKind.productUnit => 'đơn vị tính',
+    CatalogOptionKind.employeeTitle => 'chức danh',
   };
 
   List<String> get defaultNames => switch (this) {
@@ -28,6 +31,7 @@ enum CatalogOptionKind {
       'Khác',
     ],
     CatalogOptionKind.productBrand => const [],
+    CatalogOptionKind.employeeTitle => const ['Stylist chính', 'Barber', 'Chăm sóc tóc', 'Lễ tân', 'Thợ phụ', 'Quản lý'],
     CatalogOptionKind.productUnit => const ['Cái', 'Chai', 'Hộp', 'Tuýp', 'Gói'],
     CatalogOptionKind.serviceGroup => const [
       'Cắt tóc',

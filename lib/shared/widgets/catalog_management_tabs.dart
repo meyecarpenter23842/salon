@@ -1,3 +1,5 @@
+import '../../core/models/audit_event.dart';
+import 'sensitive_action_authorization.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +39,8 @@ class _CatalogSettingsPanelState extends ConsumerState<CatalogSettingsPanel> {
   void initState() { super.initState(); _kind = widget.kinds.first; }
 
   Future<void> _edit([CatalogOption? item]) async {
+    if(_kind==CatalogOptionKind.employeeTitle &&
+      (!await ensureSensitiveActionAuthorized(context,ref,SensitiveAction.settingsEdit)||!mounted)) {return;}
     final controller = TextEditingController(text: item?.name ?? '');
     String? error;
     bool saving = false;
@@ -74,6 +78,8 @@ class _CatalogSettingsPanelState extends ConsumerState<CatalogSettingsPanel> {
   }
 
   Future<void> _toggle(CatalogOption item) async {
+    if(item.kind==CatalogOptionKind.employeeTitle &&
+      (!await ensureSensitiveActionAuthorized(context,ref,SensitiveAction.settingsEdit)||!mounted)) {return;}
     final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: Text(item.isActive ? 'Ngừng sử dụng “${item.name}”?' : 'Bật lại “${item.name}”?'),
       content: Text(item.isActive
@@ -107,6 +113,9 @@ class _CatalogSettingsPanelState extends ConsumerState<CatalogSettingsPanel> {
       ]),
       const SizedBox(height: 12),
       Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        IconButton(tooltip:'Tải lại danh mục',onPressed:_busy?null:(){
+          ref.read(catalogOptionsRefreshNonceProvider.notifier).state++;
+        },icon:const Icon(Icons.refresh)),
         SizedBox(width: 260, child: TextField(key: ValueKey(_kind),
           decoration: const InputDecoration(labelText: 'Tìm danh mục', prefixIcon: Icon(Icons.search)),
           onChanged: (v) => setState(() => _query = v.trim().toLowerCase()))),
@@ -118,6 +127,8 @@ class _CatalogSettingsPanelState extends ConsumerState<CatalogSettingsPanel> {
       if (_kind == CatalogOptionKind.productUnit) const Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
         child: Text('Đơn vị đếm tồn: chai, hộp, cái… Quy cách 500 ml vẫn nhập riêng trên sản phẩm.')),
+      if(_kind==CatalogOptionKind.employeeTitle) const Padding(padding:EdgeInsets.symmetric(vertical:8),
+        child:Text('Chức danh là vị trí công việc. Đổi tên cập nhật hồ sơ hiện tại; dữ liệu đã chốt giữ lịch sử. Không cấp quyền Owner hoặc điện thoại.')),
       const SizedBox(height: 8),
       if (_busy) const LinearProgressIndicator(),
       Expanded(child: state.when(
@@ -153,6 +164,7 @@ String _title(CatalogOptionKind kind) => switch (kind) {
   CatalogOptionKind.productBrand => 'Thương hiệu',
   CatalogOptionKind.serviceGroup => 'Nhóm dịch vụ',
   CatalogOptionKind.productUnit => 'Đơn vị tính',
+  CatalogOptionKind.employeeTitle => 'Chức danh nhân viên',
 };
 
 Future<T?> saveCatalogRecord<T>(BuildContext context, Future<T> Function() save) async {

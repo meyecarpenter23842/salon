@@ -1,3 +1,6 @@
+import 'dart:convert';
+import '../models/catalog_option.dart';
+import '../database/catalog_schema.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import '../services/sensitive_action_service.dart';
@@ -128,6 +131,10 @@ class SqliteEmployeesRepository
       throw StateError('Employee $existingId not found');
     }
 
+    if(existing!=null && input.expectedUpdatedAt!=null &&
+        input.expectedUpdatedAt!=existing['updated_at']) {
+      throw StateError('Hồ sơ đã thay đổi ở cửa sổ khác. Tải lại trước khi lưu.');
+    }
     final now = DateTime.now().toIso8601String();
     final id = existing?['id']?.toString() ?? EntityId.create('emp');
 
@@ -152,6 +159,11 @@ class SqliteEmployeesRepository
       'updated_at': now,
     };
 
+    if(input.role.trim().isEmpty && (existing==null||existing['role']!=input.role)) {
+      throw ArgumentError('Chọn chức danh cho nhân viên.');
+    }
+    final changedTitle=existing==null||catalogNameKey(existing['role'] as String)!=catalogNameKey(input.role);
+    final titleActor=changedTitle?await _security.authorizeEmployeeTitleAction('employee_title_assign',id):null;
     final changedRate = existing == null ||
       _toDouble(existing['commission_rate']) != row['commission_rate'];
     final actor = changedRate
@@ -162,10 +174,20 @@ class SqliteEmployeesRepository
           current.single['updated_at'] != existing['updated_at'])) {
         throw StateError('Hồ sơ đã thay đổi. Tải lại trước khi lưu.');
       }
+      final title=await CatalogSchema.resolve(tx,CatalogOptionKind.employeeTitle,input.role,
+        previousId:existing?['title_option_id'],requestedId:input.titleOptionId);
+      row['title_option_id']=title?['id'];
+      if(title!=null) {row['role']=title['name'];}
       if (existing == null) {
         await tx.insert('employees', row, conflictAlgorithm: ConflictAlgorithm.abort);
       } else {
         await tx.update('employees', row, where: 'id=?', whereArgs: [id]);
+      }
+      if(titleActor!=null) {
+        await tx.insert('audit_events',{'id':EntityId.create('title_assignment'),'actor_name':titleActor,
+          'action':'employee_title_assign','target_type':'employee','target_id':id,'result':'success',
+          'detail':jsonEncode({'before':{'role':existing?['role'],'title_option_id':existing?['title_option_id']},
+            'after':{'role':row['role'],'title_option_id':row['title_option_id']}}),'created_at':now});
       }
       if (changedRate) {
         await tx.insert('audit_events', {
@@ -385,6 +407,8 @@ class SqliteEmployeesRepository
           _buildInitials(row['full_name']?.toString() ?? ''),
       'name': row['full_name']?.toString() ?? '',
       'role': row['role']?.toString() ?? '',
+      'titleOptionId':row['title_option_id'],
+      'updatedAt':row['updated_at'],
       'status': row['status']?.toString() ?? 'Đang làm việc',
       'phone': row['phone']?.toString() ?? '',
       'shift': row['shift_label']?.toString() ?? '',

@@ -336,7 +336,10 @@ final retailProductsViewProvider = FutureProvider<List<RetailProductItem>>(
 );
 
 final employeesViewProvider = FutureProvider<List<Map<String, Object?>>>(
-  (ref) => ref.watch(employeesRepositoryProvider).fetchEmployeesView(),
+  (ref) {
+    ref.watch(catalogOptionsRefreshNonceProvider);
+    return ref.watch(employeesRepositoryProvider).fetchEmployeesView();
+  },
 );
 
 final invoiceDraftProvider = FutureProvider<InvoiceDraft>(

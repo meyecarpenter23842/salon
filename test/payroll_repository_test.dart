@@ -548,7 +548,7 @@ void main() {
       db = await SalonDatabase.instance.initialize(
         preserveExistingTestDatabase: true,
       );
-      expect(await db.getVersion(), 23);
+      expect(await db.getVersion(), 24);
       expect((await repo.document(r.id)).net, 8000000);
       await PayrollSchema.install(db);
       expect(await db.rawQuery('PRAGMA foreign_key_check'), isEmpty);

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:sqflite/sqflite.dart';
+import '../services/sensitive_action_service.dart';
 
 import '../database/catalog_schema.dart';
 import '../database/salon_database.dart';
@@ -13,14 +16,17 @@ abstract interface class CatalogOptionsRepository {
 }
 
 class SqliteCatalogOptionsRepository implements CatalogOptionsRepository {
-  SqliteCatalogOptionsRepository(this._database);
+  SqliteCatalogOptionsRepository(this._database, {SensitiveActionService? security})
+    : _security=security??SensitiveActionService(_database);
   final SalonDatabase _database;
+  final SensitiveActionService _security;
 
   static (String, String, String) source(CatalogOptionKind kind) => switch (kind) {
     CatalogOptionKind.productGroup => ('retail_products', 'product_type', 'group_option_id'),
     CatalogOptionKind.productBrand => ('retail_products', 'brand', 'brand_option_id'),
     CatalogOptionKind.productUnit => ('retail_products', 'unit_name', 'unit_option_id'),
     CatalogOptionKind.serviceGroup => ('services', 'category', 'group_option_id'),
+    CatalogOptionKind.employeeTitle => ('employees', 'role', 'title_option_id'),
   };
 
   @override
@@ -43,10 +49,14 @@ class SqliteCatalogOptionsRepository implements CatalogOptionsRepository {
   @override
   Future<String> createOption(CatalogOptionKind kind, String name) async {
     final normalized = _validateName(name);
+    final actor=kind==CatalogOptionKind.employeeTitle
+      ? await _security.authorizeEmployeeTitleAction('employee_title_create', normalized):null;
     return _database.inTransaction((scope) async {
       final db = await scope.database;
+      final before=await db.query('catalog_options',where:'kind=? AND normalized_name=?',whereArgs:[kind.databaseValue,catalogNameKey(normalized)]);
       final row = await CatalogSchema.ensure(db, kind, normalized);
       if (row['is_active'] != 1) throw StateError('Tên đã có trong mục ngừng sử dụng. Hãy bật lại mục đó.');
+      if(actor!=null&&before.isEmpty) {await _audit(db,actor,'employee_title_create',row['id'] as String,null,row);}
       return row['name'] as String;
     });
   }
@@ -54,11 +64,17 @@ class SqliteCatalogOptionsRepository implements CatalogOptionsRepository {
   @override
   Future<void> renameOption(String id, String name) async {
     final normalized = _validateName(name);
+    final database=await _database.database;
+    final observed=await database.query('catalog_options',where:'id=?',whereArgs:[id]);
+    if(observed.isEmpty) {throw StateError('Danh mục không còn tồn tại.');}
+    final actor=observed.single['kind']==CatalogOptionKind.employeeTitle.databaseValue
+      ?await _security.authorizeEmployeeTitleAction('employee_title_rename',id):null;
     await _database.inTransaction((scope) async {
       final db = await scope.database;
       final rows = await db.query('catalog_options', where: 'id = ?', whereArgs: [id]);
       if (rows.isEmpty) throw StateError('Danh mục không còn tồn tại.');
       final old = rows.single;
+      if(actor!=null && old['updated_at']!=observed.single['updated_at']) {throw StateError('Chức danh đã thay đổi. Tải lại.');}
       final kind = CatalogOptionKind.values.firstWhere((k) => k.databaseValue == old['kind']);
       final others = await db.query('catalog_options', where: 'kind = ? AND id <> ?',
         whereArgs: [kind.databaseValue, id]);
@@ -72,15 +88,34 @@ class SqliteCatalogOptionsRepository implements CatalogOptionsRepository {
       // Only live catalog records change. Invoice/appointment snapshots stay intact.
       await db.update(s.$1, {s.$2: normalized, 'updated_at': now},
         where: '${s.$3} = ?', whereArgs: [id]);
+      if(actor!=null) {await _audit(db,actor,'employee_title_rename',id,old,{'name':normalized,'is_active':old['is_active']});}
     });
   }
 
   @override
   Future<void> setOptionActive(String id, bool active) async {
     final db = await _database.database;
-    final count = await db.update('catalog_options', {'is_active': active ? 1 : 0,
-      'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [id]);
-    if (count != 1) throw StateError('Danh mục không còn tồn tại.');
+    final observed=await db.query('catalog_options',where:'id=?',whereArgs:[id]);
+    if(observed.isEmpty) {throw StateError('Danh mục không còn tồn tại.');}
+    final actor=observed.single['kind']==CatalogOptionKind.employeeTitle.databaseValue
+      ?await _security.authorizeEmployeeTitleAction('employee_title_active',id):null;
+    await db.transaction((tx)async{
+      final rows=await tx.query('catalog_options',where:'id=?',whereArgs:[id]);
+      if(rows.isEmpty || (actor!=null&&rows.single['updated_at']!=observed.single['updated_at'])) {
+        throw StateError('Danh mục đã thay đổi. Tải lại.');
+      }
+      final old=rows.single;
+      final values={'is_active':active?1:0,'updated_at':DateTime.now().toIso8601String()};
+      await tx.update('catalog_options',values,where:'id=?',whereArgs:[id]);
+      if(actor!=null) {await _audit(tx,actor,'employee_title_active',id,old,values);}
+    });
+  }
+  static Future<void> _audit(DatabaseExecutor tx,String actor,String action,String id,
+      Map<String,Object?>? before,Map<String,Object?> after) async {
+    await tx.insert('audit_events',{'id':EntityId.create('title_audit'),'actor_name':actor,
+      'action':action,'target_type':'employee_title','target_id':id,'result':'success',
+      'detail':jsonEncode({'before':before,'after':after}),
+      'created_at':DateTime.now().toIso8601String()});
   }
 }
 
