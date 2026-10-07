@@ -29,6 +29,7 @@ import '../repositories/sqlite_commission_repository.dart';
 import '../repositories/sqlite_attendance_repository.dart';
 import '../repositories/sqlite_payroll_repository.dart';
 import '../repositories/sqlite_expense_repository.dart';
+import '../repositories/sqlite_supplier_payable_repository.dart';
 import '../repositories/sqlite_billing_sessions_repository.dart';
 import '../repositories/sqlite_cashier_shift_repository.dart';
 import '../repositories/sqlite_invoices_repository.dart';
@@ -169,6 +170,15 @@ final commissionRepositoryProvider = Provider<SqliteCommissionRepository?>((ref)
 final expenseRepositoryProvider = Provider<SqliteExpenseRepository?>((ref) {
   if (ref.watch(appDataBackendProvider) != AppDataBackend.sqlite) return null;
   return SqliteExpenseRepository(
+    SalonDatabase.instance,
+    ref.watch(sensitiveActionServiceProvider),
+  );
+});
+
+final supplierPayableRepositoryProvider =
+    Provider<SqliteSupplierPayableRepository?>((ref) {
+  if (ref.watch(appDataBackendProvider) != AppDataBackend.sqlite) return null;
+  return SqliteSupplierPayableRepository(
     SalonDatabase.instance,
     ref.watch(sensitiveActionServiceProvider),
   );
