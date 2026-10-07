@@ -268,6 +268,8 @@ class _PayrollPageState extends ConsumerState<PayrollPage>
       if (!mounted || locked) {
         return;
       }
+      // Loading ends when the receipt editor is ready; the modal owns input.
+      setState(() => busy = false);
       await showDialog<bool>(
         context: context,
         barrierDismissible: false,
