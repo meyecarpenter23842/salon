@@ -6,7 +6,8 @@ enum SensitiveAction {
   stockDocument,
   commission,
   attendance,
-  payroll;
+  payroll,
+  finance;
 
   String get databaseValue => switch (this) {
     SensitiveAction.billDiscount => 'bill_discount',
@@ -17,6 +18,7 @@ enum SensitiveAction {
     SensitiveAction.commission => 'commission',
     SensitiveAction.attendance => 'attendance',
     SensitiveAction.payroll => 'payroll',
+    SensitiveAction.finance => 'finance',
   };
 
   String get label => switch (this) {
@@ -28,6 +30,7 @@ enum SensitiveAction {
     SensitiveAction.commission => 'chốt và trả hoa hồng',
     SensitiveAction.attendance => 'xếp ca và sửa công',
     SensitiveAction.payroll => 'xem và quản lý bảng lương',
+    SensitiveAction.finance => 'xem và quản lý chi phí, công nợ NCC',
   };
 }
 

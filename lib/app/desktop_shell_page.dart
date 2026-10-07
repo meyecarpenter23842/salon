@@ -1,3 +1,4 @@
+import '../features/finance/presentation/finance_page.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -770,6 +771,7 @@ class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
       DesktopSection.inventory => const InventoryPage(),
       DesktopSection.invoices => const InvoicesPage(),
       DesktopSection.reports => const ReportsPage(),
+      DesktopSection.finance => const FinancePage(),
       DesktopSection.settings => const SettingsPage(),
     };
   }
