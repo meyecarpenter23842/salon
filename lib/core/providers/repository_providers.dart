@@ -1,5 +1,4 @@
 import 'catalog_options_providers.dart';
-import 'catalog_options_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/fake/fake_salon_data_source.dart';
