@@ -103,6 +103,13 @@ class _SourceRepository extends StockDocumentRepository {
     supplierName: 'Nhà cung cấp Việt', externalReference: 'NCC-HD-42', note: 'Phiếu nguồn đã ghi kho', lines: const [StockDocumentLine(id: 'line', productId: 'p', productName: 'Dầu gội Việt', unitName: 'Chai', quantity: 10, unitCost: 100000)]);
 }
 
+class _PaymentDelayedReport extends FinanceWorkspaceRepository {
+  _PaymentDelayedReport(super.database, super.security, this.result);
+  final Future<FinanceWorkspace> result;
+  int calls = 0;
+  @override
+  Future<FinanceWorkspace> fetch() async => ++calls == 2 ? result : fixtureWorkspace();
+}
 class _DelayedReport extends FinanceWorkspaceRepository {
   _DelayedReport(super.database, super.security, this.result);
   final Future<FinanceWorkspace> result;
@@ -371,6 +378,37 @@ void main() {
       expect(submitted, isFalse);
     },
   );
+  testWidgets('late payment balance cannot reopen editor after Owner locks and unlocks', (tester) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final security = _Security(), result = Completer<FinanceWorkspace>();
+    final report = _PaymentDelayedReport(SalonDatabase.instance, security, result.future);
+    await tester.pumpWidget(ProviderScope(overrides: [
+      financeWorkspaceRepositoryProvider.overrideWithValue(report),
+      sensitiveActionServiceProvider.overrideWithValue(security),
+    ], child: const MaterialApp(home: FinancePage())));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Ghi trả / phân bổ').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ghi trả / phân bổ').first);
+    await tester.pump();
+    expect(report.calls, 2);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    security.active = true;
+    await tester.tap(find.text('Mở bằng PIN Owner'));
+    await tester.pumpAndSettle();
+    expect(report.calls, 3);
+    result.complete(fixtureWorkspace());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('finance-payment-submit')), findsNothing);
+    expect(find.text('Lập khoản chi'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('background closes sensitive editor', (tester) async {
     final security = _Security();
     await tester.pumpWidget(

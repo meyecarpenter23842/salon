@@ -314,13 +314,14 @@ class _FinancePageState extends ConsumerState<FinancePage>
     if (busy || !allowed) {
       return;
     }
+    final token = generation;
     final selectedBook = account?.book ?? reversal?.book ?? book;
     setState(() => busy = true);
     try {
       final latest = await ref
           .read(financeWorkspaceRepositoryProvider)!
           .fetch();
-      if (!mounted || !allowed) {
+      if (!mounted || !allowed || generation != token) {
         return;
       }
       final savedPending = latest.pending[selectedBook];
@@ -368,7 +369,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
           reversal: reversal,
           submit: (id, op, p) => _submit(selectedBook, id, op, p),
           resolve: (id) {
-            if (!mounted || !allowed) {
+            if (!mounted || !allowed || generation != token) {
               throw StateError('Phiên Owner đã khóa.');
             }
             return selectedBook == FinanceBook.expense
@@ -382,7 +383,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
     } catch (e) {
       _message('Không mở được chứng từ: $e');
     } finally {
-      if (allowed) {
+      if (allowed && generation == token) {
         await _reload();
       }
     }
@@ -490,12 +491,13 @@ class _FinancePageState extends ConsumerState<FinancePage>
     if (!allowed || a.sourceId == null) {
       return;
     }
+    final token = generation;
     try {
       final StockDocumentRepository repo = ref.read(
         stockDocumentRepositoryProvider,
       );
       final doc = await repo.document(a.sourceId!);
-      if (!mounted || !allowed) {
+      if (!mounted || !allowed || generation != token) {
         return;
       }
       await showDialog<void>(
@@ -657,19 +659,20 @@ class _FinancePageState extends ConsumerState<FinancePage>
     if (!mounted || !allowed) {
       return;
     }
+    final token = generation;
     try {
       final bytes = await buildFinancePdf(
         snapshot,
         selectedFilter,
         proof: proof,
       );
-      if (!mounted || !allowed) {
+      if (!mounted || !allowed || generation != token) {
         return;
       }
       await Printing.layoutPdf(
         name: proof == null ? 'So-doi-chieu' : 'Bien-nhan-${proof.id}',
         onLayout: (_) async {
-          if (!mounted || !allowed) {
+          if (!mounted || !allowed || generation != token) {
             throw StateError('Phiên Owner đã khóa.');
           }
           return bytes;
