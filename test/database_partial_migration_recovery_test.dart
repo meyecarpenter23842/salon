@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'package:salonmanager/core/database/commission_schema.dart';
+import 'package:salonmanager/core/database/expense_schema.dart';
 import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/database/stock_document_schema.dart';
@@ -18,7 +19,7 @@ void main() {
   });
 
   test(
-    'partially applied schema 18-21 resumes without duplicate DDL',
+    'partially applied schema 18-25 resumes without duplicate DDL',
     () async {
       final current = await SalonDatabase.instance.initialize();
       final location = current.path;
@@ -113,6 +114,9 @@ void main() {
       for (final statement in CommissionSchema.statements.take(2)) {
         await legacy.execute(statement);
       }
+      for (final statement in ExpenseSchema.statements.take(2)) {
+        await legacy.execute(statement);
+      }
       await legacy.close();
 
       final upgraded = await SalonDatabase.instance.initialize(
@@ -161,6 +165,9 @@ void main() {
       );
       expect(await upgraded.query('stock_documents'), isEmpty);
       expect(await upgraded.query('commission_payouts'), isEmpty);
+      expect(await upgraded.query('expense_entries'), isEmpty);
+      expect(await upgraded.query('expense_payments'), isEmpty);
+      expect(await upgraded.query('expense_events'), isEmpty);
       expect(await upgraded.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     },
   );

@@ -176,7 +176,16 @@ Future<void> _settle(WidgetTester tester) async {
     await tester.pump();
     await Future<void>.delayed(const Duration(milliseconds: 60));
   }
-  await tester.pumpAndSettle();
+  // Bounded settling avoids hanging forever on repeating progress/animation
+  // frames while still giving SQLite/provider work real-clock time on Windows.
+  var quietFrames = 0;
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (DateTime.now().isBefore(deadline) && quietFrames < 3) {
+    await tester.pump(const Duration(milliseconds: 16));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    quietFrames = tester.binding.hasScheduledFrame ? 0 : quietFrames + 1;
+  }
+  await tester.pump();
 }
 
 Future<void> _settleUntil(WidgetTester tester, bool Function() completed) async {
