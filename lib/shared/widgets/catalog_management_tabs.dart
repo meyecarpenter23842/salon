@@ -113,6 +113,9 @@ class _CatalogSettingsPanelState extends ConsumerState<CatalogSettingsPanel> {
       ]),
       const SizedBox(height: 12),
       Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        IconButton(tooltip:'Tải lại danh mục',onPressed:_busy?null:(){
+          ref.read(catalogOptionsRefreshNonceProvider.notifier).state++;
+        },icon:const Icon(Icons.refresh)),
         SizedBox(width: 260, child: TextField(key: ValueKey(_kind),
           decoration: const InputDecoration(labelText: 'Tìm danh mục', prefixIcon: Icon(Icons.search)),
           onChanged: (v) => setState(() => _query = v.trim().toLowerCase()))),

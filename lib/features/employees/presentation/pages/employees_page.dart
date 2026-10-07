@@ -77,6 +77,18 @@ Future<void> _openEmployeeEditor(
   WidgetRef ref, {
   Map<String, Object?>? employee,
 }) async {
+  try {
+    if(employee!=null) {
+      final id=employee['id'];
+      final latest=await ref.read(employeesRepositoryProvider).fetchEmployeesView();
+      employee=latest.singleWhere((row)=>row['id']==id);
+    }
+    if(!context.mounted) {return;}
+    ref.invalidate(catalogOptionsProvider(CatalogOptionKind.employeeTitle));
+  }catch(e) {
+    if(context.mounted) {ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Không mở được hồ sơ: $e')));}
+    return;
+  }
   final input = await showDialog<EmployeeUpsertInput>(
     context: context,
     builder: (_) => _EmployeeEditorDialog(employee: employee),
