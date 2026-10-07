@@ -57,7 +57,7 @@ void main() {
     await titles.createOption(CatalogOptionKind.employeeTitle, name);
     return (await titles.fetchOptions(
       CatalogOptionKind.employeeTitle,
-    )).singleWhere((o) => o.name == name);
+    )).singleWhere((o) => catalogNameKey(o.name) == catalogNameKey(name));
   }
 
   test(

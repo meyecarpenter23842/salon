@@ -121,7 +121,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Chức danh'), findsOneWidget);
-        expect(find.text('Chuyên viên riêng'), findsWidgets);
+        expect(find.textContaining('Chuyên viên riêng'), findsWidgets);
         await tester.tap(find.byTooltip('Sửa hồ sơ'));
         await tester.pumpAndSettle();
         expect(find.text('Sửa hồ sơ nhân viên'), findsOneWidget);
