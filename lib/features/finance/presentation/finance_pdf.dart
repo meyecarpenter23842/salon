@@ -31,12 +31,25 @@ Future<Uint8List> buildFinancePdf(
   String money(int value) =>
       '${NumberFormat.decimalPattern('vi_VN').format(value)} đ';
   String day(DateTime value) => DateFormat('dd/MM/yyyy').format(value);
-  String state(FinanceAccount a) => switch (a.state) {
+  String state(String? value) => switch (value) {
     'reversed' => 'Đã đảo',
     'paid' => 'Đã trả',
     'partial' => 'Trả một phần',
-    _ => 'Chưa trả',
+    'unpaid' => 'Chưa trả',
+    _ => 'Tất cả',
   };
+  String source(String? value) => switch (value) {
+    'stock_receipt' => 'Phiếu nhập kho',
+    'opening' => 'Số dư đầu kỳ',
+    'expense' => 'Chi phí vận hành',
+    _ => 'Tất cả',
+  };
+  String entityLabel() {
+    if (filter.entityId == null) return 'Tất cả';
+    final list = filter.book == FinanceBook.expense ? snapshot.categories : snapshot.suppliers;
+    final match = list.where((e) => e['id'] == filter.entityId);
+    return match.isEmpty ? filter.entityId! : '${match.first['name']} (${filter.entityId})';
+  }
   final rows = snapshot.select(filter);
   final flows = snapshot.cashFlow(filter);
   final widgets = <pw.Widget>[
@@ -74,6 +87,7 @@ Future<Uint8List> buildFinancePdf(
         }).toList(),
         cellStyle: const pw.TextStyle(fontSize: 9),
       ),
+      pw.SizedBox(height: 8),
       pw.Text(
         'Biên nhận ghi nhận giao dịch đã thực hiện. Chuyển khoản được đối chiếu bên ngoài; đảo tiền mặt thu lại quỹ ca hiện tại.',
       ),
@@ -89,7 +103,7 @@ Future<Uint8List> buildFinancePdf(
         'Ngày nguồn và ngày chứng từ: ${filter.from == null ? 'mọi ngày' : day(filter.from!)} – ${filter.to == null ? 'mọi ngày' : day(filter.to!)}',
       ),
       pw.Text(
-        'Danh mục/NCC: ${filter.entityId ?? 'tất cả'} · nguồn ${filter.sourceType ?? 'tất cả'} · trạng thái hiện tại ${filter.state ?? 'tất cả'} · tìm ${filter.query}',
+        'Danh mục/NCC: ${entityLabel()} · nguồn ${source(filter.sourceType)} · trạng thái hiện tại ${state(filter.state)} · tìm ${filter.query}',
       ),
       pw.SizedBox(height: 12),
       pw.Text('NGHĨA VỤ THEO NGÀY NGUỒN — toàn bộ ${rows.length} kết quả lọc'),
@@ -114,7 +128,7 @@ Future<Uint8List> buildFinancePdf(
                 a.name,
                 money(a.amount),
                 money(a.paid),
-                '${money(a.balance)}\n${state(a)}',
+                '${money(a.balance)}\n${state(a.state)}',
               ],
             )
             .toList(),
