@@ -61,8 +61,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           ref,
           SensitiveAction.attendance,
         ) ||
-        !mounted)
+        !mounted) {
       return;
+    }
     final input = await showDialog<_PlanInput>(
       context: context,
       builder: (_) => _PlanDialog(employees: snapshot.employees, day: day),
@@ -89,8 +90,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           ref,
           SensitiveAction.attendance,
         ) ||
-        !mounted)
+        !mounted) {
       return;
+    }
     final input = await showDialog<_CorrectionInput>(
       context: context,
       builder: (_) => _CorrectionDialog(shift: shift),
@@ -183,8 +185,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             ),
           );
         }
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final data = snapshot.data!;
         final shifts = data.shifts
             .where((s) => employeeId == null || s.employeeId == employeeId)
@@ -408,10 +411,11 @@ class _DateTimeField extends StatelessWidget {
       context: context,
       initialTime: TimeOfDay.fromDateTime(value),
     );
-    if (time != null)
+    if (time != null) {
       onChanged(
         DateTime(date.year, date.month, date.day, time.hour, time.minute),
       );
+    }
   }
 
   @override
@@ -794,10 +798,12 @@ class _HistoryDialog extends StatelessWidget {
       child: FutureBuilder<List<Map<String, Object?>>>(
         future: future,
         builder: (context, snapshot) {
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return Text('Không tải được lịch sử: ${snapshot.error}');
-          if (!snapshot.hasData)
+          }
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
           return ListView.separated(
             itemCount: snapshot.data!.length,
             separatorBuilder: (_, _) => const Divider(),

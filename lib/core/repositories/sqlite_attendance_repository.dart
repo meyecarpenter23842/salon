@@ -93,8 +93,9 @@ class SqliteAttendanceRepository {
         ],
         limit: 1,
       );
-      if (overlap.isNotEmpty)
+      if (overlap.isNotEmpty) {
         throw StateError('Ca bị trùng giờ với ca đã xếp của nhân viên.');
+      }
       final now = clock().toIso8601String();
       final row = <String, Object?>{
         'id': EntityId.create('attendance'),
@@ -147,8 +148,9 @@ class SqliteAttendanceRepository {
       final breaks = current.breaks.map((b) => b.toJson()).toList();
       switch (operation) {
         case 'in':
-          if (current.state != 'planned')
+          if (current.state != 'planned') {
             throw StateError('Ca này đã được chấm hoặc đã nghỉ/hủy.');
+          }
           final employee = await tx.query(
             'employees',
             where: 'id=?',
@@ -163,17 +165,20 @@ class SqliteAttendanceRepository {
             whereArgs: [current.employeeId],
             limit: 1,
           );
-          if (open.isNotEmpty)
+          if (open.isNotEmpty) {
             throw StateError('Nhân viên còn ca chưa ra. Kết thúc ca đó trước.');
+          }
           row['clock_in'] = time.millisecondsSinceEpoch;
           row['state'] = 'working';
         case 'break_start':
-          if (current.state != 'working' || current.onBreak)
+          if (current.state != 'working' || current.onBreak) {
             throw StateError('Không thể bắt đầu nghỉ.');
+          }
           breaks.add(AttendanceBreak(time, null).toJson());
         case 'break_end':
-          if (current.state != 'working' || !current.onBreak)
+          if (current.state != 'working' || !current.onBreak) {
             throw StateError('Không có lần nghỉ đang mở.');
+          }
           breaks.last['end'] = time.millisecondsSinceEpoch;
         case 'out':
           if (current.state != 'working' || current.onBreak) {
@@ -278,8 +283,9 @@ class SqliteAttendanceRepository {
       whereArgs: [id],
     );
     if (rows.isEmpty) return false;
-    if (rows.single['signature'] != signature)
+    if (rows.single['signature'] != signature) {
       throw StateError('Mã thao tác đã được dùng cho nội dung khác.');
+    }
     return true;
   }
 
@@ -347,10 +353,11 @@ class SqliteAttendanceRepository {
         ],
         limit: 1,
       );
-      if (scheduled.isNotEmpty)
+      if (scheduled.isNotEmpty) {
         throw StateError(
           'Ca bị trùng lịch; đối chiếu ca đã xếp trước khi khôi phục.',
         );
+      }
     }
     if (row['clock_in'] != null) {
       final overlap = await tx.query(
@@ -365,10 +372,11 @@ class SqliteAttendanceRepository {
         ],
         limit: 1,
       );
-      if (overlap.isNotEmpty)
+      if (overlap.isNotEmpty) {
         throw StateError(
           'Giờ công bị trùng với ca khác; đối chiếu trước khi lưu.',
         );
+      }
     }
     row['revision'] = (old['revision'] as int) + 1;
     row['updated_at'] = clock().toIso8601String();
