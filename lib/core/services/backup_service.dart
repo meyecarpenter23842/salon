@@ -331,6 +331,33 @@ class BackupService {
           );
         }
       }
+
+      if (userVersion >= 27) {
+        const benefitTables = {
+          'benefit_vouchers',
+          'benefit_voucher_redemptions',
+          'membership_plans',
+          'customer_memberships',
+          'membership_cancellations',
+          'membership_usages',
+          'service_package_plans',
+          'service_package_plan_components',
+          'customer_service_packages',
+          'customer_service_package_units',
+          'service_package_movements',
+          'service_package_cancellations',
+          'benefit_events',
+        };
+        final missingBenefits = benefitTables.difference(tables);
+        if (missingBenefits.isNotEmpty) {
+          return BackupValidationResult(
+            isValid: false,
+            schemaVersion: userVersion,
+            message:
+                'Backup schema $userVersion thiếu quyền lợi khách hàng: ${missingBenefits.join(', ')}.',
+          );
+        }
+      }
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],

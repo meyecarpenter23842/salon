@@ -7,6 +7,7 @@ import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/database/stock_document_schema.dart';
 import 'package:salonmanager/core/database/supplier_payable_schema.dart';
+import 'package:salonmanager/core/database/benefit_schema.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +21,7 @@ void main() {
   });
 
   test(
-    'partially applied schema 18-26 resumes without duplicate DDL',
+    'partially applied schema 18-27 resumes without duplicate DDL',
     () async {
       final current = await SalonDatabase.instance.initialize();
       final location = current.path;
@@ -121,6 +122,9 @@ void main() {
       for (final statement in SupplierPayableSchema.statements.take(2)) {
         await legacy.execute(statement);
       }
+      for (final statement in BenefitSchema.statements.take(3)) {
+        await legacy.execute(statement);
+      }
       await legacy.close();
 
       final upgraded = await SalonDatabase.instance.initialize(
@@ -176,6 +180,15 @@ void main() {
       expect(await upgraded.query('supplier_payments'), isEmpty);
       expect(await upgraded.query('supplier_payment_allocations'), isEmpty);
       expect(await upgraded.query('supplier_payable_events'), isEmpty);
+      expect(await upgraded.query('benefit_vouchers'), isEmpty);
+      expect(await upgraded.query('benefit_voucher_redemptions'), isEmpty);
+      expect(await upgraded.query('membership_plans'), isEmpty);
+      expect(await upgraded.query('customer_memberships'), isEmpty);
+      expect(await upgraded.query('membership_usages'), isEmpty);
+      expect(await upgraded.query('service_package_plans'), isEmpty);
+      expect(await upgraded.query('customer_service_packages'), isEmpty);
+      expect(await upgraded.query('service_package_movements'), isEmpty);
+      expect(await upgraded.query('benefit_events'), isEmpty);
       expect(await upgraded.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     },
   );
