@@ -84,10 +84,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       IconButton(tooltip:'Tải lại',onPressed:busy?null:()=>setState(_reload),icon:const Icon(Icons.refresh)),
     ]),
     body:FutureBuilder<AttendanceSnapshot>(future:future,builder:(context,snapshot) {
-      if (snapshot.hasError) return Center(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      if (snapshot.hasError) {
+        return Center(child:Column(mainAxisSize:MainAxisSize.min,children:[
         const Text('Không tải được chấm công'), Text('${snapshot.error}'),
         TextButton(onPressed:()=>setState(_reload),child:const Text('Thử lại')),
       ]));
+      }
       if (!snapshot.hasData) return const Center(child:CircularProgressIndicator());
       final data=snapshot.data!;
       final shifts=data.shifts.where((s)=>employeeId==null || s.employeeId==employeeId).toList();
