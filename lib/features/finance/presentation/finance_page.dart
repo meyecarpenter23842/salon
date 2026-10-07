@@ -112,6 +112,10 @@ class _FinancePageState extends ConsumerState<FinancePage>
     if (!mounted || busy || unlocking) {
       return;
     }
+    if (ref.read(financeWorkspaceRepositoryProvider) == null) {
+      setState(() { locked = false; error = 'Sổ tiền cần dữ liệu SQLite.'; });
+      return;
+    }
     setState(() => unlocking = true);
     try {
     final token = generation;
@@ -851,6 +855,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
               child: DropdownButtonFormField<String>(
                 key: ValueKey('status-$status'),
                 initialValue: status,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Trạng thái hiện tại',
                 ),
@@ -871,6 +876,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
                 child: DropdownButtonFormField<String>(
                   key: ValueKey('source-$source'),
                   initialValue: source,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Nguồn nghĩa vụ',
                   ),
