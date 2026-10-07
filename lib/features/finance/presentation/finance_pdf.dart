@@ -68,7 +68,9 @@ Future<Uint8List> buildFinancePdf(
           final a = snapshot.accounts.singleWhere(
             (a) => a.book == proof.book && a.id == e.key,
           );
-          return ['${a.source}\n${a.id}', a.name, money(e.value)];
+          return ['${a.source} · ${a.name}\n${a.id}',
+            a.book == FinanceBook.expense ? (a.payee.isEmpty ? 'Không ghi người nhận' : a.payee) : a.name,
+            money(e.value)];
         }).toList(),
         cellStyle: const pw.TextStyle(fontSize: 9),
       ),
@@ -100,7 +102,7 @@ Future<Uint8List> buildFinancePdf(
       pw.TableHelper.fromTextArray(
         headers: [
           'Ngày / nguồn',
-          'Đối tác',
+          'Loại chi / NCC',
           'Nghĩa vụ',
           'Đã trả ròng',
           'Còn / trạng thái',

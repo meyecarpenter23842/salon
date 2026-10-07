@@ -204,7 +204,7 @@ void main() {
         await capture('42-finance-payment');
         await tester.tap(find.text('Đóng'));
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('Công nợ NCC'));
+        await tester.scrollUntilVisible(find.text('Công nợ NCC'), -250, scrollable: find.byType(Scrollable).first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Công nợ NCC'));
         await tester.pumpAndSettle();
@@ -244,7 +244,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Đóng'));
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('Chi phí vận hành'));
+        await tester.scrollUntilVisible(find.text('Chi phí vận hành'), -250, scrollable: find.byType(Scrollable).first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Chi phí vận hành'));
         await tester.pumpAndSettle();

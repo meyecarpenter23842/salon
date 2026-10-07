@@ -175,11 +175,15 @@ void main() {
         proof: snapshot.proofs.singleWhere((p) => p.id == 'supplier-transfer'),
       );
       expect(receipt.length, greaterThan(1000));
+      final expenseReceipt = await buildFinancePdf(snapshot, expenseFilter,
+        proof: snapshot.proofs.singleWhere((p) => p.id == 'expense-cash'));
+      expect(expenseReceipt.length, greaterThan(1000));
       if (Platform.isLinux) {
         final output = Directory('build/mobile-ui-review')
           ..createSync(recursive: true);
         await File('${output.path}/finance-statement.pdf').writeAsBytes(pdf);
         await File('${output.path}/finance-receipt.pdf').writeAsBytes(receipt);
+        await File('${output.path}/finance-expense-receipt.pdf').writeAsBytes(expenseReceipt);
       }
     },
   );
