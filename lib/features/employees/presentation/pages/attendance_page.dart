@@ -71,7 +71,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   Future<void> _chooseDay() async {
     final selected = await showDatePicker(context:context,initialDate:day,
       firstDate:DateTime(2000),lastDate:DateTime(2100));
-    if (selected!=null && mounted) setState(() {day=selected; _reload();});
+    if (selected!=null && mounted) {
+      setState(() {day=selected; _reload();});
+    }
   }
   void _moveDay(int offset) {
     setState(() {day=DateTime(day.year,day.month,day.day+offset); _reload();});
