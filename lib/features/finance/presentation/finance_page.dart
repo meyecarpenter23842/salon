@@ -347,6 +347,9 @@ class _FinancePageState extends ConsumerState<FinancePage>
         _message('Chứng từ đã được đảo.');
         return;
       }
+      // The modal owns its submit busy state. Stop the page's indeterminate
+      // loading animation once the fresh balance is ready.
+      setState(() => busy = false);
       await showDialog<bool>(
         context: context,
         barrierDismissible: false,
