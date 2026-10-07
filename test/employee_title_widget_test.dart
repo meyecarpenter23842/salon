@@ -143,6 +143,8 @@ void main() {
         await tester.tap(find.text('Lưu'));
         await tester.pumpAndSettle();
         expect(find.text('Thợ spa'), findsOneWidget);
+        await tester.ensureVisible(find.byTooltip('Ngừng sử dụng').last);
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Ngừng sử dụng').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Xác nhận'));
