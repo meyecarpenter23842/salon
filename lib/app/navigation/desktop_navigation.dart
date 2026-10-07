@@ -11,6 +11,7 @@ enum DesktopSection {
   inventory,
   invoices,
   reports,
+  finance,
   settings,
 }
 
@@ -65,6 +66,10 @@ const desktopNavigationItems = [
     group: DesktopNavigationGroup.insights,
   ),
   DesktopNavigationItem(
+    section: DesktopSection.finance,
+    group: DesktopNavigationGroup.insights,
+  ),
+  DesktopNavigationItem(
     section: DesktopSection.settings,
     group: DesktopNavigationGroup.system,
   ),
@@ -106,6 +111,8 @@ extension DesktopSectionX on DesktopSection {
         return 'Tính tiền';
       case DesktopSection.reports:
         return 'Báo cáo';
+      case DesktopSection.finance:
+        return 'Chi phí & công nợ';
       case DesktopSection.settings:
         return 'Cài đặt';
     }
@@ -131,6 +138,8 @@ extension DesktopSectionX on DesktopSection {
         return Icons.point_of_sale_outlined;
       case DesktopSection.reports:
         return Icons.bar_chart_outlined;
+      case DesktopSection.finance:
+        return Icons.account_balance_wallet_outlined;
       case DesktopSection.settings:
         return Icons.settings_outlined;
     }
@@ -156,6 +165,8 @@ extension DesktopSectionX on DesktopSection {
         return 'Tính tiền nhanh cho khách và theo dõi các hóa đơn gần đây.';
       case DesktopSection.reports:
         return 'Theo dõi doanh thu, dịch vụ và hiệu suất vận hành của salon.';
+      case DesktopSection.finance:
+        return 'Đối chiếu chi phí, công nợ nhà cung cấp và chứng từ tiền.';
       case DesktopSection.settings:
         return 'Thiết lập thông tin salon, dữ liệu cục bộ và tùy chọn ứng dụng.';
     }
