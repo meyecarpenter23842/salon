@@ -2,6 +2,7 @@ class EmployeeUpsertInput {
   const EmployeeUpsertInput({
     required this.fullName,
     required this.role,
+    this.titleOptionId,
     required this.status,
     required this.phone,
     required this.shift,
@@ -16,6 +17,7 @@ class EmployeeUpsertInput {
 
   final String fullName;
   final String role;
+  final String? titleOptionId;
   final String status;
   final String phone;
   final String shift;

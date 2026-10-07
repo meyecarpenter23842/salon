@@ -1,4 +1,5 @@
 import 'catalog_options_providers.dart';
+import 'catalog_options_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/fake/fake_salon_data_source.dart';
@@ -336,7 +337,10 @@ final retailProductsViewProvider = FutureProvider<List<RetailProductItem>>(
 );
 
 final employeesViewProvider = FutureProvider<List<Map<String, Object?>>>(
-  (ref) => ref.watch(employeesRepositoryProvider).fetchEmployeesView(),
+  (ref) {
+    ref.watch(catalogOptionsRefreshNonceProvider);
+    return ref.watch(employeesRepositoryProvider).fetchEmployeesView();
+  },
 );
 
 final invoiceDraftProvider = FutureProvider<InvoiceDraft>(

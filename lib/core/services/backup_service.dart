@@ -288,6 +288,13 @@ class BackupService {
         }
       }
 
+      if(userVersion>=24) {
+        final columns=await database.rawQuery('PRAGMA table_info(employees)');
+        if(!columns.any((c)=>c['name']=='title_option_id')) {
+          return BackupValidationResult(isValid:false,schemaVersion:userVersion,
+            message:'Backup schema $userVersion thiếu liên kết chức danh nhân viên.');
+        }
+      }
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],

@@ -43,7 +43,7 @@ void main() {
     final oldMovement = await legacy.query('inventory_movements');
     await legacy.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 23);
+    expect(await upgraded.getVersion(), 24);
     final row = (await upgraded.query('retail_products')).single;
     expect(row['id'], 'legacy-product');
     expect(row['group_option_id'], 'old-group');

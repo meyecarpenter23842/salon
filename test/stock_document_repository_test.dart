@@ -152,7 +152,7 @@ void main() {
     await db.setVersion(19);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 23);
+    expect(await upgraded.getVersion(), 24);
     final row = {...(await upgraded.query('inventory_movements')).single};
     expect(row['source'], 'legacy');
     expect(row['document_id'], isNull);

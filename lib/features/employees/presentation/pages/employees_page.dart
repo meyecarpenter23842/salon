@@ -1,3 +1,7 @@
+import '../../../../core/models/catalog_option.dart';
+import '../../../../core/providers/catalog_options_providers.dart';
+import '../../../../shared/widgets/catalog_management_tabs.dart';
+import '../../../../shared/widgets/employee_title_picker.dart';
 import 'package:flutter/material.dart';
 import 'commission_page.dart';
 import 'attendance_page.dart';
@@ -33,6 +37,7 @@ final employeeProfileProvider =
       ref,
       employeeId,
     ) async {
+      ref.watch(catalogOptionsRefreshNonceProvider);
       final repository = ref.watch(employeeProfileRepositoryProvider);
       if (repository == null) return null;
       return repository.fetchEmployeeProfile(employeeId);
@@ -41,6 +46,7 @@ final employeeProfileProvider =
 final filteredEmployeesProvider = FutureProvider<List<Map<String, Object?>>>((
   ref,
 ) async {
+  ref.watch(catalogOptionsRefreshNonceProvider);
   final employees = await ref
       .watch(employeesRepositoryProvider)
       .fetchEmployeesView();
@@ -82,6 +88,8 @@ Future<void> _openEmployeeEditor(
     return;
   }
 
+  if((employee==null||input.role!=employee['role']) &&
+    (!await ensureSensitiveActionAuthorized(context,ref,SensitiveAction.settingsEdit)||!context.mounted)) {return;}
   try {
     final saved = await ref
         .read(employeesRepositoryProvider)
@@ -158,7 +166,8 @@ class EmployeesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final employees = ref.watch(filteredEmployeesProvider);
-    return employees.when(
+    return CatalogManagementTabs(kinds:const [CatalogOptionKind.employeeTitle],
+      child:employees.when(
       data: (items) => _EmployeesView(items: items),
       loading: () => const PremiumLoadingState(label: 'Đang tải đội ngũ…'),
       error: (error, _) => PremiumErrorState(
@@ -166,7 +175,7 @@ class EmployeesPage extends ConsumerWidget {
         message: '$error',
         onRetry: () => ref.invalidate(filteredEmployeesProvider),
       ),
-    );
+    ));
   }
 }
 
@@ -241,17 +250,14 @@ class _EmployeesToolbar extends ConsumerWidget {
   final int upcoming;
   final int resting;
 
-  static const roles = [
-    'Tất cả',
-    'Stylist chính',
-    'Barber',
-    'Chăm sóc tóc',
-    'Lễ tân',
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedRole = ref.watch(employeeRoleFilterProvider);
+    final existingRoles=(ref.watch(employeesViewProvider).valueOrNull??const <Map<String,Object?>>[])
+      .map((e)=>e['role']?.toString()??'').where((r)=>r.isNotEmpty).toSet();
+    if(selectedRole!='Tất cả') {existingRoles.add(selectedRole);}
+    final roles=['Tất cả',...(existingRoles.toList()..sort())];
     final selectedStatus = ref.watch(employeeStatusFilterProvider);
     final query = ref.watch(employeeSearchQueryProvider);
     final statuses = [
@@ -270,16 +276,17 @@ class _EmployeesToolbar extends ConsumerWidget {
       },
       decoration: const InputDecoration(
         prefixIcon: Icon(Icons.search_rounded),
-        hintText: 'Tìm tên, vai trò, chuyên môn, số điện thoại',
+        hintText: 'Tìm tên, chức danh, chuyên môn, số điện thoại',
       ),
     );
 
     final role = DropdownButtonFormField<String>(
+      key:ValueKey('roles:${roles.join('|')}:$selectedRole'),
       initialValue: roles.contains(selectedRole) ? selectedRole : roles.first,
       isExpanded: true,
       decoration: const InputDecoration(
         prefixIcon: Icon(Icons.tune_rounded),
-        labelText: 'Vai trò',
+        labelText: 'Chức danh',
       ),
       items: roles
           .map((item) => DropdownMenuItem(value: item, child: Text(item)))
@@ -1253,12 +1260,6 @@ class _EmployeeEditorDialog extends StatefulWidget {
 }
 
 class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
-  static const _roleOptions = [
-    'Stylist chính',
-    'Barber',
-    'Chăm sóc tóc',
-    'Lễ tân',
-  ];
   static const _statusOptions = ['Đang làm việc', 'Sắp có lịch', 'Tạm nghỉ'];
 
   final _formKey = GlobalKey<FormState>();
@@ -1270,6 +1271,7 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
   late final TextEditingController _ratingController;
   late final TextEditingController _noteController;
   late String _role;
+  String? _titleOptionId;
   late String _status;
 
   @override
@@ -1297,9 +1299,8 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
     _noteController = TextEditingController(
       text: employee?['note']?.toString() ?? '',
     );
-    _role = _roleOptions.contains(employee?['role'])
-        ? employee!['role'].toString()
-        : _roleOptions.first;
+    _role = employee?['role']?.toString() ?? CatalogOptionKind.employeeTitle.defaultNames.first;
+    _titleOptionId=employee?['titleOptionId'] as String?;
     _status = _statusOptions.contains(employee?['status'])
         ? employee!['status'].toString()
         : _statusOptions.first;
@@ -1342,22 +1343,8 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _role,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Vai trò'),
-                        items: _roleOptions
-                            .map(
-                              (item) => DropdownMenuItem(
-                                value: item,
-                                child: Text(item),
-                              ),
-                            )
-                            .toList(growable: false),
-                        onChanged: (value) {
-                          if (value != null) setState(() => _role = value);
-                        },
-                      ),
+                      child: EmployeeTitlePicker(name:_role,id:_titleOptionId,
+                        onChanged:(name,id)=>setState((){_role=name;_titleOptionId=id;})),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1473,6 +1460,7 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
       EmployeeUpsertInput(
         fullName: _nameController.text.trim(),
         role: _role,
+        titleOptionId:_titleOptionId,
         status: _status,
         phone: _phoneController.text.trim(),
         shift: _shiftController.text.trim(),
