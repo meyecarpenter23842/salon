@@ -3,6 +3,7 @@ import 'commission_schema.dart';
 import 'attendance_schema.dart';
 import 'payroll_schema.dart';
 import 'employee_title_schema.dart';
+import 'expense_schema.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -99,6 +100,7 @@ class SalonDatabase {
         await AttendanceSchema.install(database);
         await PayrollSchema.install(database);
         await EmployeeTitleSchema.install(database);
+        await ExpenseSchema.install(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
         final batch = database.batch();
@@ -459,6 +461,7 @@ class SalonDatabase {
         if (oldVersion < 22) await AttendanceSchema.install(database);
         if (oldVersion < 23) await PayrollSchema.install(database);
         if (oldVersion < 24) await EmployeeTitleSchema.install(database);
+        if (oldVersion < 25) await ExpenseSchema.install(database);
       },
       onOpen: (database) async {
         await database.insert('app_settings', {

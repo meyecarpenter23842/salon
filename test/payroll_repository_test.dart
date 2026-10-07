@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/database/payroll_schema.dart';
 import 'package:salonmanager/core/models/payroll.dart';
 import 'package:salonmanager/core/repositories/sqlite_payroll_repository.dart';
@@ -548,7 +549,7 @@ void main() {
       db = await SalonDatabase.instance.initialize(
         preserveExistingTestDatabase: true,
       );
-      expect(await db.getVersion(), 24);
+      expect(await db.getVersion(), DatabaseSchema.version);
       expect((await repo.document(r.id)).net, 8000000);
       await PayrollSchema.install(db);
       expect(await db.rawQuery('PRAGMA foreign_key_check'), isEmpty);

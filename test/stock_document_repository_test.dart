@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/models/stock_document.dart';
 import 'package:salonmanager/core/repositories/stock_document_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
@@ -152,7 +153,7 @@ void main() {
     await db.setVersion(19);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 24);
+    expect(await upgraded.getVersion(), DatabaseSchema.version);
     final row = {...(await upgraded.query('inventory_movements')).single};
     expect(row['source'], 'legacy');
     expect(row['document_id'], isNull);

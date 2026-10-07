@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/models/inventory_item.dart';
 import 'package:salonmanager/core/models/retail_product_upsert_input.dart';
 import 'package:salonmanager/core/providers/data_backend_provider.dart';
@@ -50,7 +51,7 @@ void main() {
     await db.setVersion(18);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 24);
+    expect(await upgraded.getVersion(), DatabaseSchema.version);
     expect((await upgraded.query('retail_products')).single['low_stock_threshold'], 5);
     expect((await upgraded.query('inventory_stock')).single['stock_on_hand'], -5);
     expect(await upgraded.query('inventory_movements'), movements);

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/repositories/commission_ledger.dart';
 import 'package:salonmanager/core/repositories/sqlite_commission_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
@@ -205,7 +206,7 @@ void main(){
     await db.execute('DROP TRIGGER commission_cash_no_update');await db.execute('DROP TRIGGER commission_cash_no_delete');
     await db.setVersion(20);await SalonDatabase.instance.close();
     db=await SalonDatabase.instance.initialize(preserveExistingTestDatabase:true);
-    expect(await db.getVersion(), 24);expect(await db.query('commission_entries'),isEmpty);
+    expect(await db.getVersion(), DatabaseSchema.version);expect(await db.query('commission_entries'),isEmpty);
     expect((await db.query('invoices')).single['id'],'old');
     expect(await db.rawQuery('PRAGMA foreign_key_check'),isEmpty);
   });

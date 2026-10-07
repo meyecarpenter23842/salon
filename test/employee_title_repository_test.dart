@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/database/employee_title_schema.dart';
 import 'package:salonmanager/core/data/fake/fake_salon_data_source.dart';
 import 'package:salonmanager/core/models/catalog_option.dart';
@@ -241,7 +242,7 @@ void main() {
       db = await SalonDatabase.instance.initialize(
         preserveExistingTestDatabase: true,
       );
-      expect(await db.getVersion(), 24);
+      expect(await db.getVersion(), DatabaseSchema.version);
       final after = await db.query('employees');
       for (var i = 0; i < before.length; i++) {
         expect(after[i]['role'], before[i]['role']);

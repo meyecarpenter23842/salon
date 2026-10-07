@@ -153,7 +153,7 @@ class WindowsSelfUpdateHandoff {
     required String executable,
     required String installDir,
     required String logPath,
-    Duration readyTimeout = const Duration(seconds: 8),
+    Duration readyTimeout = const Duration(seconds: 20),
   }) async {
     final nonce = const Uuid().v4();
     final ready = File(path.join(helper.parent.path, 'ready-$nonce.txt'));

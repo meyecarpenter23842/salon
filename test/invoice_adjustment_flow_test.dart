@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'package:salonmanager/core/data/fake/fake_salon_data_source.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
+import 'package:salonmanager/core/database/database_schema.dart';
 import 'package:salonmanager/core/models/appointment_entry.dart';
 import 'package:salonmanager/core/models/invoice_adjustment.dart';
 import 'package:salonmanager/core/models/invoice_draft.dart';
@@ -29,7 +30,7 @@ void main() {
     'full refund is audited, financially reversed, immutable, and keeps visit closed',
     () async {
       final fixture = await _createFixture();
-      expect(await fixture.database.getVersion(), 24);
+      expect(await fixture.database.getVersion(), DatabaseSchema.version);
       final paidInvoice = await _checkoutFixture(fixture);
       final adjustments = fixture.invoices as InvoiceAdjustmentRepository;
 

@@ -295,6 +295,24 @@ class BackupService {
             message:'Backup schema $userVersion thiếu liên kết chức danh nhân viên.');
         }
       }
+
+      if (userVersion >= 25) {
+        const expenseTables = {
+          'expense_categories',
+          'expense_entries',
+          'expense_payments',
+          'expense_events',
+        };
+        final missingExpenses = expenseTables.difference(tables);
+        if (missingExpenses.isNotEmpty) {
+          return BackupValidationResult(
+            isValid: false,
+            schemaVersion: userVersion,
+            message:
+                'Backup schema $userVersion thiếu sổ chi phí: ${missingExpenses.join(', ')}.',
+          );
+        }
+      }
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],
