@@ -68,11 +68,13 @@ void main() {
               '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
             ).readAsBytes(),
           );
-          await tester.runAsync(
-            (FontLoader(
-              'Segoe UI',
-            )..addFont(Future.value(ByteData.sublistView(font!)))).load,
-          );
+          for (final family in ['Roboto', 'Segoe UI']) {
+            await tester.runAsync(
+              (FontLoader(
+                family,
+              )..addFont(Future.value(ByteData.sublistView(font!)))).load,
+            );
+          }
           await tester.runAsync(
             (FontLoader(
               'MaterialIcons',
