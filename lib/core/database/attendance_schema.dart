@@ -1,4 +1,3 @@
-
 import 'package:sqflite/sqflite.dart';
 
 /// Schema 22: attendance is independent of cashier shifts and appointments.

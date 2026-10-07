@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 class AttendanceBreak {
@@ -21,19 +20,36 @@ class AttendanceShift {
   String get workDay => data['work_day'] as String;
   String get state => data['state'] as String;
   int get revision => data['revision'] as int;
-  DateTime get plannedStart => DateTime.fromMillisecondsSinceEpoch(data['planned_start'] as int);
-  DateTime get plannedEnd => DateTime.fromMillisecondsSinceEpoch(data['planned_end'] as int);
+  DateTime get plannedStart =>
+      DateTime.fromMillisecondsSinceEpoch(data['planned_start'] as int);
+  DateTime get plannedEnd =>
+      DateTime.fromMillisecondsSinceEpoch(data['planned_end'] as int);
   DateTime? get clockIn => _date('clock_in');
   DateTime? get clockOut => _date('clock_out');
-  DateTime? _date(String key) => data[key] == null ? null : DateTime.fromMillisecondsSinceEpoch(data[key] as int);
-  List<AttendanceBreak> get breaks => (jsonDecode(data['breaks_json'] as String) as List)
-    .map((b) => AttendanceBreak(DateTime.fromMillisecondsSinceEpoch(b['start'] as int),
-      b['end'] == null ? null : DateTime.fromMillisecondsSinceEpoch(b['end'] as int))).toList();
+  DateTime? _date(String key) => data[key] == null
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(data[key] as int);
+  List<AttendanceBreak> get breaks =>
+      (jsonDecode(data['breaks_json'] as String) as List)
+          .map(
+            (b) => AttendanceBreak(
+              DateTime.fromMillisecondsSinceEpoch(b['start'] as int),
+              b['end'] == null
+                  ? null
+                  : DateTime.fromMillisecondsSinceEpoch(b['end'] as int),
+            ),
+          )
+          .toList();
   bool get onBreak => breaks.isNotEmpty && breaks.last.end == null;
+
   /// Only closed attendance contributes final worked time; never estimate wages.
-  int? get workedSeconds => clockIn == null || clockOut == null ? null :
-    clockOut!.difference(clockIn!).inSeconds -
-      breaks.fold<int>(0, (sum, b) => sum + b.end!.difference(b.start).inSeconds);
+  int? get workedSeconds => clockIn == null || clockOut == null
+      ? null
+      : clockOut!.difference(clockIn!).inSeconds -
+            breaks.fold<int>(
+              0,
+              (sum, b) => sum + b.end!.difference(b.start).inSeconds,
+            );
   String get statusLabel => switch (state) {
     'planned' => 'Chưa vào ca',
     'working' => onBreak ? 'Đang nghỉ' : 'Đang làm',
