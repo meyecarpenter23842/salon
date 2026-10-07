@@ -338,7 +338,11 @@ class _FinancePageState extends ConsumerState<FinancePage>
                           ? a.id == account.id
                           : a.entityId == account.entityId),
                 )
-                .toList();
+              .toList();
+      if (account != null) {
+        selected.sort((a, b) => (a.id == account.id ? 0 : 1)
+          .compareTo(b.id == account.id ? 0 : 1));
+      }
       if (effectivePending == null && reversal == null && selected.isEmpty) {
         _message('Khoản này đã thay đổi hoặc hết nợ. Tải lại sổ.');
         return;
@@ -505,9 +509,10 @@ class _FinancePageState extends ConsumerState<FinancePage>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${doc.supplierName} · ${financeDate(doc.date)} · ${doc.statusLabel}\nTổng phiếu ${financeMoney(doc.total)}',
-                  ),
+                    Text(
+                      '${doc.supplierName} · ${financeDate(doc.date)} · ${doc.statusLabel}\nTổng phiếu ${financeMoney(doc.total)}',
+                    ),
+                    Text('Người lập ${doc.preparedBy} · người ghi kho ${doc.postedBy}\nTham chiếu ${doc.externalReference} · ${doc.note}\nLý do hủy: ${doc.cancellationReason.isEmpty ? '—' : doc.cancellationReason}'),
                   for (final l in doc.lines)
                     Text(
                       '${l.productName} · ${l.quantity} ${l.unitName} · ${financeMoney(l.amount)}',

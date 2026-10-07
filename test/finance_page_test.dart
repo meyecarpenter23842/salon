@@ -8,6 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salonmanager/core/database/salon_database.dart';
 import 'package:salonmanager/core/models/finance_workspace.dart';
+import 'package:salonmanager/core/models/stock_document.dart';
+import 'package:salonmanager/core/providers/stock_document_providers.dart';
+import 'package:salonmanager/core/repositories/stock_document_repository.dart';
 import 'package:salonmanager/core/providers/repository_providers.dart';
 import 'package:salonmanager/core/repositories/finance_workspace_repository.dart';
 import 'package:salonmanager/core/services/sensitive_action_service.dart';
@@ -41,8 +44,9 @@ FinanceAccount fixtureAccount(
     'category_name': 'Thuê mặt bằng',
     'supplier_id': 'ncc',
     'supplier_name': 'Nhà cung cấp Việt',
-    'source_type': 'opening',
-    'source_number': 'Số dư đầu kỳ',
+    'source_type': id == 'opening-b' ? 'stock_receipt' : 'opening',
+    'source_number': id == 'opening-b' ? 'PN-000042' : 'Số dư đầu kỳ',
+    'source_id': id == 'opening-b' ? 'stock-receipt' : null,
     'source_date': '2026-10-01',
     'expense_date': '2026-10-01',
     'amount': 1000000,
@@ -90,6 +94,13 @@ class _Report extends FinanceWorkspaceRepository {
   _Report(super.database, super.security);
   @override
   Future<FinanceWorkspace> fetch() async => fixtureWorkspace();
+}
+class _SourceRepository extends StockDocumentRepository {
+  _SourceRepository(super.database, super.security);
+  @override
+  Future<StockDocument> document(String id) async => StockDocument(id: id, number: 'PN-000042', kind: StockDocumentKind.receipt,
+    date: DateTime(2026, 10, 1), preparedBy: 'Chủ salon', postedBy: 'Chủ salon', status: 'posted', revision: 2,
+    supplierName: 'Nhà cung cấp Việt', externalReference: 'NCC-HD-42', note: 'Phiếu nguồn đã ghi kho', lines: const [StockDocumentLine(id: 'line', productId: 'p', productName: 'Dầu gội Việt', unitName: 'Chai', quantity: 10, unitCost: 100000)]);
 }
 
 class _DelayedReport extends FinanceWorkspaceRepository {
@@ -167,6 +178,7 @@ void main() {
                   _Report(SalonDatabase.instance, security),
                 ),
                 sensitiveActionServiceProvider.overrideWithValue(security),
+                stockDocumentRepositoryProvider.overrideWithValue(_SourceRepository(SalonDatabase.instance, security)),
               ],
               child: MaterialApp(
                 debugShowCheckedModeBanner: false,
@@ -185,6 +197,7 @@ void main() {
         await tester.tap(find.text('Hủy'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Ghi trả / phân bổ').first);
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Ghi trả / phân bổ').first);
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('finance-payment-submit')), findsOneWidget);
@@ -192,11 +205,13 @@ void main() {
         await tester.tap(find.text('Đóng'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Công nợ NCC'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Công nợ NCC'));
         await tester.pumpAndSettle();
         await capture('43-finance-suppliers');
-        await tester.ensureVisible(find.text('Ghi trả / phân bổ').first);
-        await tester.tap(find.text('Ghi trả / phân bổ').first);
+        await tester.ensureVisible(find.text('Ghi trả / phân bổ').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Ghi trả / phân bổ').last);
         await tester.pumpAndSettle();
         expect(
           find.byKey(const ValueKey('allocation-opening-a')),
@@ -206,23 +221,40 @@ void main() {
           find.byKey(const ValueKey('allocation-opening-b')),
           findsOneWidget,
         );
+        expect(tester.widget<TextFormField>(find.byKey(const ValueKey('allocation-opening-b'))).controller!.text, '1000000');
+        expect(tester.widget<TextFormField>(find.byKey(const ValueKey('allocation-opening-a'))).controller!.text, isEmpty);
         await capture('44-finance-allocation');
         await tester.tap(find.text('Đóng'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Chi tiết / lịch sử').first);
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Chi tiết / lịch sử').first);
         await tester.pumpAndSettle();
         await capture('45-finance-details');
         await tester.tap(find.text('Đóng'));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Chi tiết / lịch sử').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Chi tiết / lịch sử').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Xem phiếu nhập nguồn'));
+        await tester.pumpAndSettle();
+        await capture('49-finance-stock-source');
+        await tester.tap(find.text('Đóng').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Đóng'));
+        await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Chi phí vận hành'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Chi phí vận hành'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Chi tiết / lịch sử').first);
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Chi tiết / lịch sử').first);
         await tester.pumpAndSettle();
         await capture('47-finance-receipt');
         await tester.ensureVisible(find.text('Đảo / hoàn tiền'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Đảo / hoàn tiền'));
         await tester.pumpAndSettle();
         await capture('48-finance-reversal');
@@ -277,6 +309,7 @@ void main() {
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.pumpAndSettle();
       await tester.tap(find.byType(CheckboxListTile));
       await tester.pump();
       await tester.tap(find.byKey(const Key('finance-payment-submit')));
@@ -292,6 +325,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(resolutions, 1);
       await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.pumpAndSettle();
       await tester.tap(find.byType(CheckboxListTile));
       await tester.pump();
       await tester.tap(find.text('Thử lại cùng yêu cầu'));
