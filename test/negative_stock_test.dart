@@ -50,7 +50,7 @@ void main() {
     await db.setVersion(18);
     await SalonDatabase.instance.close();
     final upgraded = await SalonDatabase.instance.initialize(preserveExistingTestDatabase: true);
-    expect(await upgraded.getVersion(), 22);
+    expect(await upgraded.getVersion(), 23);
     expect((await upgraded.query('retail_products')).single['low_stock_threshold'], 5);
     expect((await upgraded.query('inventory_stock')).single['stock_on_hand'], -5);
     expect(await upgraded.query('inventory_movements'), movements);

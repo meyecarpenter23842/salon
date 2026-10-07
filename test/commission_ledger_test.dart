@@ -205,7 +205,7 @@ void main(){
     await db.execute('DROP TRIGGER commission_cash_no_update');await db.execute('DROP TRIGGER commission_cash_no_delete');
     await db.setVersion(20);await SalonDatabase.instance.close();
     db=await SalonDatabase.instance.initialize(preserveExistingTestDatabase:true);
-    expect(await db.getVersion(), 22);expect(await db.query('commission_entries'),isEmpty);
+    expect(await db.getVersion(), 23);expect(await db.query('commission_entries'),isEmpty);
     expect((await db.query('invoices')).single['id'],'old');
     expect(await db.rawQuery('PRAGMA foreign_key_check'),isEmpty);
   });
