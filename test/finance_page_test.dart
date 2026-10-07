@@ -213,6 +213,19 @@ void main() {
         await tester.tap(find.text('Chi tiết / lịch sử').first);
         await tester.pumpAndSettle();
         await capture('45-finance-details');
+        await tester.tap(find.text('Đóng'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Chi phí vận hành'));
+        await tester.tap(find.text('Chi phí vận hành'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Chi tiết / lịch sử').first);
+        await tester.tap(find.text('Chi tiết / lịch sử').first);
+        await tester.pumpAndSettle();
+        await capture('47-finance-receipt');
+        await tester.ensureVisible(find.text('Đảo / hoàn tiền'));
+        await tester.tap(find.text('Đảo / hoàn tiền'));
+        await tester.pumpAndSettle();
+        await capture('48-finance-reversal');
         security.active = false;
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
@@ -370,6 +383,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sổ tiền cần quyền chủ salon'), findsOneWidget);
     expect(find.textContaining('Chủ nhà'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('PIN remains open during input, but background removes it', (tester) async {
+    final security = _Security()..active = false;
+    await tester.pumpWidget(ProviderScope(overrides: [
+      financeWorkspaceRepositoryProvider.overrideWithValue(_Report(SalonDatabase.instance, security)),
+      sensitiveActionServiceProvider.overrideWithValue(security),
+    ], child: const MaterialApp(home: FinancePage())));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const Key('owner-authorization-dialog')), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('owner-authorization-dialog')), findsNothing);
+    expect(find.text('Sổ tiền cần quyền chủ salon'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpWidget(const SizedBox.shrink());
   });

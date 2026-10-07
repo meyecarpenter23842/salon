@@ -28,7 +28,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
   DateTime? from, to;
   final query = TextEditingController();
   int page = 0, generation = 0;
-  bool locked = true, protected = false, busy = false;
+  bool locked = true, protected = false, busy = false, unlocking = false;
   String error = '';
   Timer? timer;
   ModalRoute<dynamic>? pageRoute;
@@ -52,7 +52,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _unlock());
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (protected &&
+      if (protected && !unlocking &&
           !ref.read(sensitiveActionServiceProvider).isOwnerSessionActive) {
         _lock();
       }
@@ -77,6 +77,9 @@ class _FinancePageState extends ConsumerState<FinancePage>
     if (!mounted) {
       return;
     }
+    if (locked && data == null && pageRoute?.isCurrent != false && !unlocking) {
+      return;
+    }
     generation++;
     if (pageRoute != null) {
       Navigator.of(context).popUntil((r) => r == pageRoute);
@@ -99,16 +102,18 @@ class _FinancePageState extends ConsumerState<FinancePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed && protected) {
-      ref.read(sensitiveActionServiceProvider).lockOwnerSession();
+    if (state != AppLifecycleState.resumed) {
+      if (protected) { ref.read(sensitiveActionServiceProvider).lockOwnerSession(); }
       _lock();
     }
   }
 
   Future<void> _unlock() async {
-    if (!mounted || busy) {
+    if (!mounted || busy || unlocking) {
       return;
     }
+    setState(() => unlocking = true);
+    try {
     final token = generation;
     final configured = await ref
         .read(sensitiveActionServiceProvider)
@@ -131,6 +136,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
       locked = false;
     });
     await _reload();
+    } finally { if (mounted) { setState(() => unlocking = false); } }
   }
 
   Future<void> _reload() async {
