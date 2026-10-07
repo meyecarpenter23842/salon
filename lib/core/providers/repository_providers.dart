@@ -33,6 +33,7 @@ import '../repositories/sqlite_supplier_payable_repository.dart';
 import '../repositories/sqlite_benefit_repository.dart';
 import '../repositories/sqlite_billing_sessions_repository.dart';
 import '../repositories/sqlite_cashier_shift_repository.dart';
+import '../repositories/sqlite_invoice_benefit_repository.dart';
 import '../repositories/sqlite_invoices_repository.dart';
 import '../repositories/sqlite_overview_repository.dart';
 import '../repositories/sqlite_reports_repository.dart';
@@ -212,7 +213,11 @@ final invoiceRepositoryForSessionProvider =
     Provider.family<InvoicesRepository, String>((ref, sessionId) {
       return GuardedInvoicesRepository(
         SalonDatabase.instance,
-        SqliteInvoicesRepository(SalonDatabase.instance, null, sessionId),
+        SqliteInvoicesRepository(
+          SalonDatabase.instance,
+          ref.watch(sensitiveActionServiceProvider),
+          sessionId,
+        ),
         ref.watch(sensitiveActionServiceProvider),
       );
     });
@@ -232,6 +237,25 @@ Future<InvoiceDraft> openAppointmentInvoice(
   ref.invalidate(activeInvoiceSessionsProvider);
   return draft;
 }
+
+final invoiceBenefitRepositoryForSessionProvider =
+    Provider.family<SqliteInvoiceBenefitRepository?, String>((ref, sessionId) {
+  if (ref.watch(appDataBackendProvider) != AppDataBackend.sqlite) return null;
+  return SqliteInvoiceBenefitRepository(
+    SalonDatabase.instance,
+    ref.watch(sensitiveActionServiceProvider),
+    sessionId,
+  );
+});
+
+final invoiceBenefitRepositoryProvider =
+    Provider<SqliteInvoiceBenefitRepository?>((ref) {
+  return ref.watch(
+    invoiceBenefitRepositoryForSessionProvider(
+      ref.watch(selectedInvoiceSessionIdProvider),
+    ),
+  );
+});
 
 final invoicesRepositoryProvider = Provider<InvoicesRepository>((ref) {
   final backend = ref.watch(appDataBackendProvider);

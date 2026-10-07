@@ -9,6 +9,7 @@ import '../models/invoice_draft.dart';
 import '../models/audit_event.dart';
 import '../models/invoice_payment_allocation.dart';
 import 'invoice_adjustment_repository.dart';
+import 'invoice_benefit_checkout.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
 import '../services/sensitive_action_service.dart';
@@ -520,6 +521,16 @@ class GuardedInvoicesRepository
       if (appointmentId != null && appointmentId.isNotEmpty) {
         final database = await _database.database;
         await _ensureAppointmentNotPaid(database, appointmentId);
+      }
+      final benefitTarget = _delegate is CheckoutBenefitAuthorizationTarget
+          ? _delegate as CheckoutBenefitAuthorizationTarget
+          : null;
+      if (benefitTarget != null &&
+          await benefitTarget.checkoutRequiresBenefitIssueAuthorization()) {
+        await _security.authorizeBenefitAction(
+          'benefit_checkout_issue',
+          draft.id,
+        );
       }
       return await _delegate.checkoutInvoice();
     } finally {

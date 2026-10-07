@@ -2,10 +2,19 @@ import 'package:sqflite/sqflite.dart';
 
 // Reconstruct a real pre-20 file, preserving business rows.
 Future<void> removeStockDocumentSchema(Database db) async {
-  // Schema 27 is unrelated to old stock data. Remove it when reconstructing
+  // Schemas 27-28 are unrelated to old stock data. Remove it when reconstructing
   // a genuine pre-20 file so restore tests cannot accidentally keep modern
   // voucher/membership/package structures in a legacy backup.
   for (final name in [
+    'invoice_benefit_snapshot_no_update',
+    'invoice_benefit_snapshot_no_delete',
+    'invoice_benefit_line_snapshot_no_update',
+    'invoice_benefit_line_snapshot_no_delete',
+    'invoice_package_application_no_update',
+    'invoice_package_application_no_delete',
+    'lan_rev_benefit_intent_insert',
+    'lan_rev_benefit_intent_update',
+    'lan_rev_benefit_intent_delete',
     'benefit_voucher_revision_guard',
     'benefit_voucher_no_delete',
     'membership_plan_revision_guard',
@@ -34,6 +43,9 @@ Future<void> removeStockDocumentSchema(Database db) async {
     await db.execute('DROP TRIGGER IF EXISTS $name');
   }
   for (final table in [
+    'invoice_package_applications',
+    'invoice_benefit_line_snapshots',
+    'invoice_benefit_snapshots',
     'benefit_events',
     'benefit_voucher_redemptions',
     'service_package_cancellations',

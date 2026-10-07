@@ -29,10 +29,26 @@ class CommissionLedger {
       whereArgs: [invoiceId], limit: 1)).single;
     final rows = await db.query('invoice_items', where: 'invoice_id=?',
       whereArgs: [invoiceId], orderBy: 'id');
-    final allocated = allocateInvoiceNetRevenue(
-      invoiceTotal: invoice['total_amount'] as int,
-      lines: rows.map((r) => RevenueAllocationInput(
-        id: r['id'] as String, amount: r['total_price'] as int)).toList());
+    final benefitRows = await db.query(
+      'invoice_benefit_line_snapshots',
+      where: 'invoice_id=?',
+      whereArgs: [invoiceId],
+    );
+    final benefitByLine = <String, Map<String, Object?>>{
+      for (final row in benefitRows) row['invoice_line_id'] as String: row,
+    };
+    final allocated = benefitRows.isEmpty
+        ? allocateInvoiceNetRevenue(
+            invoiceTotal: invoice['total_amount'] as int,
+            lines: rows.map((r) => RevenueAllocationInput(
+              id: r['id'] as String,
+              amount: r['total_price'] as int,
+            )).toList(),
+          )
+        : const <String, int>{};
+    if (benefitRows.isNotEmpty && benefitByLine.length != rows.length) {
+      throw StateError('Snapshot quyền lợi không đủ dòng để tính hoa hồng.');
+    }
     final period = await _openMonth(db, now);
     for (final row in rows) {
       if (row['item_type'] != 'service' || row['employee_id'] == null) continue;
@@ -40,7 +56,12 @@ class CommissionLedger {
         whereArgs: [row['employee_id']], limit: 1);
       if (employee.isEmpty) throw StateError('Nhân viên dịch vụ không còn tồn tại.');
       final bps = rateBps(employee.single['commission_rate']);
-      final basis = allocated[row['id']] ?? 0;
+      final lineId = row['id'] as String;
+      final benefitLine = benefitByLine[lineId];
+      final basis = benefitLine == null
+          ? (allocated[lineId] ?? 0)
+          : (benefitLine['cash_basis'] as int) +
+              (benefitLine['recognized_value'] as int);
       final id = 'commission-earned-${row['id']}';
       // A replay must never recalculate with a new employee rate.
       if ((await db.query('commission_entries', where: 'id=?', whereArgs: [id])).isNotEmpty) continue;

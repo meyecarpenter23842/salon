@@ -488,6 +488,26 @@ void main() {
   test(
     'schema 26 migration creates empty benefit ledgers without deriving tier or loyalty',
     () async {
+      for (final trigger in [
+        'invoice_benefit_snapshot_no_update',
+        'invoice_benefit_snapshot_no_delete',
+        'invoice_benefit_line_snapshot_no_update',
+        'invoice_benefit_line_snapshot_no_delete',
+        'invoice_package_application_no_update',
+        'invoice_package_application_no_delete',
+        'lan_rev_benefit_intent_insert',
+        'lan_rev_benefit_intent_update',
+        'lan_rev_benefit_intent_delete',
+      ]) {
+        await db.execute('DROP TRIGGER IF EXISTS $trigger');
+      }
+      for (final table in [
+        'invoice_package_applications',
+        'invoice_benefit_line_snapshots',
+        'invoice_benefit_snapshots',
+      ]) {
+        await db.execute('DROP TABLE IF EXISTS $table');
+      }
       await db.execute('DROP TRIGGER IF EXISTS benefit_voucher_revision_guard');
       await db.execute('DROP TRIGGER IF EXISTS benefit_voucher_no_delete');
       await db.execute('DROP TRIGGER IF EXISTS membership_plan_revision_guard');
@@ -548,6 +568,9 @@ void main() {
       expect(await db.query('service_package_plans'), isEmpty);
       expect(await db.query('customer_service_packages'), isEmpty);
       expect(await db.query('benefit_events'), isEmpty);
+      expect(await db.query('invoice_benefit_snapshots'), isEmpty);
+      expect(await db.query('invoice_benefit_line_snapshots'), isEmpty);
+      expect(await db.query('invoice_package_applications'), isEmpty);
       final customer = (await db.query(
         'customers',
         where: 'id=?',
@@ -559,7 +582,7 @@ void main() {
     },
   );
 
-  test('schema 27 backup requires complete benefit ledger', () async {
+  test('schema 28 backup requires complete benefit ledger', () async {
     const service = BackupService();
     final backup = await service.createBackup();
     expect(backup.success, isTrue, reason: backup.message);
@@ -579,4 +602,24 @@ void main() {
     expect(validation.message, contains('quyền lợi khách hàng'));
     await File(backup.filePath!).delete();
   });
+
+  test('schema 28 backup requires complete POS benefit snapshot tables', () async {
+    const service = BackupService();
+    final backup = await service.createBackup();
+    expect(backup.success, isTrue, reason: backup.message);
+    final copy = await openDatabase(
+      backup.filePath!,
+      singleInstance: false,
+    );
+    try {
+      await copy.execute('DROP TABLE invoice_package_applications');
+    } finally {
+      await copy.close();
+    }
+    final validation = await service.validateBackupFile(backup.filePath!);
+    expect(validation.isValid, isFalse);
+    expect(validation.message, contains('POS quyền lợi'));
+    await File(backup.filePath!).delete();
+  });
+
 }
