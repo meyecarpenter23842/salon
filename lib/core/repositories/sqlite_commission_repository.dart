@@ -151,6 +151,10 @@ class SqliteCommissionRepository {
           where:"employee_id=? AND method='transfer' AND reference=? COLLATE NOCASE",
           whereArgs:[employeeId,reference.trim()],limit:1);
         if(duplicate.isNotEmpty) throw StateError('Mã chuyển khoản đã ghi trả cho nhân viên này. Đối chiếu chứng từ cũ.');
+        final salaryDuplicate=await tx.query('payroll_payouts',
+          where:"employee_id=? AND method='transfer' AND reference=? COLLATE NOCASE",
+          whereArgs:[employeeId,reference.trim()],limit:1);
+        if(salaryDuplicate.isNotEmpty) { throw StateError('Mã chuyển khoản đã ghi trả lương cho nhân viên. Đối chiếu chứng từ cũ.'); }
       }
       final now=clock();
       String? movementId;

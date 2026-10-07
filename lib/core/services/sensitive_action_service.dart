@@ -171,6 +171,18 @@ class SensitiveActionService {
       : 'Owner mặc định (chưa khóa PIN)';
   }
 
+  Future<String> authorizePayrollAction(String action, String targetId) async {
+    final protected = await isProtectionConfigured();
+    if (protected && !isOwnerSessionActive) {
+      await _writeAudit(actorName: 'Chưa xác thực', action: action,
+        targetType: 'payroll', targetId: targetId, result: 'denied', detail: 'Owner authorization required');
+      throw StateError('Bảng lương cần xác thực Owner.');
+    }
+    final db = await _database.database;
+    return protected ? (await _readSetting(db, _actorNameKey) ?? _actorName)
+      : 'Owner mặc định (chưa khóa PIN)';
+  }
+
   Future<T> runSensitive<T>({
     required SensitiveAction action,
     required String targetType,

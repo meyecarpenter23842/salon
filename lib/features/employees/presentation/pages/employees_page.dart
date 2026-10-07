@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'commission_page.dart';
 import 'attendance_page.dart';
+import 'payroll_page.dart';
 import '../../../../core/models/audit_event.dart';
 import '../../../../shared/widgets/sensitive_action_authorization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -313,6 +314,13 @@ class _EmployeesToolbar extends ConsumerWidget {
               spacing: 7,
               runSpacing: 7,
               children: [
+                if (ref.watch(payrollRepositoryProvider) != null)
+                  ActionChip(label: const Text('Bảng lương'),
+                    avatar: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                    onPressed: () async {
+                      if (!await ensureSensitiveActionAuthorized(context, ref, SensitiveAction.payroll) || !context.mounted) { return; }
+                      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PayrollPage()));
+                    }),
                 if (ref.watch(attendanceRepositoryProvider) != null)
                   ActionChip(label: const Text('Chấm công'),
                     avatar: const Icon(Icons.schedule, size: 18),

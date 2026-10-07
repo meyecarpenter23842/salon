@@ -279,6 +279,15 @@ class BackupService {
         }
       }
 
+      if (userVersion >= 23) {
+        const payrollTables = {'payroll_policies', 'payroll_runs', 'payroll_items', 'payroll_payouts', 'payroll_events'};
+        final missingPayroll = payrollTables.difference(tables);
+        if (missingPayroll.isNotEmpty) {
+          return BackupValidationResult(isValid: false, schemaVersion: userVersion,
+            message: 'Backup schema $userVersion thiếu bảng lương: ${missingPayroll.join(', ')}.');
+        }
+      }
+
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],
