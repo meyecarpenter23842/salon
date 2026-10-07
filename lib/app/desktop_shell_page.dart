@@ -140,9 +140,11 @@ class _DesktopShellPageState extends ConsumerState<DesktopShellPage> {
     }
 
     try {
-      await Process.start(Platform.resolvedExecutable, const [
-        '--staff-window',
-      ], mode: ProcessStartMode.detached);
+      await Process.start(
+        Platform.resolvedExecutable,
+        const ['--staff-window'],
+        mode: ProcessStartMode.detached,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Đã mở Bàn nhân viên riêng.')),
@@ -268,9 +270,7 @@ class _DesktopSidebarState extends ConsumerState<_DesktopSidebar> {
                           child: Text(
                             group.label.toUpperCase(),
                             style: TextStyle(
-                              color: AppColors.textMuted.withValues(
-                                alpha: 0.72,
-                              ),
+                              color: AppColors.textMuted.withValues(alpha: 0.72),
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.05,
@@ -334,9 +334,8 @@ class _SidebarBrand extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: collapsed
-            ? MainAxisAlignment.center
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
         children: [
           const _SalonMark(),
           if (!collapsed) ...[
@@ -400,7 +399,11 @@ class _SalonMark extends StatelessWidget {
         border: Border.all(color: AppColors.cardBorder),
         boxShadow: AppColors.surfaceShadow,
       ),
-      child: Icon(Icons.content_cut_rounded, size: 19, color: AppColors.copper),
+      child: Icon(
+        Icons.content_cut_rounded,
+        size: 19,
+        color: AppColors.copper,
+      ),
     );
   }
 }
@@ -695,10 +698,7 @@ class _DesktopWorkspaceState extends ConsumerState<_DesktopWorkspace> {
       previous,
       next,
     ) {
-      if (!mounted ||
-          next == null ||
-          !next.hasUpdate ||
-          next.manifest == null) {
+      if (!mounted || next == null || !next.hasUpdate || next.manifest == null) {
         return;
       }
       if (previous?.manifest?.latestVersion == next.manifest!.latestVersion) {

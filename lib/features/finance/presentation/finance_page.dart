@@ -134,7 +134,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
   }
 
   Future<void> _reload() async {
-    if (!allowed) {
+    if (!mounted || !allowed) {
       _lock();
       return;
     }
@@ -245,7 +245,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
     String operation,
     Map<String, Object?> p,
   ) async {
-    if (!allowed) {
+    if (!mounted || !allowed) {
       throw StateError('Phiên Owner đã khóa.');
     }
     if (selectedBook == FinanceBook.expense) {
@@ -310,7 +310,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
       final latest = await ref
           .read(financeWorkspaceRepositoryProvider)!
           .fetch();
-      if (!allowed) {
+      if (!mounted || !allowed) {
         return;
       }
       final savedPending = latest.pending[selectedBook];
@@ -351,7 +351,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
           reversal: reversal,
           submit: (id, op, p) => _submit(selectedBook, id, op, p),
           resolve: (id) {
-            if (!allowed) {
+            if (!mounted || !allowed) {
               throw StateError('Phiên Owner đã khóa.');
             }
             return selectedBook == FinanceBook.expense
@@ -478,7 +478,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
         stockDocumentRepositoryProvider,
       );
       final doc = await repo.document(a.sourceId!);
-      if (!allowed) {
+      if (!mounted || !allowed) {
         return;
       }
       await showDialog<void>(
@@ -527,7 +527,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
       final snapshot = await ref
           .read(financeWorkspaceRepositoryProvider)!
           .fetch();
-      if (!allowed) {
+      if (!mounted || !allowed) {
         return;
       }
       final current = snapshot.accounts.singleWhere(
@@ -636,7 +636,7 @@ class _FinancePageState extends ConsumerState<FinancePage>
     FinanceFilter selectedFilter, {
     FinanceProof? proof,
   }) async {
-    if (!allowed) {
+    if (!mounted || !allowed) {
       return;
     }
     try {
@@ -645,13 +645,13 @@ class _FinancePageState extends ConsumerState<FinancePage>
         selectedFilter,
         proof: proof,
       );
-      if (!allowed) {
+      if (!mounted || !allowed) {
         return;
       }
       await Printing.layoutPdf(
         name: proof == null ? 'So-doi-chieu' : 'Bien-nhan-${proof.id}',
         onLayout: (_) async {
-          if (!allowed) {
+          if (!mounted || !allowed) {
             throw StateError('Phiên Owner đã khóa.');
           }
           return bytes;

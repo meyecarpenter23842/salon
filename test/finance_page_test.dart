@@ -92,6 +92,13 @@ class _Report extends FinanceWorkspaceRepository {
   Future<FinanceWorkspace> fetch() async => fixtureWorkspace();
 }
 
+class _DelayedReport extends FinanceWorkspaceRepository {
+  _DelayedReport(super.database, super.security, this.result);
+  final Future<FinanceWorkspace> result;
+  @override
+  Future<FinanceWorkspace> fetch() => result;
+}
+
 Future<void> fonts(WidgetTester tester) async {
   if (!Platform.isLinux) {
     return;
@@ -317,30 +324,53 @@ void main() {
       expect(submitted, isFalse);
     },
   );
-  testWidgets(
-    'background closes sensitive editor and late read cannot restore data',
-    (tester) async {
-      final security = _Security();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            financeWorkspaceRepositoryProvider.overrideWithValue(
-              _Report(SalonDatabase.instance, security),
-            ),
-            sensitiveActionServiceProvider.overrideWithValue(security),
-          ],
-          child: const MaterialApp(home: FinancePage()),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Lập khoản chi'));
-      await tester.pumpAndSettle();
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('finance-create-amount')), findsNothing);
-      expect(find.text('Sổ tiền cần quyền chủ salon'), findsOneWidget);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+  testWidgets('background closes sensitive editor', (tester) async {
+    final security = _Security();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          financeWorkspaceRepositoryProvider.overrideWithValue(
+            _Report(SalonDatabase.instance, security),
+          ),
+          sensitiveActionServiceProvider.overrideWithValue(security),
+        ],
+        child: const MaterialApp(home: FinancePage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lập khoản chi'));
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('finance-create-amount')), findsNothing);
+    expect(find.text('Sổ tiền cần quyền chủ salon'), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('late snapshot after background never restores sensitive data', (
+    tester,
+  ) async {
+    final security = _Security(), result = Completer<FinanceWorkspace>();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          financeWorkspaceRepositoryProvider.overrideWithValue(
+            _DelayedReport(SalonDatabase.instance, security, result.future),
+          ),
+          sensitiveActionServiceProvider.overrideWithValue(security),
+        ],
+        child: const MaterialApp(home: FinancePage()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    result.complete(fixtureWorkspace());
+    await tester.pumpAndSettle();
+    expect(find.text('Sổ tiền cần quyền chủ salon'), findsOneWidget);
+    expect(find.textContaining('Chủ nhà'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
