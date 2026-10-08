@@ -8,23 +8,31 @@ import '../database/invoice_mapper.dart';
 import '../database/salon_database.dart';
 import '../models/appointment_entry.dart';
 import '../models/invoice_adjustment.dart';
+import '../models/invoice_benefit.dart';
 import '../models/invoice_draft.dart';
 import '../models/invoice_draft_line.dart';
 import '../models/invoice_payment_allocation.dart';
 import 'invoice_adjustment_repository.dart';
+import 'invoice_benefit_checkout.dart';
 import 'invoice_line_actions_repository.dart';
 import 'repository_contracts.dart';
+import '../services/sensitive_action_service.dart';
 
 class SqliteInvoicesRepository
     implements
         InvoicesRepository,
         InvoiceLineActionsRepository,
-        InvoiceAdjustmentRepository {
+        InvoiceAdjustmentRepository,
+        CheckoutBenefitAuthorizationTarget {
   SqliteInvoicesRepository(
-    this._database, [
-    Object? _,
+    SalonDatabase database, [
+    Object? securityContext,
     String draftInvoiceId = legacyDraftInvoiceId,
-  ]) : _draftInvoiceId = draftInvoiceId.trim().isEmpty
+  ]) : _database = database,
+       _security = securityContext is SensitiveActionService
+           ? securityContext
+           : SensitiveActionService(database),
+       _draftInvoiceId = draftInvoiceId.trim().isEmpty
            ? legacyDraftInvoiceId
            : draftInvoiceId.trim();
 
@@ -34,7 +42,18 @@ class SqliteInvoicesRepository
       'invoice_draft_state_v2:';
 
   final SalonDatabase _database;
+  final SensitiveActionService _security;
   final String _draftInvoiceId;
+
+  InvoiceBenefitCheckout get _benefitCheckout => InvoiceBenefitCheckout(
+    _database,
+    _security,
+    _draftInvoiceId,
+  );
+
+  @override
+  Future<bool> checkoutRequiresBenefitIssueAuthorization() =>
+      _benefitCheckout.requiresIssueAuthorization();
 
   // Result metadata for a caller joining checkout to its outer transaction.
   String? _lastArchivedInvoiceId;
@@ -42,7 +61,11 @@ class SqliteInvoicesRepository
 
   Future<InvoiceDraft> _mutate(Future<InvoiceDraft> Function(SqliteInvoicesRepository repo) action) =>
     _database.inTransaction((scope) async {
-      final repo = SqliteInvoicesRepository(scope, null, _draftInvoiceId);
+      final repo = SqliteInvoicesRepository(
+        scope,
+        _security.forDatabase(scope),
+        _draftInvoiceId,
+      );
       final result = await action(repo);
       _lastArchivedInvoiceId = repo.lastArchivedInvoiceId;
       return result;
@@ -279,9 +302,10 @@ class SqliteInvoicesRepository
     if (!_database.isTransactionScoped) return _mutate((repo) => repo.updateInvoicePaymentAllocations(allocations));
     final database = await _database.database;
     final draft = await _loadDraft(database);
+    final preview = await _benefitCheckout.preview(database, draft);
     final normalized = _normalizePaymentAllocations(
       allocations,
-      expectedTotal: draft.totalAmount,
+      expectedTotal: preview.cashDue,
     );
     return _saveDraft(
       database,
@@ -446,6 +470,69 @@ class SqliteInvoicesRepository
     );
   }
 
+  Future<InvoiceDraft> addBenefitPurchaseLine({
+    required String lineId,
+    required String itemType,
+    required String title,
+    required int unitPrice,
+  }) async {
+    if (!_database.isTransactionScoped) {
+      return _mutate(
+        (repo) => repo.addBenefitPurchaseLine(
+          lineId: lineId,
+          itemType: itemType,
+          title: title,
+          unitPrice: unitPrice,
+        ),
+      );
+    }
+    if (itemType != 'membership_purchase' &&
+        itemType != 'service_package_purchase') {
+      throw ArgumentError('Loại dòng mua quyền lợi không hợp lệ.');
+    }
+    final normalizedId = lineId.trim();
+    final normalizedTitle = title.trim();
+    if (normalizedId.isEmpty ||
+        normalizedTitle.isEmpty ||
+        unitPrice <= 0) {
+      throw ArgumentError('Dữ liệu dòng mua quyền lợi không hợp lệ.');
+    }
+    final database = await _database.database;
+    final draft = await _loadDraft(database);
+    if (draft.customerId.trim().isEmpty) {
+      throw StateError('Chọn khách hàng trước khi mua quyền lợi.');
+    }
+    if (draft.lines.any((line) => line.id == normalizedId)) {
+      throw StateError('Mã dòng mua quyền lợi đã tồn tại.');
+    }
+    final line = InvoiceDraftLine(
+      id: normalizedId,
+      invoiceId: draft.id,
+      itemType: itemType,
+      serviceId: null,
+      productId: null,
+      employeeId: null,
+      title: normalizedTitle,
+      quantity: 1,
+      unitPrice: unitPrice,
+      discountAmount: 0,
+      totalPrice: unitPrice,
+    );
+    final lines = [...draft.lines, line];
+    return _saveDraft(
+      database,
+      draft.copyWith(
+        lines: lines,
+        discountAmount: _normalizeDiscount(
+          draft.discountAmount,
+          _subtotal(lines),
+        ),
+        updatedAt: DateTime.now(),
+      ),
+      rewriteItems: true,
+    );
+  }
+
   @override
   Future<InvoiceDraft> updateInvoiceLineQuantity(
     String lineId,
@@ -462,6 +549,9 @@ class SqliteInvoicesRepository
     final normalizedQuantity = quantity < 1 ? 1 : quantity;
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
     final line = updatedLines[index];
+    if (_isBenefitPurchaseLine(line) && normalizedQuantity != 1) {
+      throw StateError('Dòng mua quyền lợi luôn có số lượng 1.');
+    }
     if (line.isProduct) {
       final productId = line.productId?.trim() ?? '';
       if (productId.isEmpty) {
@@ -506,6 +596,9 @@ class SqliteInvoicesRepository
 
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
     final line = updatedLines[index];
+    if (_isBenefitPurchaseLine(line) && discountAmount != 0) {
+      throw StateError('Dòng mua quyền lợi không hỗ trợ giảm giá dòng.');
+    }
     final subtotal = line.unitPrice * line.quantity;
     final normalizedDiscount = _normalizeDiscount(discountAmount, subtotal);
     updatedLines[index] = line.copyWith(
@@ -590,6 +683,9 @@ class SqliteInvoicesRepository
 
     final updatedLines = List<InvoiceDraftLine>.from(draft.lines);
     final line = updatedLines[index];
+    if (_isBenefitPurchaseLine(line)) {
+      throw StateError('Giá plan quyền lợi phải lấy từ cấu hình hiện hành.');
+    }
     final subtotal = unitPrice * line.quantity;
     final normalizedLineDiscount = _normalizeDiscount(
       line.discountAmount,
@@ -681,7 +777,7 @@ class SqliteInvoicesRepository
         .where((line) => line.id != lineId)
         .toList(growable: false);
 
-    return _saveDraft(
+    final saved = await _saveDraft(
       database,
       draft.copyWith(
         lines: updatedLines,
@@ -693,6 +789,19 @@ class SqliteInvoicesRepository
       ),
       rewriteItems: true,
     );
+    final intent = await _benefitCheckout.loadIntent(database);
+    await _benefitCheckout.saveIntent(
+      database,
+      intent.copyWith(
+        packageRedemptions: intent.packageRedemptions
+            .where((item) => item.lineId != lineId)
+            .toList(growable: false),
+        purchases: intent.purchases
+            .where((item) => item.lineId != lineId)
+            .toList(growable: false),
+      ),
+    );
+    return saved;
   }
 
   @override
@@ -707,8 +816,12 @@ class SqliteInvoicesRepository
     if (draft.lines.isEmpty) {
       throw StateError('Hóa đơn chưa có dịch vụ hoặc sản phẩm.');
     }
-    _ensureCheckoutPaymentAllocations(draft);
-    return _archiveAndResetDraft(database, draft);
+    final preview = await _benefitCheckout.preview(database, draft);
+    _ensureCheckoutPaymentAllocations(
+      draft,
+      expectedTotal: preview.cashDue,
+    );
+    return _archiveAndResetDraft(database, draft, preview);
   }
 
   Future<InvoiceAdjustment> _adjustPaidInvoice(
@@ -716,6 +829,19 @@ class SqliteInvoicesRepository
     required InvoiceAdjustmentType type,
     required String reason,
   }) async {
+    if (!_database.isTransactionScoped) {
+      return _database.inTransaction(
+        (scope) => SqliteInvoicesRepository(
+          scope,
+          _security.forDatabase(scope),
+          _draftInvoiceId,
+        )._adjustPaidInvoice(
+          invoiceId,
+          type: type,
+          reason: reason,
+        ),
+      );
+    }
     final normalizedInvoiceId = invoiceId.trim();
     final normalizedReason = reason.trim();
     if (normalizedInvoiceId.isEmpty) {
@@ -763,6 +889,12 @@ class SqliteInvoicesRepository
         normalizedInvoiceId,
         invoice['payment_method']?.toString() ?? '',
       );
+      await _benefitCheckout.applyAdjustment(
+        transaction,
+        invoiceId: normalizedInvoiceId,
+        isVoid: type == InvoiceAdjustmentType.voided,
+      );
+
       final adjustment = InvoiceAdjustment(
         id: 'invoice-adjustment-${now.microsecondsSinceEpoch}',
         invoiceId: normalizedInvoiceId,
@@ -1052,12 +1184,18 @@ class SqliteInvoicesRepository
   Future<InvoiceDraft> _archiveAndResetDraft(
     Database database,
     InvoiceDraft draft,
+    InvoiceBenefitPreview benefitPreview,
   ) async {
     final now = DateTime.now();
     _lastArchivedInvoiceId = null;
     final archivedInvoiceId = 'invoice-${now.microsecondsSinceEpoch}';
+    final archiveDiscount = draft.subtotal - benefitPreview.cashDue;
+    if (archiveDiscount < 0) {
+      throw StateError('Tổng tiền quyền lợi không hợp lệ.');
+    }
     final archivedDraft = draft.copyWith(
       id: archivedInvoiceId,
+      discountAmount: archiveDiscount,
       paidAt: now,
       createdAt: draft.createdAt,
       updatedAt: now,
@@ -1104,8 +1242,14 @@ class SqliteInvoicesRepository
         );
       }
 
+      await _benefitCheckout.commit(
+        transaction,
+        draft: draft,
+        invoiceId: archivedInvoiceId,
+        preview: benefitPreview,
+      );
       await CommissionLedger.capture(transaction, archivedInvoiceId, now);
-      await _applyCustomerCheckoutMetrics(transaction, draft, now);
+      await _applyCustomerCheckoutMetrics(transaction, archivedDraft, now);
 
       await transaction.delete(
         'invoice_items',
@@ -1236,13 +1380,16 @@ class SqliteInvoicesRepository
     return normalized;
   }
 
-  void _ensureCheckoutPaymentAllocations(InvoiceDraft draft) {
+  void _ensureCheckoutPaymentAllocations(
+    InvoiceDraft draft, {
+    required int expectedTotal,
+  }) {
     if (draft.paymentAllocations.isEmpty) {
       return;
     }
     _normalizePaymentAllocations(
       draft.paymentAllocations,
-      expectedTotal: draft.totalAmount,
+      expectedTotal: expectedTotal,
     );
   }
 
@@ -1645,6 +1792,10 @@ class SqliteInvoicesRepository
     );
     return rows.isEmpty ? null : rows.first;
   }
+
+  bool _isBenefitPurchaseLine(InvoiceDraftLine line) =>
+      line.itemType == 'membership_purchase' ||
+      line.itemType == 'service_package_purchase';
 
   int _normalizeDiscount(int discountAmount, int subtotal) {
     if (discountAmount < 0) return 0;

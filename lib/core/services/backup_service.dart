@@ -358,6 +358,22 @@ class BackupService {
           );
         }
       }
+      if (userVersion >= 28) {
+        const posBenefitTables = {
+          'invoice_benefit_snapshots',
+          'invoice_benefit_line_snapshots',
+          'invoice_package_applications',
+        };
+        final missingPosBenefits = posBenefitTables.difference(tables);
+        if (missingPosBenefits.isNotEmpty) {
+          return BackupValidationResult(
+            isValid: false,
+            schemaVersion: userVersion,
+            message:
+                'Backup schema $userVersion thiếu tích hợp POS quyền lợi: ${missingPosBenefits.join(', ')}.',
+          );
+        }
+      }
       final settingRows = await database.query(
         'app_settings',
         columns: const ['value'],

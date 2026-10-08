@@ -219,7 +219,7 @@ class SqliteBillingSessionsRepository implements BillingSessionsRepository {
   }
 
   SqliteInvoicesRepository _raw(String sessionId) {
-    return SqliteInvoicesRepository(_database, null, sessionId);
+    return SqliteInvoicesRepository(_database, _security, sessionId);
   }
 
   GuardedInvoicesRepository _guarded(String sessionId) {

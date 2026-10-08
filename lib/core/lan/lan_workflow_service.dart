@@ -15,6 +15,7 @@ import '../repositories/guarded_salon_repositories.dart';
 import '../repositories/sqlite_appointments_repository.dart';
 import '../repositories/sqlite_billing_sessions_repository.dart';
 import '../repositories/sqlite_customers_repository.dart';
+import '../repositories/sqlite_invoice_benefit_repository.dart';
 import '../repositories/sqlite_invoices_repository.dart';
 import '../services/sensitive_action_service.dart';
 import 'lan_contract.dart';
@@ -74,6 +75,11 @@ class LanWorkflowService implements LanWorkflowBackend {
       } else {
         await _sessionExists(tx, id!);
         final bill = await SqliteBillingSessionsRepository(scope).fetchSession(id);
+        final benefitPreview = await SqliteInvoiceBenefitRepository(
+          scope,
+          SensitiveActionService(scope),
+          id,
+        ).preview();
         final customer = bill.customerId.isEmpty ? <Map<String, Object?>>[] :
           await tx.query('customers', columns: ['full_name'], where: 'id = ?', whereArgs: [bill.customerId], limit: 1);
         if (bill.lines.length > 200) throw const PairingFailure(LanErrorCode.unavailable);
@@ -90,8 +96,10 @@ class LanWorkflowService implements LanWorkflowBackend {
         final productStocks = {for (final stock in stocks) stock['id']: stock};
         values = {'customerId': bill.customerId, 'customerLabel': customer.isEmpty ? 'Chưa chọn khách' : customer.single['full_name'],
           'appointmentId': bill.appointmentId, 'updatedAt': bill.updatedAt.toIso8601String(), 'subtotal': bill.subtotal, 'discountAmount': bill.discountAmount,
-          'totalAmount': bill.totalAmount, 'paymentMethod': bill.paymentMethod,
-          'payments': bill.effectivePaymentAllocations.map((a) => {'method': a.paymentMethod, 'amount': a.amount}).toList(),
+          'totalAmount': benefitPreview.cashDue, 'paymentMethod': bill.paymentMethod,
+          'payments': bill.paymentAllocations.isEmpty
+              ? [if (benefitPreview.cashDue > 0) {'method': bill.paymentMethod, 'amount': benefitPreview.cashDue}]
+              : bill.paymentAllocations.map((a) => {'method': a.paymentMethod, 'amount': a.amount}).toList(),
           'lines': bill.lines.map((l) => {'id': l.id, 'title': l.title, 'quantity': l.quantity,
             'unitPrice': l.unitPrice, 'discountAmount': l.discountAmount, 'totalPrice': l.totalPrice,
             'employeeId': l.employeeId, 'employeeLabel': employeeNames[l.employeeId] ?? '', 'isService': l.isService,
@@ -146,11 +154,16 @@ class LanWorkflowService implements LanWorkflowBackend {
         for (final row in rows.take(25)) {
           final id = row['id'] as String;
           final bill = await SqliteBillingSessionsRepository(scope).fetchSession(id);
+          final cashDue = (await SqliteInvoiceBenefitRepository(
+            scope,
+            SensitiveActionService(scope),
+            id,
+          ).preview()).cashDue;
           final customers = await tx.query('customers', columns: ['full_name'], where: 'id = ?',
             whereArgs: [bill.customerId], limit: 1);
           items.add(LanCatalogItem(id, customers.isEmpty ? 'Bill chưa chọn khách' :
-            customers.single['full_name'] as String, '${bill.totalAmount} đ · ${bill.lines.length} dòng',
-            totalAmount: bill.totalAmount, lineCount: bill.lines.length, updatedAt: bill.updatedAt.toIso8601String()));
+            customers.single['full_name'] as String, '$cashDue đ · ${bill.lines.length} dòng',
+            totalAmount: cashDue, lineCount: bill.lines.length, updatedAt: bill.updatedAt.toIso8601String()));
         }
       } else {
         final table = kind == 'products' ? 'retail_products' : kind;
@@ -326,15 +339,19 @@ class LanWorkflowService implements LanWorkflowBackend {
         }
         if (allocations.map((a) => a.paymentMethod).toSet().length != allocations.length) throw const FormatException('Duplicate method');
         if (allocations.length == 1) {
-          final bill = await sessions.fetchSession(id!);
-          if (allocations.single.amount != bill.totalAmount) throw const PairingFailure(LanErrorCode.businessRule);
+          final cashDue = (await SqliteInvoiceBenefitRepository(
+            scope,
+            security,
+            id!,
+          ).preview()).cashDue;
+          if (allocations.single.amount != cashDue) throw const PairingFailure(LanErrorCode.businessRule);
           saved = await sessions.updatePaymentMethod(id, allocations.single.paymentMethod);
         } else {
           saved = await sessions.updatePaymentAllocations(id!, allocations);
         }
       case LanWriteOperation.sessionCheckout:
         p.keys([]);
-        final raw = SqliteInvoicesRepository(scope, null, id!);
+        final raw = SqliteInvoicesRepository(scope, security, id!);
         await GuardedInvoicesRepository(scope, raw, security).checkoutInvoice();
         final receipt = raw.lastArchivedInvoiceId;
         if (receipt == null) throw StateError('No committed receipt');
@@ -375,6 +392,19 @@ class LanWorkflowService implements LanWorkflowBackend {
 class _DeviceSecurity extends SensitiveActionService {
   _DeviceSecurity(super.database, this.role);
   final PhoneWriteRole role;
+  @override
+  Future<String> authorizeBenefitAction(String action, String targetId) async {
+    if (role != PhoneWriteRole.owner ||
+        !const {
+          'benefit_checkout_issue',
+          'benefit_membership_issue',
+          'benefit_package_issue',
+        }.contains(action)) {
+      throw const PairingFailure(LanErrorCode.forbidden);
+    }
+    return 'Thiết bị Owner';
+  }
+
   @override
   Future<T> runSensitive<T>({required SensitiveAction action, required String targetType,
     required String targetId, required Future<T> Function() operation}) {

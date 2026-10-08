@@ -231,6 +231,146 @@ class SqliteBenefitRepository {
     });
   }
 
+  Future<int> quoteVoucherDiscount({
+    required String voucherId,
+    required String customerId,
+    required int eligibleAmount,
+  }) async {
+    if (eligibleAmount <= 0 || eligibleAmount > benefitMoneyLimit) {
+      throw ArgumentError('Giá trị đủ điều kiện voucher không hợp lệ.');
+    }
+    final tx = await database.database;
+    final voucher = await _one(tx, 'benefit_vouchers', voucherId);
+    final now = clock();
+    if (voucher['status'] != 'active') {
+      throw StateError('Voucher không ở trạng thái sử dụng.');
+    }
+    final validFrom = DateTime.parse(voucher['valid_from'] as String);
+    final validTo = DateTime.parse(voucher['valid_to'] as String);
+    if (now.isBefore(validFrom) || !now.isBefore(validTo)) {
+      throw StateError('Voucher chưa hiệu lực hoặc đã hết hạn.');
+    }
+    final boundCustomer = voucher['customer_id'] as String?;
+    if (boundCustomer != null && boundCustomer != customerId) {
+      throw StateError('Voucher được phát cho khách hàng khác.');
+    }
+    if (eligibleAmount < (voucher['min_spend_amount'] as int)) {
+      throw StateError('Hóa đơn chưa đạt mức tối thiểu của voucher.');
+    }
+    if (await _hasOpenVoucherRedemption(tx, voucherId)) {
+      throw StateError('Voucher đã được sử dụng.');
+    }
+
+    int discount;
+    if (voucher['discount_type'] == 'fixed') {
+      discount = voucher['discount_value'] as int;
+    } else {
+      discount =
+          eligibleAmount * (voucher['discount_value'] as int) ~/ 10000;
+      final cap = voucher['max_discount_amount'] as int?;
+      if (cap != null && discount > cap) discount = cap;
+    }
+    if (discount > eligibleAmount) discount = eligibleAmount;
+    if (discount <= 0) {
+      throw StateError('Voucher không tạo ra giá trị giảm hợp lệ.');
+    }
+    return discount;
+  }
+
+  Future<({int serviceDiscountAmount, int productDiscountAmount})>
+  quoteMembershipDiscount({
+    required String membershipId,
+    required String customerId,
+    required int serviceEligibleAmount,
+    required int productEligibleAmount,
+  }) async {
+    _validateNonNegativeMoney(serviceEligibleAmount);
+    _validateNonNegativeMoney(productEligibleAmount);
+    final tx = await database.database;
+    final membership = await _membershipRow(tx, membershipId);
+    if (membership['customer_id'] != customerId) {
+      throw StateError('Membership thuộc khách hàng khác.');
+    }
+    if (membership['is_cancelled'] == 1) {
+      throw StateError('Membership đã hủy.');
+    }
+    final now = clock();
+    final startsAt = DateTime.parse(membership['starts_at'] as String);
+    final expiresAt = DateTime.parse(membership['expires_at'] as String);
+    if (now.isBefore(startsAt) || !now.isBefore(expiresAt)) {
+      throw StateError('Membership chưa hiệu lực hoặc đã hết hạn.');
+    }
+    final serviceDiscount =
+        serviceEligibleAmount *
+        (membership['service_discount_bps'] as int) ~/
+        10000;
+    final productDiscount =
+        productEligibleAmount *
+        (membership['product_discount_bps'] as int) ~/
+        10000;
+    if (serviceDiscount + productDiscount <= 0) {
+      throw StateError('Membership không tạo ra giá trị giảm hợp lệ.');
+    }
+    return (
+      serviceDiscountAmount: serviceDiscount,
+      productDiscountAmount: productDiscount,
+    );
+  }
+
+  Future<({String packageUnitId, int recognizedValue})>
+  quoteServicePackageRedemption({
+    required String packageId,
+    required String customerId,
+    required String serviceId,
+    required int quantity,
+  }) async {
+    if (quantity <= 0 || quantity > benefitQuantityLimit) {
+      throw ArgumentError('Số lượt gói dịch vụ không hợp lệ.');
+    }
+    final tx = await database.database;
+    final package = await _packageRow(tx, packageId);
+    if (package['customer_id'] != customerId) {
+      throw StateError('Gói dịch vụ thuộc khách hàng khác.');
+    }
+    if (package['is_cancelled'] == 1) {
+      throw StateError('Gói dịch vụ đã hủy.');
+    }
+    final now = clock();
+    final startsAt = DateTime.parse(package['starts_at'] as String);
+    final expiresAt = DateTime.parse(package['expires_at'] as String);
+    if (now.isBefore(startsAt) || !now.isBefore(expiresAt)) {
+      throw StateError('Gói dịch vụ chưa hiệu lực hoặc đã hết hạn.');
+    }
+    final units = await tx.query(
+      'customer_service_package_units',
+      where: 'package_id=? AND service_id=?',
+      whereArgs: [packageId, serviceId],
+      limit: 1,
+    );
+    if (units.isEmpty) {
+      throw StateError('Dịch vụ không thuộc gói đã mua.');
+    }
+    final unit = units.single;
+    final balance = await _packageUnitBalance(tx, unit['id'] as String);
+    if (quantity > balance) {
+      throw StateError('Số lượt gói còn lại không đủ.');
+    }
+    final consumedBefore =
+        (unit['quantity_total'] as int) - balance;
+    final remainder = unit['remainder_units'] as int;
+    final extraStart =
+        consumedBefore < remainder ? consumedBefore : remainder;
+    final end = consumedBefore + quantity;
+    final extraEnd = end < remainder ? end : remainder;
+    final extras = extraEnd - extraStart;
+    final recognized =
+        quantity * (unit['unit_value_base'] as int) + extras;
+    return (
+      packageUnitId: unit['id'] as String,
+      recognizedValue: recognized,
+    );
+  }
+
   Future<VoucherRedemption> redeemVoucher({
     required String requestId,
     required String voucherId,

@@ -19,6 +19,13 @@ class SensitiveActionService {
   DateTime? _authorizedUntil;
   String _actorName = 'Owner';
 
+  SensitiveActionService forDatabase(SalonDatabase database) {
+    final scoped = SensitiveActionService(database);
+    scoped._authorizedUntil = _authorizedUntil;
+    scoped._actorName = _actorName;
+    return scoped;
+  }
+
   bool get isOwnerSessionActive {
     final until = _authorizedUntil;
     return until != null && DateTime.now().isBefore(until);

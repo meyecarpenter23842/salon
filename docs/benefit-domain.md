@@ -62,3 +62,18 @@ chúng trong transaction invoice.
 Schema 27 backup phải có đầy đủ plan/catalog, entitlement snapshot, usage/
 redemption/movement/cancellation và event journal. Partial migration chạy lại
 idempotent. Restore/restart giữ ID, snapshot, balance và event nguyên vẹn.
+
+
+## POS integration — schema 28 (#144)
+
+Schema 28 không thay đổi entitlement schema 27. Nó chỉ thêm snapshot nối hóa đơn với
+quyền lợi: tổng benefit trên invoice, basis tiền mặt theo từng invoice line và
+package movement gắn đúng service line. Draft lưu intent trong app_settings; chỉ
+checkout transaction mới redeem/use/issue entitlement.
+
+Thứ tự V1: package trước, sau đó membership hoặc voucher, sau đó manual line/bill
+discount. Snapshot line giữ cash basis và recognized package value riêng để
+commission không double-count package purchase với service redemption. Void đảo
+voucher/membership/package usage theo rule; refund sau dịch vụ không restore
+voucher/package. Refund/void giao dịch mua membership/package dùng cancellation
+primitive schema 27 và bị chặn nếu còn net usage/redemption.
